@@ -176,8 +176,9 @@
           <div class="field"><label>Proceso nivel 0 <span class="req">*</span></label><select id="fi_n0" disabled></select></div>
           <div class="field niv-n1 niv-n2"><label>Proceso nivel 1</label><select id="fi_n1" disabled></select></div>
           <div class="field niv-n2"><label>Proceso nivel 2</label><select id="fi_n2" disabled></select></div>
-          <div class="field niv-n1 niv-n2"><label>Proceso nivel 3</label><select id="fi_n3" disabled></select></div>
-          <div class="field niv-n1 niv-n2"><label>Procedimiento</label><select id="fi_proc" disabled></select></div>
+          <!-- N3 y Procedimiento NO van en Identificación; se detectan en SIPOC -->
+          <select id="fi_n3" disabled class="hidden"></select>
+          <select id="fi_proc" disabled class="hidden"></select>
           <div class="field full"><label>Ruta del proceso (se arma sola)</label><div class="ruta-pill" id="fi_ruta">Selecciona la jerarquía arriba…</div></div>
           <div class="field full"><label>Objetivo del proceso</label><textarea id="fi_objetivo"></textarea></div>
           <div class="field"><label>Dueño del proceso (unidad orgánica)</label><select id="fi_dueno"></select></div>
@@ -188,6 +189,11 @@
 
       <div class="section">
         <div class="section-title"><span class="section-num">II</span>Estructura operativa (SIPOC)</div>
+        <div class="section-desc" id="fi_sipoc_desc">El sistema detecta el siguiente subproceso con información para analizar su SIPOC.</div>
+        <div id="fi_subproc_box" class="hidden" style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+          <div style="font-size:12px;color:var(--mist);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Subproceso en análisis</div>
+          <div class="mono" id="fi_subproc_txt" style="font-size:13px;color:var(--brand)">—</div>
+        </div>
         <div class="grid">
           <div class="field"><label>Proveedores / Cliente</label><textarea id="fi_proveedores"></textarea></div>
           <div class="field"><label>Entrada / Insumo</label><textarea id="fi_entrada"></textarea></div>
@@ -399,23 +405,71 @@ async function initCascadaFicha(){
   const inv = await loadInventario();
   const C=INV_COLS;
   const tipo=document.getElementById('fi_tipo'), n0=document.getElementById('fi_n0'),
-        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2'),
-        n3=document.getElementById('fi_n3'), pr=document.getElementById('fi_proc');
-  const reset=el=>{ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; };
+        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2');
+  const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
   fillSelect(tipo, opcionesInv(inv,{},C.tipo));
-  tipo.onchange=()=>{ [n0,n1,n2,n3,pr].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } actualizarRuta(); };
-  n0.onchange=()=>{ [n1,n2,n3,pr].forEach(reset); if(n0.value){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; } actualizarRuta(); };
-  n1.onchange=()=>{ [n2,n3,pr].forEach(reset); if(n1.value){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } actualizarRuta(); };
-  n2.onchange=()=>{ [n3,pr].forEach(reset); if(n2.value){ fillSelect(n3,opcionesInv(inv,{[C.n1]:n1.value,[C.n2]:n2.value},C.n3)); n3.disabled=false; } actualizarRuta(); };
-  n3.onchange=()=>{ reset(pr); if(n3.value){ fillSelect(pr,opcionesInv(inv,{[C.n2]:n2.value,[C.n3]:n3.value},C.proc)); pr.disabled=false; } actualizarRuta(); };
-  pr.onchange=actualizarRuta;
+  tipo.onchange=()=>{ [n0,n1,n2].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } trasCascada(); };
+  n0.onchange=()=>{ [n1,n2].forEach(reset); if(n0.value){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; } trasCascada(); };
+  n1.onchange=()=>{ [n2].forEach(reset); if(n1.value){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } trasCascada(); };
+  n2.onchange=trasCascada;
 }
+// Tras cualquier cambio en la cascada: actualizar ruta y detectar el subproceso SIPOC.
+function trasCascada(){
+  actualizarRuta();
+  detectarSubprocesoSIPOC();
+}
+
+// Detecta el SIGUIENTE subproceso con información, partiendo del nivel de la ficha.
+// Busca hacia abajo en el inventario: ¿hay N2 con datos? si no, ¿N3? si no, Procedimiento.
+// Muestra el subproceso encontrado en el recuadro de la sección SIPOC.
+function detectarSubprocesoSIPOC(){
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const box=document.getElementById('fi_subproc_box');
+  const txt=document.getElementById('fi_subproc_txt');
+  if(!box||!txt) return;
+  const inv = STATE.inventario||[];
+  const C = INV_COLS;
+  // Valores actuales de la cascada (hasta el nivel de la ficha)
+  const vTipo=g('fi_tipo'), vN0=g('fi_n0'), vN1=g('fi_n1'), vN2=g('fi_n2');
+  // El "nivel de la ficha" determina desde dónde buscamos hacia abajo:
+  //   N0 → busca desde N1   ·   N1 → busca desde N2   ·   N2 → busca desde N3
+  // Filtro: registros del inventario que coinciden con la cascada elegida.
+  const coincide = r => {
+    const v=r.values||{};
+    if(vTipo && v[C.tipo]!==vTipo) return false;
+    if(vN0 && v[C.n0]!==vN0) return false;
+    if((NIVEL==='N1'||NIVEL==='N2') && vN1 && v[C.n1]!==vN1) return false;
+    if(NIVEL==='N2' && vN2 && v[C.n2]!==vN2) return false;
+    return true;
+  };
+  const filas = inv.filter(coincide);
+  // Orden de búsqueda del siguiente nivel con datos según el nivel de la ficha.
+  const orden = NIVEL==='N0' ? [C.n1,C.n2,C.n3,C.proc]
+              : NIVEL==='N1' ? [C.n2,C.n3,C.proc]
+              : [C.n3,C.proc]; // N2
+  const noVacio = x => x && !esBasura(x) && !/N\.D\.?$/i.test(String(x).trim()); // ignora "N.D."
+  let encontrado='', nivelNombre='';
+  for(const col of orden){
+    const valores=[...new Set(filas.map(r=>(r.values||{})[col]).filter(noVacio))];
+    if(valores.length){ encontrado=valores.join(' · '); nivelNombre=col; break; }
+  }
+  if(encontrado){
+    box.classList.remove('hidden');
+    txt.textContent = nivelNombre+': '+encontrado;
+  } else {
+    box.classList.add('hidden');
+    txt.textContent='—';
+  }
+}
+window.detectarSubprocesoSIPOC=detectarSubprocesoSIPOC;
 // Arma la ruta de texto a partir de los niveles visibles según el nivel de ficha.
+// Ruta del proceso = SOLO hasta el nivel de la ficha (lógica del analista):
+//   N0 → Tipo › N0        N1 → Tipo › N0 › N1        N2 → Tipo › N0 › N1 › N2
 function valoresCascada(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  // N0: Tipo › N0 › N1 ; N1: Tipo › N0 › N1 › N2 › N3 › Proc ; N2: Tipo › N0 › N1 › N2 › N3 › Proc
-  if(NIVEL==='N0') return [g('fi_tipo'),g('fi_n0'),g('fi_n1')];
-  return [g('fi_tipo'),g('fi_n0'),g('fi_n1'),g('fi_n2'),g('fi_n3'),g('fi_proc')];
+  if(NIVEL==='N0') return [g('fi_tipo'), g('fi_n0')];
+  if(NIVEL==='N1') return [g('fi_tipo'), g('fi_n0'), g('fi_n1')];
+  return [g('fi_tipo'), g('fi_n0'), g('fi_n1'), g('fi_n2')]; // N2
 }
 function actualizarRuta(){
   const ruta = valoresCascada().filter(Boolean).join(' › ');
@@ -653,44 +707,35 @@ async function editarFicha(nivel, id){
 }
 window.editarFicha=editarFicha;
 
-// Reconstruye la cascada (Tipo→N0→N1→N2→N3→Proc) a partir de la ruta de texto
-// "Tipo › N0 › N1 › …". Selecciona cada segmento en su nivel si existe como opción.
-// Si un segmento no existe, para ahí y deja que el usuario complete (sin errores).
+// Reconstruye la cascada SOLO hasta el nivel de la ficha, a partir de la ruta
+// de texto "Tipo › N0 › N1 (› N2)". Tras reconstruir, detecta el subproceso SIPOC.
 async function reconstruirCascadaFicha(ruta){
   const inv = await loadInventario();
   const C = INV_COLS;
   const tipo=document.getElementById('fi_tipo'), n0=document.getElementById('fi_n0'),
-        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2'),
-        n3=document.getElementById('fi_n3'), pr=document.getElementById('fi_proc');
+        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2');
   const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
-  [n0,n1,n2,n3,pr].forEach(reset);
-  // Asegurar que el desplegable de Tipo esté poblado.
+  [n0,n1,n2].forEach(reset);
   if(tipo && tipo.options.length<=1) fillSelect(tipo, opcionesInv(inv,{},C.tipo));
-  if(!ruta || ruta==='—'){ actualizarRuta(); return; }
+  if(!ruta || ruta==='—'){ trasCascada(); return; }
   const segs = String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
-  // Generic guard: descartar segmentos que sean solo el nombre del campo
   const generico = /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
   const seg = i => (segs[i] && !generico.test(segs[i])) ? segs[i] : '';
-  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3), vN3=seg(4), vPr=seg(5);
-  // Selecciona el valor en el select solo si existe como opción.
+  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3);
   const fijar=(el,val)=>{ if(!el||!val) return false; const ok=[...el.options].some(o=>o.value===val); if(ok){ el.value=val; return true; } return false; };
   if(fijar(tipo,vTipo)){
     fillSelect(n0, opcionesInv(inv,{[C.tipo]:vTipo},C.n0)); n0.disabled=false;
     if(fijar(n0,vN0)){
-      fillSelect(n1, opcionesInv(inv,{[C.tipo]:vTipo,[C.n0]:vN0},C.n1)); n1.disabled=false;
-      if(fijar(n1,vN1)){
-        fillSelect(n2, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1},C.n2)); n2.disabled=false;
-        if(fijar(n2,vN2)){
-          fillSelect(n3, opcionesInv(inv,{[C.n1]:vN1,[C.n2]:vN2},C.n3)); n3.disabled=false;
-          if(fijar(n3,vN3)){
-            fillSelect(pr, opcionesInv(inv,{[C.n2]:vN2,[C.n3]:vN3},C.proc)); pr.disabled=false;
-            fijar(pr,vPr);
-          }
+      if(NIVEL==='N1'||NIVEL==='N2'){
+        fillSelect(n1, opcionesInv(inv,{[C.tipo]:vTipo,[C.n0]:vN0},C.n1)); n1.disabled=false;
+        if(fijar(n1,vN1) && NIVEL==='N2'){
+          fillSelect(n2, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1},C.n2)); n2.disabled=false;
+          fijar(n2,vN2);
         }
       }
     }
   }
-  actualizarRuta();
+  trasCascada();
 }
 window.reconstruirCascadaFicha=reconstruirCascadaFicha;
 
