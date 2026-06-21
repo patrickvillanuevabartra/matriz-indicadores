@@ -681,9 +681,13 @@ async function editarFicha(nivel, id){
   // 4) Cargar los campos de texto. (NO usamos form.reset() porque puede borrar
   //    de forma diferida los valores que ponemos justo después.)
   const F=FF(); const v=r.values||{};
-  console.log('[editarFicha] values crudos:', JSON.stringify(v));
-  console.log('[editarFicha] objetivo por ID:', JSON.stringify(v[F.objetivo.id]), '| por nombre:', JSON.stringify(v['Objetivo del proceso']));
-  const cur=(def,nombre)=>{ if(!def) return ''; const x=v[def.id]??(nombre?v[nombre]:''); return (x&&!esBasura(x)&&x!==nombre)?x:''; };
+  // Misma lógica que objFicha (que sí funciona en el listado): busca el valor
+  // por ID y por nombre de columna, y toma el primero que no sea basura ni el nombre.
+  const cur=(def,nombre)=>{
+    if(!def) return '';
+    const cand=[v[def.id], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x));
+    return cand||'';
+  };
   const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
   set('fi_objetivo', cur(F.objetivo,'Objetivo del proceso'));
   set('fi_alcance', cur(F.alcance,'Alcance'));
