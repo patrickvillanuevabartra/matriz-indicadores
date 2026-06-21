@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGC ISO 21001 · Fichas de Proceso e Indicadores</title>
+<script src="config.js"></script>
+<style>
+  /* ===== Identidad visual: "Arquitectura de procesos" =====
+     Distinta del aplicativo de riesgos (que era verde). Aquí: azul pizarra
+     institucional + acento ámbar para indicadores/metas. Tipografía:
+     Display = Fraunces (serif con carácter), UI/Body = Inter, Datos = Spline Mono. */
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&family=Spline+Sans+Mono:wght@400;500&display=swap');
+
+  :root{
+    --ink:#16202e; --slate:#3c4a5e; --mist:#6a7889; --line:#e3e8ef;
+    --paper:#f5f7fa; --card:#ffffff;
+    --brand:#1d3a5f; --brand-2:#2f5a8f;       /* azul pizarra */
+    --accent:#c47a1a; --accent-2:#e0942a;     /* ámbar (indicadores/metas) */
+    --ok:#2f7d5b; --warn:#c47a1a; --bad:#b3402f;
+    --n0:#1d3a5f; --n1:#2f5a8f; --n2:#5a82b0; /* niveles de proceso */
+    --shadow:0 1px 2px rgba(22,32,46,.04),0 4px 18px rgba(22,32,46,.07);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{font-size:16px}
+  body{font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--paper);line-height:1.55;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{font-family:'Fraunces',Georgia,serif;font-weight:600;letter-spacing:-.01em;line-height:1.15}
+  .mono{font-family:'Spline Sans Mono',monospace}
+
+  header{background:var(--brand);color:#fff;position:sticky;top:0;z-index:50;box-shadow:var(--shadow)}
+  .bar{max-width:1180px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:20px}
+  .logo{display:flex;align-items:center;gap:12px}
+  .logo-mark{width:34px;height:34px;border:2px solid var(--accent-2);border-radius:8px;display:grid;place-items:center;font-family:'Fraunces',serif;font-weight:600;font-size:17px;color:var(--accent-2)}
+  .logo b{font-family:'Fraunces',serif;font-weight:600;font-size:18px;display:block;letter-spacing:-.01em}
+  .logo span{display:block;font-size:11px;opacity:.72;font-weight:400}
+  nav{margin-left:auto;display:flex;gap:2px}
+  nav button{background:transparent;border:0;color:#fff;opacity:.7;font-family:inherit;font-size:14px;font-weight:500;padding:9px 15px;border-radius:8px;cursor:pointer;transition:.15s}
+  nav button:hover{opacity:1;background:rgba(255,255,255,.08)}
+  nav button.active{opacity:1;background:rgba(255,255,255,.15)}
+
+  main{max-width:1180px;margin:0 auto;padding:28px 24px 80px}
+  .view{display:none;animation:fade .25s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  .conn{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--mist);margin-bottom:20px;padding:9px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--mist);flex:none}
+  .dot.on{background:var(--ok)} .dot.off{background:var(--bad)}
+
+  .page-head{margin-bottom:24px}
+  .eyebrow{font-size:12px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+  .page-head h1{font-size:31px;color:var(--ink)}
+  .page-head p{color:var(--mist);font-size:15px;margin-top:7px;max-width:62ch}
+
+  /* Selector de nivel de ficha */
+  .nivel-tabs{display:flex;gap:8px;margin-bottom:22px;flex-wrap:wrap}
+  .nivel-tab{flex:1;min-width:200px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;cursor:pointer;transition:.15s;text-align:left}
+  .nivel-tab:hover{border-color:var(--brand-2)}
+  .nivel-tab.active{border-color:var(--brand);box-shadow:0 0 0 3px rgba(29,58,95,.12)}
+  .nivel-tab .nt-mark{font-family:'Spline Sans Mono',monospace;font-size:12px;font-weight:500;color:#fff;padding:3px 9px;border-radius:6px;display:inline-block;margin-bottom:8px}
+  .nivel-tab.n0 .nt-mark{background:var(--n0)} .nivel-tab.n1 .nt-mark{background:var(--n1)} .nivel-tab.n2 .nt-mark{background:var(--n2)}
+  .nivel-tab .nt-title{font-family:'Fraunces',serif;font-weight:600;font-size:16px;color:var(--ink)}
+  .nivel-tab .nt-desc{font-size:12px;color:var(--mist);margin-top:3px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+  .section{padding:22px 24px;border-bottom:1px solid var(--line)}
+  .section:last-of-type{border-bottom:0}
+  .section-title{display:flex;align-items:center;gap:10px;font-family:'Fraunces',serif;font-weight:600;font-size:17px;margin-bottom:4px}
+  .section-num{font-family:'Spline Sans Mono',monospace;font-size:12px;color:#fff;background:var(--brand-2);width:24px;height:24px;border-radius:6px;display:grid;place-items:center;flex:none}
+  .section-desc{font-size:13px;color:var(--mist);margin-bottom:18px}
+
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px 20px}
+  .grid .full{grid-column:1/-1}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label{font-size:13px;font-weight:500;color:var(--slate)}
+  .field label .req{color:var(--bad)}
+  .hint{font-size:12px;color:var(--mist)}
+  input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:9px;padding:9px 11px;width:100%;transition:.15s}
+  input:focus,select:focus,textarea:focus{outline:0;border-color:var(--brand-2);box-shadow:0 0 0 3px rgba(47,90,143,.12)}
+  textarea{resize:vertical;min-height:64px}
+  select:disabled,input:disabled{background:var(--paper);color:var(--mist);cursor:not-allowed}
+  .ruta-pill{font-family:'Spline Sans Mono',monospace;font-size:13px;background:var(--paper);border:1px dashed var(--line);border-radius:9px;padding:10px 12px;color:var(--slate);min-height:40px;display:flex;align-items:center;word-break:break-word}
+  .hidden{display:none!important}
+
+  /* Subformulario de indicadores (lista editable) */
+  .ind-list{display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+  .ind-item{display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 12px}
+  .ind-item .ind-txt{flex:1;font-size:14px;color:var(--ink)}
+  .ind-item .ind-num{font-family:'Spline Sans Mono',monospace;font-size:12px;color:var(--accent);font-weight:500}
+  .ind-add{display:flex;gap:8px}
+  .ind-add input{flex:1}
+
+  .actions{display:flex;gap:12px;justify-content:flex-end;padding:20px 24px;background:var(--paper);border-radius:0 0 14px 14px}
+  .btn{font-family:inherit;font-size:14px;font-weight:600;padding:11px 22px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:.15s}
+  .btn-primary{background:var(--brand);color:#fff}
+  .btn-primary:hover{background:var(--brand-2)}
+  .btn-primary:disabled{background:var(--mist);cursor:not-allowed}
+  .btn-ghost{background:#fff;border-color:var(--line);color:var(--slate)}
+  .btn-ghost:hover{border-color:var(--brand-2);color:var(--brand)}
+  .btn-sm{padding:7px 13px;font-size:13px}
+  .btn-accent{background:var(--accent);color:#fff}
+  .btn-accent:hover{background:var(--accent-2)}
+
+  /* Tabla de fichas guardadas */
+  .tabla-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mist);font-weight:600;padding:10px 12px;border-bottom:2px solid var(--line)}
+  td{padding:11px 12px;border-bottom:1px solid var(--line);color:var(--slate);vertical-align:top}
+  tr:hover td{background:var(--paper)}
+  .badge-n{font-family:'Spline Sans Mono',monospace;font-size:11px;font-weight:500;color:#fff;padding:2px 8px;border-radius:5px}
+  .badge-n.n0{background:var(--n0)} .badge-n.n1{background:var(--n1)} .badge-n.n2{background:var(--n2)}
+  .icon-btn{background:#fff;border:1px solid var(--line);border-radius:8px;width:34px;height:30px;cursor:pointer;font-size:14px;line-height:1;transition:.15s}
+  .icon-btn:hover{border-color:var(--brand-2);background:var(--paper)}
+
+  .empty{text-align:center;padding:54px 20px;color:var(--mist)}
+  .empty h3{color:var(--slate);margin-bottom:8px;font-family:'Fraunces',serif}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:14px 22px;border-radius:11px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);transition:.3s;z-index:100;opacity:0;max-width:90vw}
+  .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  .toast.err{background:var(--bad)}
+  .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  @media(max-width:820px){.grid{grid-template-columns:1fr}.bar{flex-direction:column;align-items:stretch;gap:10px}nav{margin-left:0;overflow-x:auto}nav button{flex:1 0 auto;white-space:nowrap}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="bar">
+    <div class="logo">
+      <div class="logo-mark">Q</div>
+      <div><b>SGC · ISO 21001</b><span>Facultad de Ingeniería · URP — Procesos e Indicadores</span></div>
+    </div>
+    <nav>
+      <button data-view="fichas" class="active">Fichas de proceso</button>
+      <button data-view="listado">Fichas registradas</button>
+      <button data-view="matriz" id="navMatriz">Matriz de indicadores</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="conn" id="conn">
+    <span class="dot" id="connDot"></span>
+    <span id="connText">Verificando conexión con QuintaDB…</span>
+  </div>
+
+  <!-- ===================== FICHAS DE PROCESO ===================== -->
+  <section class="view active" id="view-fichas">
+    <div class="page-head">
+      <div class="eyebrow">Arquitectura de procesos</div>
+      <h1>Ficha de proceso</h1>
+      <p>Documenta un proceso del sistema de gestión. Elige el nivel, define la jerarquía con la cascada del inventario y registra los indicadores de desempeño que alimentarán la matriz.</p>
+    </div>
+
+    <!-- Selector de nivel -->
+    <div class="nivel-tabs">
+      <div class="nivel-tab n0 active" data-nivel="N0" onclick="setNivel('N0')">
+        <span class="nt-mark">NIVEL 0</span>
+        <div class="nt-title">Macroproceso</div>
+        <div class="nt-desc">Tipo › Proceso N0 · con su proceso N1 asociado</div>
+      </div>
+      <div class="nivel-tab n1" data-nivel="N1" onclick="setNivel('N1')">
+        <span class="nt-mark">NIVEL 1</span>
+        <div class="nt-title">Proceso</div>
+        <div class="nt-desc">Hasta N1, con N2/N3, procedimiento</div>
+      </div>
+      <div class="nivel-tab n2" data-nivel="N2" onclick="setNivel('N2')">
+        <span class="nt-mark">NIVEL 2</span>
+        <div class="nt-title">Subproceso</div>
+        <div class="nt-desc">Hasta N2, con N3, procedimiento</div>
+      </div>
+    </div>
+
+    <form id="formFicha" class="card">
+      <div class="section">
+        <div class="section-title"><span class="section-num">I</span>Identificación del proceso</div>
+        <div class="section-desc">Jerarquía del proceso (cascada desde el inventario) e información base.</div>
+        <div class="grid">
+          <div class="field"><label>Tipo de proceso <span class="req">*</span></label><select id="fi_tipo"></select></div>
+          <div class="field"><label>Proceso nivel 0 <span class="req">*</span></label><select id="fi_n0" disabled></select></div>
+          <div class="field niv-n1 niv-n2"><label>Proceso nivel 1</label><select id="fi_n1" disabled></select></div>
+          <div class="field niv-n2"><label>Proceso nivel 2</label><select id="fi_n2" disabled></select></div>
+          <div class="field niv-n1 niv-n2"><label>Proceso nivel 3</label><select id="fi_n3" disabled></select></div>
+          <div class="field niv-n1 niv-n2"><label>Procedimiento</label><select id="fi_proc" disabled></select></div>
+          <div class="field full"><label>Ruta del proceso (se arma sola)</label><div class="ruta-pill" id="fi_ruta">Selecciona la jerarquía arriba…</div></div>
+          <div class="field full"><label>Objetivo del proceso</label><textarea id="fi_objetivo"></textarea></div>
+          <div class="field"><label>Dueño del proceso (unidad orgánica)</label><select id="fi_dueno"></select></div>
+          <div class="field"><label>Alcance</label><textarea id="fi_alcance"></textarea></div>
+          <div class="field full"><label>Base legal</label><textarea id="fi_base_legal"></textarea></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title"><span class="section-num">II</span>Estructura operativa (SIPOC)</div>
+        <div class="grid">
+          <div class="field"><label>Proveedores / Cliente</label><textarea id="fi_proveedores"></textarea></div>
+          <div class="field"><label>Entrada / Insumo</label><textarea id="fi_entrada"></textarea></div>
+          <div class="field"><label>Producto</label><textarea id="fi_producto"></textarea></div>
+          <div class="field"><label>Receptor final del producto</label><textarea id="fi_receptor"></textarea></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-title"><span class="section-num">III</span>Recursos y control del desempeño</div>
+        <div class="section-desc">Los indicadores de desempeño que registres aquí alimentarán la Matriz de Indicadores.</div>
+        <div class="grid">
+          <div class="field full">
+            <label>Indicadores de desempeño (ficha de procesos)</label>
+            <div class="ind-list" id="fi_ind_list"></div>
+            <div class="ind-add">
+              <input id="fi_ind_nuevo" placeholder="Escribe un indicador y pulsa Añadir…" onkeydown="if(event.key==='Enter'){event.preventDefault();anadirIndicador();}">
+              <button type="button" class="btn btn-accent btn-sm" onclick="anadirIndicador()">+ Añadir</button>
+            </div>
+            <p class="hint">Cada indicador se guarda como una fila del subformulario de la ficha.</p>
+          </div>
+          <div class="field"><label>Controles</label><textarea id="fi_controles"></textarea></div>
+          <div class="field"><label>Documentos internos</label><textarea id="fi_docs_int"></textarea></div>
+          <div class="field"><label>Documentos externos</label><textarea id="fi_docs_ext"></textarea></div>
+          <div class="field"><label>Recursos humanos</label><textarea id="fi_rrhh"></textarea></div>
+          <div class="field"><label>Sistemas informáticos</label><textarea id="fi_sistemas"></textarea></div>
+          <div class="field"><label>Registros</label><textarea id="fi_registros"></textarea></div>
+          <div class="field"><label>Instalaciones</label><textarea id="fi_instalaciones"></textarea></div>
+          <div class="field"><label>Equipos</label><textarea id="fi_equipos"></textarea></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="btn btn-ghost" id="btnFichaReset">Limpiar</button>
+        <button type="submit" class="btn btn-primary" id="btnFichaGuardar">Guardar ficha</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- ===================== LISTADO ===================== -->
+  <section class="view" id="view-listado">
+    <div class="page-head">
+      <div class="eyebrow">Inventario documental</div>
+      <h1>Fichas registradas</h1>
+      <p>Fichas de proceso guardadas en los tres niveles. Edita o elimina según necesites.</p>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+      <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
+        <input id="listBuscar" placeholder="Buscar por proceso u objetivo…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderListado()">
+      </div>
+      <div style="display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px">
+        <button class="list-tab active" data-f="todos" onclick="setListFiltro('todos')" style="border:0;background:var(--brand);color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Todas</button>
+        <button class="list-tab" data-f="N0" onclick="setListFiltro('N0')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 0</button>
+        <button class="list-tab" data-f="N1" onclick="setListFiltro('N1')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 1</button>
+        <button class="list-tab" data-f="N2" onclick="setListFiltro('N2')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 2</button>
+      </div>
+    </div>
+    <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
+      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th>Objetivo</th><th>Indicadores</th><th style="text-align:right">Acciones</th></tr></thead>
+      <tbody id="tablaListado"><tr><td colspan="5" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+    </table></div></div>
+  </section>
+
+  <!-- ===================== MATRIZ (placeholder de la siguiente fase) ===================== -->
+  <section class="view" id="view-matriz">
+    <div class="page-head">
+      <div class="eyebrow">Desempeño</div>
+      <h1>Matriz de indicadores</h1>
+      <p>Este módulo se construye en la siguiente fase: jalará los indicadores desde las fichas, añadirá su definición (fórmula, fuente, frecuencias) y gestionará la programación y el seguimiento de metas.</p>
+    </div>
+    <div class="card"><div class="empty"><h3>Próximamente</h3><p>Primero terminamos las fichas; luego conectamos la matriz.</p></div></div>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   CLIENTE DEL PROXY (idéntico patrón al aplicativo de riesgos)
+   ============================================================ */
+const API = {
+  async call(path, method='GET', body={}, contentType){
+    if(!CONFIG.PROXY_URL || CONFIG.PROXY_URL.startsWith('PEGA')) throw new Error('Configura PROXY_URL en config.js');
+    const payload = { path, method, body };
+    if(contentType) payload.contentType = contentType;
+    if(CONFIG.PROXY_TOKEN) payload.token = CONFIG.PROXY_TOKEN;
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), 30000);
+    let r;
+    try{
+      r = await fetch(CONFIG.PROXY_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload), signal:ctrl.signal });
+    }catch(e){ clearTimeout(t); if(e.name==='AbortError') throw new Error('Sin respuesta del servidor (30s). Revisa tu conexión.'); throw e; }
+    clearTimeout(t);
+    const data = await r.json();
+    if(data.error) throw new Error(data.error);
+    return data;
+  },
+  records(entityId){
+    return this.call(`/apps/${CONFIG.APP_ID}/dtypes/entity/${entityId}.json`,'GET',{ name_value:1, fetch_all:true, per_page:2000 });
+  },
+  // Guardar/actualizar por formulario (único método que respeta relaciones).
+  // recordId null = crear (POST a /dtypes.json con entity_id en el body).
+  saveForm(recordId, campos, entityId){
+    const partes=[];
+    Object.keys(campos).forEach(fid=>{
+      let val=campos[fid];
+      if(val===null||val===undefined) return;
+      if(Array.isArray(val)){ val.forEach(it=>{ if(it!==null&&it!==undefined&&it!=='') partes.push('values['+encodeURIComponent(fid)+'][]='+encodeURIComponent(it)); }); }
+      else partes.push('values['+encodeURIComponent(fid)+']='+encodeURIComponent(val));
+    });
+    const method = recordId ? 'PUT' : 'POST';
+    let path, bodyStr;
+    if(recordId){ path=`/apps/${CONFIG.APP_ID}/dtypes/${recordId}.json`; bodyStr=partes.join('&'); }
+    else { path=`/apps/${CONFIG.APP_ID}/dtypes.json`; bodyStr='entity_id='+encodeURIComponent(entityId)+(partes.length?'&'+partes.join('&'):''); }
+    return this.call(path, method, bodyStr, 'application/x-www-form-urlencoded');
+  }
+};
+
+/* ============================================================
+   ESTADO + utilidades
+   ============================================================ */
+const STATE = { inventario:[], fichas:{N0:[],N1:[],N2:[]}, maestras:{} };
+let NIVEL = 'N0';                 // nivel de ficha activo en el formulario
+let INDICADORES = [];             // indicadores capturados para la ficha en curso
+let EDIT_FICHA = null;            // {nivel, id} si se está editando
+
+function toast(msg, isErr){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'+(isErr?' err':''); setTimeout(()=>t.className='toast',3400); }
+function setConn(ok,msg){ const d=document.getElementById('connDot'),x=document.getElementById('connText'); if(ok){d.className='dot on';x.textContent='Conectado a QuintaDB · datos en vivo';}else{d.className='dot off';x.textContent='Sin conexión: '+(msg||'revisa PROXY_URL');} }
+function genId22(){ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'; let s=''; for(let i=0;i<22;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
+const esBasura = x => (!x || /^[a-zA-Z0-9_\-]{22}$/.test(String(x)));
+// devuelve el field-config del nivel activo
+function FF(){ return NIVEL==='N0'?CONFIG.FICHA_N0_FIELDS : NIVEL==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS; }
+function entFicha(n){ return n==='N0'?CONFIG.ENTITIES.FICHA_N0 : n==='N1'?CONFIG.ENTITIES.FICHA_N1 : CONFIG.ENTITIES.FICHA_N2; }
+
+/* ============================================================
+   NAVEGACIÓN
+   ============================================================ */
+document.querySelectorAll('nav button').forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    b.classList.add('active');
+    document.getElementById('view-'+b.dataset.view).classList.add('active');
+    if(b.dataset.view==='listado') renderListado();
+  };
+});
+
+/* ============================================================
+   SELECTOR DE NIVEL — muestra/oculta campos de jerarquía
+   ============================================================ */
+function setNivel(n){
+  NIVEL=n;
+  document.querySelectorAll('.nivel-tab').forEach(t=>t.classList.toggle('active', t.dataset.nivel===n));
+  // Mostrar campos según nivel: N0 usa hasta N1; N1 y N2 usan más profundidad
+  document.querySelectorAll('.niv-n1').forEach(e=>e.classList.toggle('hidden', !(n==='N1'||n==='N2')));
+  document.querySelectorAll('.niv-n2').forEach(e=>e.classList.toggle('hidden', n!=='N2'));
+  // Reiniciar el formulario al cambiar de nivel
+  resetFicha();
+}
+window.setNivel=setNivel;
+
+/* ============================================================
+   CARGA DE LISTAS (maestras y cascada desde inventario)
+   ============================================================ */
+function fillSelect(el, options, ph='Seleccione…'){
+  if(!el) return;
+  el.innerHTML=`<option value="">${ph}</option>`+options.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
+}
+function recordsToOptions(records, labelCol){
+  return records.map(r=>{
+    const vals=r.values||{}; let label='';
+    if(labelCol && vals[labelCol] && vals[labelCol]!==labelCol) label=vals[labelCol];
+    else { for(const k in vals){ const v=vals[k]; if(typeof v==='string'&&v&&v!==k&&!esBasura(v)){label=v;break;} } }
+    return { value:r.id, label: label||r.id };
+  });
+}
+async function loadMaestra(entityKey, labelCol){
+  const ck=entityKey+(labelCol?(':'+labelCol):'');
+  if(STATE.maestras[ck]) return STATE.maestras[ck];
+  const data = await API.records(CONFIG.ENTITIES[entityKey]);
+  const opts = recordsToOptions(data.records||[], labelCol);
+  STATE.maestras[ck]=opts;
+  return opts;
+}
+
+// Inventario: misma fuente única de la cascada que en riesgos.
+const INV_COLS = { tipo:'Tipo de proceso', n0:'Proceso nivel 0', n1:'Procesos nivel 1', n2:'Proceso nivel 2', n3:'Proceso nivel 3', proc:'Procedimiento' };
+async function loadInventario(){
+  if(STATE.inventario.length) return STATE.inventario;
+  const data = await API.records(CONFIG.ENTITIES.PROCEDIMIENTO); // tabla integradora (inventario)
+  STATE.inventario = data.records||[];
+  return STATE.inventario;
+}
+function opcionesInv(inv, filtros, colSig){
+  const set=new Set();
+  inv.forEach(r=>{ const v=r.values||{}; const ok=Object.entries(filtros).every(([c,val])=>!val||v[c]===val); if(ok&&v[colSig]) set.add(v[colSig]); });
+  return [...set].sort().map(x=>({value:x,label:x}));
+}
+
+/* ============================================================
+   CASCADA del formulario de ficha (Tipo→N0→N1→N2→N3→Proc)
+   Actualiza la "ruta del proceso" en vivo.
+   ============================================================ */
+async function initCascadaFicha(){
+  const inv = await loadInventario();
+  const C=INV_COLS;
+  const tipo=document.getElementById('fi_tipo'), n0=document.getElementById('fi_n0'),
+        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2'),
+        n3=document.getElementById('fi_n3'), pr=document.getElementById('fi_proc');
+  const reset=el=>{ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; };
+  fillSelect(tipo, opcionesInv(inv,{},C.tipo));
+  tipo.onchange=()=>{ [n0,n1,n2,n3,pr].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } actualizarRuta(); };
+  n0.onchange=()=>{ [n1,n2,n3,pr].forEach(reset); if(n0.value){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; } actualizarRuta(); };
+  n1.onchange=()=>{ [n2,n3,pr].forEach(reset); if(n1.value){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } actualizarRuta(); };
+  n2.onchange=()=>{ [n3,pr].forEach(reset); if(n2.value){ fillSelect(n3,opcionesInv(inv,{[C.n1]:n1.value,[C.n2]:n2.value},C.n3)); n3.disabled=false; } actualizarRuta(); };
+  n3.onchange=()=>{ reset(pr); if(n3.value){ fillSelect(pr,opcionesInv(inv,{[C.n2]:n2.value,[C.n3]:n3.value},C.proc)); pr.disabled=false; } actualizarRuta(); };
+  pr.onchange=actualizarRuta;
+}
+// Arma la ruta de texto a partir de los niveles visibles según el nivel de ficha.
+function valoresCascada(){
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  // N0: Tipo › N0 › N1 ; N1: Tipo › N0 › N1 › N2 › N3 › Proc ; N2: Tipo › N0 › N1 › N2 › N3 › Proc
+  if(NIVEL==='N0') return [g('fi_tipo'),g('fi_n0'),g('fi_n1')];
+  return [g('fi_tipo'),g('fi_n0'),g('fi_n1'),g('fi_n2'),g('fi_n3'),g('fi_proc')];
+}
+function actualizarRuta(){
+  const ruta = valoresCascada().filter(Boolean).join(' › ');
+  document.getElementById('fi_ruta').textContent = ruta || 'Selecciona la jerarquía arriba…';
+}
+
+/* ============================================================
+   INDICADORES (subformulario de la ficha)
+   ============================================================ */
+function anadirIndicador(){
+  const inp=document.getElementById('fi_ind_nuevo');
+  const txt=(inp.value||'').trim();
+  if(!txt){ toast('Escribe un indicador antes de añadir.', true); return; }
+  INDICADORES.push({ id:null, texto:txt }); // id null = nuevo
+  inp.value=''; inp.focus();
+  renderIndicadores();
+}
+function quitarIndicador(i){ INDICADORES.splice(i,1); renderIndicadores(); }
+window.anadirIndicador=anadirIndicador; window.quitarIndicador=quitarIndicador;
+function renderIndicadores(){
+  const cont=document.getElementById('fi_ind_list');
+  if(!INDICADORES.length){ cont.innerHTML='<p class="hint">Aún no has añadido indicadores.</p>'; return; }
+  cont.innerHTML = INDICADORES.map((ind,i)=>`
+    <div class="ind-item">
+      <span class="ind-num">${String(i+1).padStart(2,'0')}</span>
+      <span class="ind-txt">${(ind.texto||'').replace(/</g,'&lt;')}</span>
+      <button type="button" class="icon-btn" title="Quitar" onclick="quitarIndicador(${i})">✕</button>
+    </div>`).join('');
+}
+
+/* ============================================================
+   GUARDAR FICHA
+   ============================================================ */
+document.getElementById('formFicha').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const F=FF();
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const ruta = valoresCascada().filter(Boolean).join(' › ');
+  if(!g('fi_tipo')||!g('fi_n0')){ toast('Indica al menos Tipo de proceso y Proceso nivel 0.', true); return; }
+
+  // Campos de la ficha. Guardamos relaciones de jerarquía Y la ruta de texto.
+  const campos={};
+  const put=(def,val)=>{ if(def && val) campos[def.id]=val; };
+  // Relaciones de jerarquía (se guardan por nombre→ buscaremos el ID en la maestra)
+  // NOTA: por ahora guardamos la RUTA DE TEXTO (campo Proceso), que es lo robusto.
+  put(F.proceso_txt, ruta);
+  // Información base
+  put(F.objetivo, g('fi_objetivo'));
+  put(F.alcance, g('fi_alcance'));
+  put(F.base_legal, g('fi_base_legal'));
+  put(F.proveedores, g('fi_proveedores'));
+  put(F.entrada, g('fi_entrada'));
+  put(F.producto, g('fi_producto'));
+  put(F.receptor, g('fi_receptor'));
+  put(F.controles, g('fi_controles'));
+  put(F.docs_internos, g('fi_docs_int'));
+  put(F.docs_externos, g('fi_docs_ext'));
+  put(F.rrhh, g('fi_rrhh'));
+  put(F.sistemas, g('fi_sistemas'));
+  put(F.registros, g('fi_registros'));
+  put(F.instalaciones, g('fi_instalaciones'));
+  put(F.equipos, g('fi_equipos'));
+  // Dueño (relación) — se manda como relación si se eligió
+  const dueno=g('fi_dueno');
+
+  const btn=document.getElementById('btnFichaGuardar');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  try{
+    let fichaId = EDIT_FICHA ? EDIT_FICHA.id : null;
+    // 1) Guardar campos base (texto + ruta)
+    const resp = await API.saveForm(fichaId, campos, entFicha(NIVEL));
+    if(!fichaId){ fichaId = resp.record && resp.record.id; }
+    // 2) Dueño (relación) en llamada aparte si se eligió
+    if(dueno && F.dueno){ try{ await API.saveForm(fichaId, { [F.dueno.id]: [dueno] }); }catch(err){ console.warn('Dueño no guardado:', err.message); } }
+    // 3) Indicadores (subformulario) — crear los nuevos
+    const nuevos = INDICADORES.filter(x=>!x.id && x.texto);
+    if(nuevos.length && fichaId){
+      const SUB = F.subform_indicador.id;
+      const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
+      nuevos.forEach(ind=>{ subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: ind.texto }; });
+      await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) });
+    }
+    toast(EDIT_FICHA?'Ficha actualizada.':'Ficha guardada correctamente.');
+    STATE.fichas[NIVEL]=[]; EDIT_FICHA=null;
+    resetFicha();
+  }catch(err){ toast('Error al guardar: '+err.message, true); }
+  finally{ btn.disabled=false; btn.textContent='Guardar ficha'; }
+});
+
+function resetFicha(){
+  EDIT_FICHA=null;
+  INDICADORES=[];
+  document.getElementById('formFicha').reset();
+  // Vaciar SOLO los desplegables dependientes (no el de Tipo, que es la raíz de la cascada).
+  ['fi_n0','fi_n1','fi_n2','fi_n3','fi_proc'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } });
+  // Repoblar el desplegable de Tipo desde el inventario ya cargado (form.reset() borró su selección,
+  // pero las <option> siguen; aun así lo regeneramos por si quedó vacío).
+  if(STATE.inventario.length){
+    const tipo=document.getElementById('fi_tipo');
+    if(tipo && tipo.options.length<=1){ fillSelect(tipo, opcionesInv(STATE.inventario,{},INV_COLS.tipo)); }
+  }
+  renderIndicadores();
+  actualizarRuta();
+  const btn=document.getElementById('btnFichaGuardar'); if(btn){ btn.disabled=false; btn.textContent='Guardar ficha'; }
+}
+document.getElementById('btnFichaReset').onclick=resetFicha;
+
+/* ============================================================
+   LISTADO DE FICHAS
+   ============================================================ */
+let LIST_FILTRO='todos';
+function setListFiltro(f){
+  LIST_FILTRO=f;
+  document.querySelectorAll('.list-tab').forEach(b=>{ const on=b.dataset.f===f; b.style.background=on?'var(--brand)':'transparent'; b.style.color=on?'#fff':'var(--slate)'; });
+  renderListado();
+}
+window.setListFiltro=setListFiltro;
+
+async function loadFichas(nivel, forzar){
+  if(!forzar && STATE.fichas[nivel].length) return STATE.fichas[nivel];
+  const data = await API.records(entFicha(nivel));
+  STATE.fichas[nivel] = data.records||[];
+  return STATE.fichas[nivel];
+}
+// Lee la ruta de proceso (texto) de forma robusta
+function rutaFicha(r, nivel){
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const v=r.values||{};
+  const cand=[v[F.proceso_txt.id], v['Proceso']].find(x=>x && x!=='Proceso' && String(x).length>1);
+  return cand||'—';
+}
+function objFicha(r, nivel){
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const v=r.values||{};
+  const cand=[v[F.objetivo.id], v['Objetivo del proceso']].find(x=>x && x!=='Objetivo del proceso' && !esBasura(x));
+  return cand||'';
+}
+function nIndFicha(r, nivel){
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const sub=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
+  return sub.length;
+}
+
+async function renderListado(){
+  const tb=document.getElementById('tablaListado');
+  try{
+    const niveles = LIST_FILTRO==='todos' ? ['N0','N1','N2'] : [LIST_FILTRO];
+    const todas=[];
+    for(const n of niveles){ const fichas=await loadFichas(n); fichas.forEach(r=>todas.push({r,nivel:n})); }
+    const filtro=(document.getElementById('listBuscar').value||'').toLowerCase();
+    const filas = todas.filter(({r,nivel})=>{
+      if(!filtro) return true;
+      return (rutaFicha(r,nivel)+' '+objFicha(r,nivel)).toLowerCase().includes(filtro);
+    });
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="5"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
+    tb.innerHTML = filas.map(({r,nivel})=>{
+      const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
+      return `<tr>
+        <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
+        <td class="mono" style="max-width:340px;font-size:12px">${ruta.length>70?ruta.slice(0,70)+'…':ruta}</td>
+        <td style="max-width:260px">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
+        <td style="text-align:center"><strong>${nInd}</strong></td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>
+          <button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>
+        </td>
+      </tr>`;
+    }).join('');
+    setConn(true);
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="5"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+}
+
+async function editarFicha(nivel, id){
+  setNivel(nivel);
+  // ir a la vista de fichas
+  document.querySelector('nav button[data-view="fichas"]').click();
+  const fichas = await loadFichas(nivel);
+  const r = fichas.find(x=>x.id===id);
+  if(!r){ toast('No se encontró la ficha.', true); return; }
+  EDIT_FICHA={nivel,id};
+  const F=FF(); const v=r.values||{};
+  const cur=(def,nombre)=>{ const x=v[def.id]??(nombre?v[nombre]:''); return (x&&!esBasura(x)&&x!==nombre)?x:''; };
+  const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
+  set('fi_objetivo', cur(F.objetivo,'Objetivo del proceso'));
+  set('fi_alcance', cur(F.alcance,'Alcance'));
+  set('fi_base_legal', cur(F.base_legal,'Base legal'));
+  set('fi_proveedores', cur(F.proveedores,'Proveedores/Cliente'));
+  set('fi_entrada', cur(F.entrada,'Entrada/Insumo'));
+  set('fi_producto', cur(F.producto,'Producto'));
+  set('fi_receptor', cur(F.receptor,'Receptor final del producto'));
+  set('fi_controles', cur(F.controles,'Controles'));
+  set('fi_docs_int', cur(F.docs_internos,'Documentos internos '));
+  set('fi_docs_ext', cur(F.docs_externos,'Documentos externos'));
+  set('fi_rrhh', cur(F.rrhh,'Recursos Humanos'));
+  set('fi_sistemas', cur(F.sistemas,'Sistemas Informáticos'));
+  set('fi_registros', cur(F.registros,'Registros'));
+  set('fi_instalaciones', cur(F.instalaciones,'Instalaciones'));
+  set('fi_equipos', cur(F.equipos,'Equipos'));
+  // Ruta: mostrar como referencia (la cascada se puede rehacer si se quiere)
+  const ruta=rutaFicha(r,nivel);
+  document.getElementById('fi_ruta').textContent = ruta||'(sin ruta — vuelve a seleccionar la jerarquía)';
+  // Indicadores existentes
+  INDICADORES=[];
+  const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
+  if(subIds.length){
+    for(const sid of subIds){
+      try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
+        const txt=(d.record.values||{})[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || (d.record.values||{})['Indicador'] || '';
+        if(txt && !esBasura(txt) && txt!=='Indicador') INDICADORES.push({id:sid, texto:txt});
+      }catch(_){}
+    }
+  }
+  renderIndicadores();
+  document.getElementById('btnFichaGuardar').textContent='Actualizar ficha';
+  toast('Editando ficha '+nivel+'. La jerarquía se conserva como texto; vuelve a seleccionarla si necesitas cambiarla.');
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+window.editarFicha=editarFicha;
+
+async function eliminarFicha(nivel, id){
+  if(!confirm('¿Eliminar esta ficha de proceso? Esta acción no se puede deshacer.')) return;
+  try{
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','DELETE',{});
+    toast('Ficha eliminada.');
+    STATE.fichas[nivel]=[]; renderListado();
+  }catch(e){ toast('Error al eliminar: '+e.message, true); }
+}
+window.eliminarFicha=eliminarFicha;
+
+/* ============================================================
+   ARRANQUE
+   ============================================================ */
+(async function init(){
+  renderIndicadores();
+  try{
+    await initCascadaFicha();
+    // Verificación: si el desplegable de Tipo quedó vacío, avisar con claridad.
+    const tipo=document.getElementById('fi_tipo');
+    if(!tipo || tipo.options.length<=1){
+      toast('La cascada no cargó opciones del inventario. Revisa la consola (F12).', true);
+      console.warn('[SGC] Inventario cargó', STATE.inventario.length, 'registros, pero el desplegable Tipo quedó vacío. Columna esperada:', INV_COLS.tipo);
+      if(STATE.inventario[0]) console.warn('[SGC] Columnas reales del inventario:', Object.keys(STATE.inventario[0].values||{}).filter(k=>!/^[a-zA-Z0-9_\-]{22}$/.test(k)));
+    } else {
+      console.log('[SGC] Cascada lista. Tipos cargados:', tipo.options.length-1);
+    }
+    // Cargar dueños (responsables) para el desplegable
+    try{ const duenos=await loadMaestra('RESPONSABLES'); fillSelect(document.getElementById('fi_dueno'), duenos); }catch(_){}
+    setConn(true);
+  }catch(e){
+    setConn(false, e.message);
+    toast('Error al iniciar: '+e.message, true);
+    console.error('[SGC] Error en init:', e);
+  }
+})();
+</script>
+</body>
+</html>
