@@ -167,6 +167,10 @@
       </div>
     </div>
 
+    <div id="editBanner" class="hidden" style="background:#fef3e2;border:1px solid var(--accent);border-radius:11px;padding:13px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="font-size:14px;color:#8a5510"><strong>✏️ Editando ficha</strong> — <span id="editBannerRuta" class="mono" style="font-size:13px"></span></div>
+      <button type="button" class="btn btn-ghost btn-sm" onclick="resetFicha()">Cancelar edición</button>
+    </div>
     <form id="formFicha" class="card">
       <div class="section">
         <div class="section-title"><span class="section-num">I</span>Identificación del proceso</div>
@@ -585,6 +589,7 @@ function resetFicha(){
   }
   renderIndicadores();
   actualizarRuta();
+  const banner=document.getElementById('editBanner'); if(banner) banner.classList.add('hidden');
   const btn=document.getElementById('btnFichaGuardar'); if(btn){ btn.disabled=false; btn.textContent='Guardar ficha'; }
 }
 document.getElementById('btnFichaReset').onclick=resetFicha;
@@ -657,21 +662,26 @@ async function renderListado(){
 async function editarFicha(nivel, id){
  try{
   console.log('[editarFicha] inicio →', nivel, id);
-  // 1) Ir a la vista de fichas y limpiar el formulario UNA sola vez (antes de cargar datos).
+  // 1) Navegar a la vista de fichas.
   document.querySelector('nav button[data-view="fichas"]').click();
-  EDIT_FICHA=null;
+  // 2) Buscar la ficha. Si no está en cache, forzar recarga desde QuintaDB.
+  let fichas = await loadFichas(nivel);
+  let r = fichas.find(x=>x.id===id);
+  if(!r){
+    console.warn('[editarFicha] no estaba en cache, recargando…');
+    fichas = await loadFichas(nivel, true); // forzar
+    r = fichas.find(x=>x.id===id);
+  }
+  if(!r){ toast('No se encontró la ficha (id '+id+').', true); console.error('[editarFicha] id no hallado. IDs:', fichas.map(f=>f.id)); return; }
+  console.log('[editarFicha] ficha encontrada ✓');
+  // 3) Limpiar el formulario y fijar el nivel visual (ya con la ficha en mano).
   INDICADORES=[];
-  document.getElementById('formFicha').reset();
-  // 2) Aplicar SOLO la parte visual del nivel (NO resetea como setNivel).
   aplicarNivelVisual(nivel);
-  // 3) Cargar la ficha.
-  const fichas = await loadFichas(nivel);
-  console.log('[editarFicha] fichas cargadas:', fichas.length);
-  const r = fichas.find(x=>x.id===id);
-  if(!r){ toast('No se encontró la ficha.', true); console.warn('[editarFicha] no se halló id', id, 'en', fichas.map(f=>f.id)); return; }
   EDIT_FICHA={nivel,id};
+  // 4) Cargar los campos de texto. (NO usamos form.reset() porque puede borrar
+  //    de forma diferida los valores que ponemos justo después.)
   const F=FF(); const v=r.values||{};
-  const cur=(def,nombre)=>{ const x=v[def.id]??(nombre?v[nombre]:''); return (x&&!esBasura(x)&&x!==nombre)?x:''; };
+  const cur=(def,nombre)=>{ if(!def) return ''; const x=v[def.id]??(nombre?v[nombre]:''); return (x&&!esBasura(x)&&x!==nombre)?x:''; };
   const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
   set('fi_objetivo', cur(F.objetivo,'Objetivo del proceso'));
   set('fi_alcance', cur(F.alcance,'Alcance'));
@@ -689,12 +699,12 @@ async function editarFicha(nivel, id){
   set('fi_instalaciones', cur(F.instalaciones,'Instalaciones'));
   set('fi_equipos', cur(F.equipos,'Equipos'));
   console.log('[editarFicha] campos de texto cargados');
-  // 4) Reconstruir la cascada desde la ruta de texto guardada (técnica de riesgos).
+  // 5) Reconstruir la cascada desde la ruta de texto guardada.
   const ruta=rutaFicha(r,nivel);
   console.log('[editarFicha] ruta:', ruta);
   await reconstruirCascadaFicha(ruta);
   console.log('[editarFicha] cascada reconstruida');
-  // 5) Indicadores existentes.
+  // 6) Indicadores existentes.
   INDICADORES=[];
   const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
   if(subIds.length){
@@ -707,7 +717,10 @@ async function editarFicha(nivel, id){
   }
   renderIndicadores();
   document.getElementById('btnFichaGuardar').textContent='Actualizar ficha';
-  toast('Editando ficha '+nivel+'. Revisa la jerarquía y los datos, luego pulsa «Actualizar ficha».');
+  // Banner visible de edición
+  const banner=document.getElementById('editBanner');
+  if(banner){ banner.classList.remove('hidden'); document.getElementById('editBannerRuta').textContent=ruta||('Ficha '+nivel); }
+  toast('Editando ficha '+nivel+'. Revisa los datos y pulsa «Actualizar ficha».');
   window.scrollTo({top:0,behavior:'smooth'});
   console.log('[editarFicha] COMPLETADO ✓');
  }catch(err){
