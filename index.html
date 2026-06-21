@@ -454,6 +454,7 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
   const F=FF();
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const ruta = valoresCascada().filter(Boolean).join(' › ');
+  console.log('[guardarFicha] NIVEL:', NIVEL, '| ruta construida:', JSON.stringify(ruta), '| campo proceso_txt:', F.proceso_txt && F.proceso_txt.id);
   if(!g('fi_tipo')||!g('fi_n0')){ toast('Indica al menos Tipo de proceso y Proceso nivel 0.', true); return; }
 
   // Campos de la ficha. Guardamos relaciones de jerarquía Y la ruta de texto.
@@ -483,6 +484,7 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
 
   const btn=document.getElementById('btnFichaGuardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  console.log('[guardarFicha] campos a enviar:', JSON.stringify(campos));
   try{
     let fichaId = EDIT_FICHA ? EDIT_FICHA.id : null;
     // 1) Guardar campos base (texto + ruta)
