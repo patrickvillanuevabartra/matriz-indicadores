@@ -338,13 +338,17 @@ document.querySelectorAll('nav button').forEach(b=>{
 /* ============================================================
    SELECTOR DE NIVEL — muestra/oculta campos de jerarquía
    ============================================================ */
-function setNivel(n){
+// Aplica solo la parte VISUAL del nivel (qué campos de jerarquía se ven).
+// No toca los datos del formulario. La usa tanto setNivel como editarFicha.
+function aplicarNivelVisual(n){
   NIVEL=n;
   document.querySelectorAll('.nivel-tab').forEach(t=>t.classList.toggle('active', t.dataset.nivel===n));
-  // Mostrar campos según nivel: N0 usa hasta N1; N1 y N2 usan más profundidad
   document.querySelectorAll('.niv-n1').forEach(e=>e.classList.toggle('hidden', !(n==='N1'||n==='N2')));
   document.querySelectorAll('.niv-n2').forEach(e=>e.classList.toggle('hidden', n!=='N2'));
-  // Reiniciar el formulario al cambiar de nivel
+}
+// setNivel = cambiar de nivel manualmente (clic en las pestañas) → sí reinicia el formulario.
+function setNivel(n){
+  aplicarNivelVisual(n);
   resetFicha();
 }
 window.setNivel=setNivel;
@@ -585,9 +589,14 @@ async function renderListado(){
 }
 
 async function editarFicha(nivel, id){
-  setNivel(nivel);
-  // ir a la vista de fichas
+  // 1) Ir a la vista de fichas y limpiar el formulario UNA sola vez (antes de cargar datos).
   document.querySelector('nav button[data-view="fichas"]').click();
+  EDIT_FICHA=null;
+  INDICADORES=[];
+  document.getElementById('formFicha').reset();
+  // 2) Aplicar SOLO la parte visual del nivel (NO resetea como setNivel).
+  aplicarNivelVisual(nivel);
+  // 3) Cargar la ficha.
   const fichas = await loadFichas(nivel);
   const r = fichas.find(x=>x.id===id);
   if(!r){ toast('No se encontró la ficha.', true); return; }
@@ -610,10 +619,10 @@ async function editarFicha(nivel, id){
   set('fi_registros', cur(F.registros,'Registros'));
   set('fi_instalaciones', cur(F.instalaciones,'Instalaciones'));
   set('fi_equipos', cur(F.equipos,'Equipos'));
-  // Ruta: mostrar como referencia (la cascada se puede rehacer si se quiere)
+  // 4) Reconstruir la cascada desde la ruta de texto guardada (técnica de riesgos).
   const ruta=rutaFicha(r,nivel);
-  document.getElementById('fi_ruta').textContent = ruta||'(sin ruta — vuelve a seleccionar la jerarquía)';
-  // Indicadores existentes
+  await reconstruirCascadaFicha(ruta);
+  // 5) Indicadores existentes.
   INDICADORES=[];
   const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
   if(subIds.length){
@@ -626,10 +635,51 @@ async function editarFicha(nivel, id){
   }
   renderIndicadores();
   document.getElementById('btnFichaGuardar').textContent='Actualizar ficha';
-  toast('Editando ficha '+nivel+'. La jerarquía se conserva como texto; vuelve a seleccionarla si necesitas cambiarla.');
+  toast('Editando ficha '+nivel+'. Revisa la jerarquía y los datos, luego pulsa «Actualizar ficha».');
   window.scrollTo({top:0,behavior:'smooth'});
 }
 window.editarFicha=editarFicha;
+
+// Reconstruye la cascada (Tipo→N0→N1→N2→N3→Proc) a partir de la ruta de texto
+// "Tipo › N0 › N1 › …". Selecciona cada segmento en su nivel si existe como opción.
+// Si un segmento no existe, para ahí y deja que el usuario complete (sin errores).
+async function reconstruirCascadaFicha(ruta){
+  const inv = await loadInventario();
+  const C = INV_COLS;
+  const tipo=document.getElementById('fi_tipo'), n0=document.getElementById('fi_n0'),
+        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2'),
+        n3=document.getElementById('fi_n3'), pr=document.getElementById('fi_proc');
+  const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
+  [n0,n1,n2,n3,pr].forEach(reset);
+  // Asegurar que el desplegable de Tipo esté poblado.
+  if(tipo && tipo.options.length<=1) fillSelect(tipo, opcionesInv(inv,{},C.tipo));
+  if(!ruta || ruta==='—'){ actualizarRuta(); return; }
+  const segs = String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+  // Generic guard: descartar segmentos que sean solo el nombre del campo
+  const generico = /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
+  const seg = i => (segs[i] && !generico.test(segs[i])) ? segs[i] : '';
+  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3), vN3=seg(4), vPr=seg(5);
+  // Selecciona el valor en el select solo si existe como opción.
+  const fijar=(el,val)=>{ if(!el||!val) return false; const ok=[...el.options].some(o=>o.value===val); if(ok){ el.value=val; return true; } return false; };
+  if(fijar(tipo,vTipo)){
+    fillSelect(n0, opcionesInv(inv,{[C.tipo]:vTipo},C.n0)); n0.disabled=false;
+    if(fijar(n0,vN0)){
+      fillSelect(n1, opcionesInv(inv,{[C.tipo]:vTipo,[C.n0]:vN0},C.n1)); n1.disabled=false;
+      if(fijar(n1,vN1)){
+        fillSelect(n2, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1},C.n2)); n2.disabled=false;
+        if(fijar(n2,vN2)){
+          fillSelect(n3, opcionesInv(inv,{[C.n1]:vN1,[C.n2]:vN2},C.n3)); n3.disabled=false;
+          if(fijar(n3,vN3)){
+            fillSelect(pr, opcionesInv(inv,{[C.n2]:vN2,[C.n3]:vN3},C.proc)); pr.disabled=false;
+            fijar(pr,vPr);
+          }
+        }
+      }
+    }
+  }
+  actualizarRuta();
+}
+window.reconstruirCascadaFicha=reconstruirCascadaFicha;
 
 async function eliminarFicha(nivel, id){
   if(!confirm('¿Eliminar esta ficha de proceso? Esta acción no se puede deshacer.')) return;
