@@ -349,8 +349,12 @@ document.querySelectorAll('nav button').forEach(b=>{
 function aplicarNivelVisual(n){
   NIVEL=n;
   document.querySelectorAll('.nivel-tab').forEach(t=>t.classList.toggle('active', t.dataset.nivel===n));
-  document.querySelectorAll('.niv-n1').forEach(e=>e.classList.toggle('hidden', !(n==='N1'||n==='N2')));
-  document.querySelectorAll('.niv-n2').forEach(e=>e.classList.toggle('hidden', n!=='N2'));
+  // Visibilidad de los campos de jerarquía en la sección I (Identificación):
+  //   N0 → solo Tipo y N0.   N1 → + Proceso N1.   N2 → + Proceso N1 y N2.
+  const wrap=id=>{ const el=document.getElementById(id); return el?el.closest('.field'):null; };
+  const w1=wrap('fi_n1'), w2=wrap('fi_n2');
+  if(w1) w1.classList.toggle('hidden', !(n==='N1'||n==='N2'));
+  if(w2) w2.classList.toggle('hidden', n!=='N2');
 }
 // setNivel = cambiar de nivel manualmente (clic en las pestañas) → sí reinicia el formulario.
 function setNivel(n){
@@ -407,10 +411,16 @@ async function initCascadaFicha(){
   const tipo=document.getElementById('fi_tipo'), n0=document.getElementById('fi_n0'),
         n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2');
   const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
+  // Asegura que el contenedor .field de un select esté visible (quita 'hidden' del wrapper).
+  const mostrarCampo=(el)=>{ const wrap=el && el.closest('.field'); if(wrap) wrap.classList.remove('hidden'); };
   fillSelect(tipo, opcionesInv(inv,{},C.tipo));
   tipo.onchange=()=>{ [n0,n1,n2].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } trasCascada(); };
-  n0.onchange=()=>{ [n1,n2].forEach(reset); if(n0.value){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; } trasCascada(); };
-  n1.onchange=()=>{ [n2].forEach(reset); if(n1.value){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } trasCascada(); };
+  n0.onchange=()=>{ [n1,n2].forEach(reset);
+    if(n0.value && (NIVEL==='N1'||NIVEL==='N2')){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; mostrarCampo(n1); }
+    trasCascada(); };
+  n1.onchange=()=>{ [n2].forEach(reset);
+    if(n1.value && NIVEL==='N2'){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; mostrarCampo(n2); }
+    trasCascada(); };
   n2.onchange=trasCascada;
 }
 // Tras cualquier cambio en la cascada: actualizar ruta y detectar el subproceso SIPOC.
@@ -754,6 +764,7 @@ window.eliminarFicha=eliminarFicha;
    ============================================================ */
 (async function init(){
   renderIndicadores();
+  aplicarNivelVisual('N0'); // fijar visibilidad inicial coherente con el nivel
   try{
     await initCascadaFicha();
     // Verificación: si el desplegable de Tipo quedó vacío, avisar con claridad.
