@@ -589,6 +589,8 @@ async function renderListado(){
 }
 
 async function editarFicha(nivel, id){
+ try{
+  console.log('[editarFicha] inicio →', nivel, id);
   // 1) Ir a la vista de fichas y limpiar el formulario UNA sola vez (antes de cargar datos).
   document.querySelector('nav button[data-view="fichas"]').click();
   EDIT_FICHA=null;
@@ -598,8 +600,9 @@ async function editarFicha(nivel, id){
   aplicarNivelVisual(nivel);
   // 3) Cargar la ficha.
   const fichas = await loadFichas(nivel);
+  console.log('[editarFicha] fichas cargadas:', fichas.length);
   const r = fichas.find(x=>x.id===id);
-  if(!r){ toast('No se encontró la ficha.', true); return; }
+  if(!r){ toast('No se encontró la ficha.', true); console.warn('[editarFicha] no se halló id', id, 'en', fichas.map(f=>f.id)); return; }
   EDIT_FICHA={nivel,id};
   const F=FF(); const v=r.values||{};
   const cur=(def,nombre)=>{ const x=v[def.id]??(nombre?v[nombre]:''); return (x&&!esBasura(x)&&x!==nombre)?x:''; };
@@ -619,9 +622,12 @@ async function editarFicha(nivel, id){
   set('fi_registros', cur(F.registros,'Registros'));
   set('fi_instalaciones', cur(F.instalaciones,'Instalaciones'));
   set('fi_equipos', cur(F.equipos,'Equipos'));
+  console.log('[editarFicha] campos de texto cargados');
   // 4) Reconstruir la cascada desde la ruta de texto guardada (técnica de riesgos).
   const ruta=rutaFicha(r,nivel);
+  console.log('[editarFicha] ruta:', ruta);
   await reconstruirCascadaFicha(ruta);
+  console.log('[editarFicha] cascada reconstruida');
   // 5) Indicadores existentes.
   INDICADORES=[];
   const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
@@ -637,6 +643,11 @@ async function editarFicha(nivel, id){
   document.getElementById('btnFichaGuardar').textContent='Actualizar ficha';
   toast('Editando ficha '+nivel+'. Revisa la jerarquía y los datos, luego pulsa «Actualizar ficha».');
   window.scrollTo({top:0,behavior:'smooth'});
+  console.log('[editarFicha] COMPLETADO ✓');
+ }catch(err){
+  console.error('[editarFicha] ERROR:', err);
+  toast('Error al cargar la ficha para editar: '+err.message, true);
+ }
 }
 window.editarFicha=editarFicha;
 
