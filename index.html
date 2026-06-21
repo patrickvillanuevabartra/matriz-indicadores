@@ -681,6 +681,8 @@ async function editarFicha(nivel, id){
   // 4) Cargar los campos de texto. (NO usamos form.reset() porque puede borrar
   //    de forma diferida los valores que ponemos justo después.)
   const F=FF(); const v=r.values||{};
+  console.log('[editarFicha] values crudos:', JSON.stringify(v));
+  console.log('[editarFicha] objetivo por ID:', JSON.stringify(v[F.objetivo.id]), '| por nombre:', JSON.stringify(v['Objetivo del proceso']));
   const cur=(def,nombre)=>{ if(!def) return ''; const x=v[def.id]??(nombre?v[nombre]:''); return (x&&!esBasura(x)&&x!==nombre)?x:''; };
   const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
   set('fi_objetivo', cur(F.objetivo,'Objetivo del proceso'));
@@ -721,7 +723,9 @@ async function editarFicha(nivel, id){
   const banner=document.getElementById('editBanner');
   if(banner){ banner.classList.remove('hidden'); document.getElementById('editBannerRuta').textContent=ruta||('Ficha '+nivel); }
   toast('Editando ficha '+nivel+'. Revisa los datos y pulsa «Actualizar ficha».');
-  window.scrollTo({top:0,behavior:'smooth'});
+  // Llevar la vista al banner de edición (no al tope) para que se vean los datos cargados.
+  const bn=document.getElementById('editBanner');
+  if(bn) bn.scrollIntoView({behavior:'smooth', block:'start'});
   console.log('[editarFicha] COMPLETADO ✓');
  }catch(err){
   console.error('[editarFicha] ERROR:', err);
