@@ -148,9 +148,8 @@ const CONFIG = {
     frecuencia_medicion: { id: "ajDaibWQndNkxdH0NdQ8kl", type: "select", options: ["Mensual","Bimensual","Trimestral","Semestral","Anual","A demanda"] },
     frecuencia_calculo:  { id: "ddNCkwW5PcMOoKW5tcUduy", type: "select", options: ["Mensual","Bimensual","Trimestral","Semestral","Anual","A demanda"] },
     prog_metas:          { id: "dcP8kTvSnks4kQWQmXWPTj", type: "linked_records", entity: "PROG_METAS", readOnly: true },
-    seg_metas:           { id: "ddR8orW4XdJAdcU39nFmk9", type: "linked_records", entity: "SEG_METAS", readOnly: true }
-    // NOTA: no hay campo de TEXTO propio para el indicador copiado (decisión P1).
-    //       Pendiente: crear "Indicador (texto)" en QuintaDB o resolver en la prueba.
+    seg_metas:           { id: "ddR8orW4XdJAdcU39nFmk9", type: "linked_records", entity: "SEG_METAS", readOnly: true },
+    indicador_txt:       { id: "ddJCkVBmjlW5JcSX3dKmo6", type: "text" } // indicador concreto (texto, robusto)
   },
 
   // ---- PROGRAMACIÓN DE METAS ---------------------------------------------
