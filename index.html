@@ -118,7 +118,7 @@
   /* Modal de edición */
   .modal-bg{position:fixed;inset:0;background:rgba(16,22,29,.55);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:28px 16px;overflow-y:auto}
   .modal-bg.show{display:flex}
-  .modal{background:var(--card);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:920px;margin:auto;animation:modalIn .2s ease}
+  .modal{position:relative;background:var(--card);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:920px;margin:auto;animation:modalIn .2s ease}
   @keyframes modalIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
   .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 26px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);border-radius:16px 16px 0 0;z-index:2}
   .modal-head .eyebrow{margin-bottom:4px}
@@ -396,6 +396,9 @@
 <!-- ===================== MODAL DE EDICIÓN ===================== -->
 <div class="modal-bg" id="modalEdit">
   <div class="modal">
+    <div id="ed_cargando" style="display:none;position:absolute;inset:0;background:rgba(255,255,255,.92);z-index:20;align-items:center;justify-content:center;border-radius:16px">
+      <div style="text-align:center"><span class="spinner" style="width:34px;height:34px;border-width:4px"></span><div style="margin-top:14px;color:var(--slate);font-weight:600">Cargando ficha…</div></div>
+    </div>
     <div class="modal-head">
       <div>
         <div class="eyebrow">Editar ficha · <span id="ed_nivel_lbl">N1</span></div>
@@ -975,19 +978,34 @@ async function renderListado(){
       return (rutaFicha(r,nivel)+' '+objFicha(r,nivel)).toLowerCase().includes(filtro);
     });
     if(!filas.length){ tb.innerHTML='<tr><td colspan="5"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
-    tb.innerHTML = filas.map(({r,nivel})=>{
-      const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
-      return `<tr>
-        <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
-        <td class="mono" style="max-width:340px;font-size:12px">${ruta.length>70?ruta.slice(0,70)+'…':ruta}</td>
-        <td style="max-width:260px">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
-        <td style="text-align:center"><strong>${nInd}</strong></td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>
-          <button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>
-        </td>
-      </tr>`;
-    }).join('');
+    // Agrupar por dueño del proceso (texto). Sin dueño → "(Sin dueño asignado)".
+    const duenoDe=({r,nivel})=>{
+      const F=EDF(nivel);
+      const t = F.dueno_txt ? (leerCampo(r,F.dueno_txt.id,'Dueño del proceso') || leerCampo(r,F.dueno_txt.id,'Nombre Dueño del proceso')) : '';
+      return t || '(Sin dueño asignado)';
+    };
+    const grupos={};
+    filas.forEach(f=>{ const d=duenoDe(f); (grupos[d]=grupos[d]||[]).push(f); });
+    const nombresOrdenados=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
+    let html='';
+    nombresOrdenados.forEach(dueno=>{
+      const items=grupos[dueno];
+      html+=`<tr style="background:var(--paper)"><td colspan="5" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
+      html+=items.map(({r,nivel})=>{
+        const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
+        return `<tr>
+          <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
+          <td class="mono" style="max-width:340px;font-size:12px">${ruta.length>70?ruta.slice(0,70)+'…':ruta}</td>
+          <td style="max-width:260px">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
+          <td style="text-align:center"><strong>${nInd}</strong></td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>
+            <button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>
+          </td>
+        </tr>`;
+      }).join('');
+    });
+    tb.innerHTML=html;
     setConn(true);
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="5"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
@@ -1001,16 +1019,19 @@ const EDF = n => n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIEL
 
 async function editarFicha(nivel, id){
  try{
+  // Abrir el modal de INMEDIATO con un overlay de carga (mejor percepción de velocidad)
+  ED_STATE = { nivel, id, indicadores:[] };
+  document.getElementById('ed_nivel_lbl').textContent=nivel;
+  const modalEl=document.getElementById('modalEdit');
+  modalEl.classList.add('show'); document.body.style.overflow='hidden';
+  mostrarCargaEdit(true);
   // 1) Leer la ficha FRESCA e individual desde QuintaDB (trae subform_values completos,
   //    que la lista masiva no siempre incluye).
   let r;
   try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','GET',{name_value:1}); r=d.record; }catch(_){}
   if(!r){ let fichas = await loadFichas(nivel, true); r = fichas.find(x=>x.id===id); }
-  if(!r){ toast('No se encontró la ficha.', true); return; }
-  ED_STATE = { nivel, id, indicadores:[] };
+  if(!r){ mostrarCargaEdit(false); toast('No se encontró la ficha.', true); cerrarModalEdit(); return; }
   const F=EDF(nivel); const v=r.values||{};
-  // Cabecera del modal
-  document.getElementById('ed_nivel_lbl').textContent=nivel;
   // Visibilidad de niveles en el modal
   document.getElementById('ed_w_n1').classList.toggle('hidden', !(nivel==='N1'||nivel==='N2'));
   document.getElementById('ed_w_n2').classList.toggle('hidden', nivel!=='N2');
@@ -1074,10 +1095,9 @@ async function editarFicha(nivel, id){
   renderSipocModal();
   // Regenerar subtítulos SOLO para los componentes marcados (coherencia: sin marca, sin subtítulo)
   sincronizarSubtitulos('ed', Object.keys(SIPOC_ED));
-  // Abrir modal
-  document.getElementById('modalEdit').classList.add('show');
-  document.body.style.overflow='hidden';
- }catch(err){ console.error('Error al abrir edición:', err); toast('Error al abrir edición: '+err.message, true); }
+  // Datos listos: quitar overlay de carga (el modal ya está abierto)
+  mostrarCargaEdit(false);
+ }catch(err){ console.error('Error al abrir edición:', err); mostrarCargaEdit(false); toast('Error al abrir edición: '+err.message, true); }
 }
 window.editarFicha=editarFicha;
 
@@ -1087,6 +1107,7 @@ function cerrarModalEdit(){
   ED_STATE={ nivel:null, id:null, indicadores:[] };
 }
 window.cerrarModalEdit=cerrarModalEdit;
+function mostrarCargaEdit(on){ const el=document.getElementById('ed_cargando'); if(el) el.style.display = on?'flex':'none'; }
 
 // Cascada del modal (Tipo→N0→N1→N2 según nivel)
 async function initCascadaModal(){
