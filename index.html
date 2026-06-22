@@ -1297,16 +1297,18 @@ async function renderMatriz(){
       const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
       const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
       const frec=leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
-      const partes=ind.split(' — '); const comp=partes.length>1?partes[0]:'';
-      const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
-      const nivel = leerCampo(r,MAT.indicador_n1.id,'Indicador proceso nivel 1')?'N1' : leerCampo(r,MAT.indicador_n2.id,'Indicador proceso nivel 2')?'N2' : leerCampo(r,MAT.indicador_n0.id,'Indicador proceso nivel 0')?'N0':'—';
-      const nivelBadge = nivel!=='—'?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
+      const rutaFull=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)');
+      const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
+      // Nivel: deducir de la relación a ficha; si falla, del nº de segmentos de la ruta
+      let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
+      if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
+      const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
       const avance = r._avance!==undefined && r._avance!==null ? barraAvance(r._avance) : '<span class="hint" style="font-size:12px">Ver metas</span>';
       return `<tr>
         <td>${nivelBadge}</td>
-        <td style="max-width:280px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
-        <td style="max-width:200px;font-size:12px" class="mono">${(comp||'').replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
-        <td style="max-width:200px;font-size:12px">${(formula||'').slice(0,60).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
+        <td style="max-width:260px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
+        <td style="max-width:240px;font-size:11px" class="mono">${(rutaFull||'').replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
+        <td style="max-width:180px;font-size:12px">${(formula||'').slice(0,60).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
         <td style="font-size:12px">${frec||'<span class=hint>—</span>'}</td>
         <td>${avance}</td>
         <td style="text-align:right;white-space:nowrap">
@@ -1326,6 +1328,25 @@ function barraAvance(pct){
   return `<div style="display:flex;align-items:center;gap:7px">
     <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:50px"><div style="width:${p}%;height:100%;background:${color}"></div></div>
     <span style="font-size:12px;font-weight:600;color:${color}">${p}%</span></div>`;
+}
+// ¿La relación tiene algún valor real (no vacío, no nombre de columna)?
+function relTieneAlgo(r, fieldId){
+  const v=(r.values||{})[fieldId];
+  if(!v) return false;
+  const s=JSON.stringify(v);
+  return s.length>4 && !/^"(Indicador|Proceso)/.test(s);
+}
+// Deduce el nivel (N0/N1/N2) contando segmentos de la ruta hasta la ficha.
+// Ruta: "Tipo › N0 › N1 › N2 › Componente". El componente es el último segmento.
+function nivelDesdeRuta(ruta){
+  const segs=String(ruta).split(/\s*›\s*/).filter(Boolean);
+  // Quitar el componente final (el análisis) para contar el nivel de la ficha
+  const n=segs.length; // Tipo(1)+N0(2)+...+componente
+  // Tipo+N0+componente = 3 → N0 ; +N1=4 → N1 ; +N2=5 → N2
+  if(n>=5) return 'N2';
+  if(n===4) return 'N1';
+  if(n===3) return 'N0';
+  return '';
 }
 
 const OFICINAS_MEDICION = ["Biblioteca Especializada","Biblioteca Virtual","Centro de Prácticas y Desarrollo Profesional","CITDEL","Comisión Consultiva","Comisión de Evaluación Curricular","Comité SGOE","Consejo de Facultad","Coordinación Relaciones Universitarias","Decanato","Defensoría Universitaria","Departamento Académico de Ingeniería","Escuela Profesional de Ingeniería Civil","Escuela Profesional de Ingeniería Electrónica","Escuela Profesional de Ingeniería Industrial","Escuela Profesional de Ingeniería Informática","Escuela Profesional de Ingeniería Mecatrónica","Escuelas profesionales","Laboratorio CIM","Laboratorio Circuitos y Dispositivos","Laboratorio Control","Laboratorio de Cómputo","Laboratorio de Ingeniería de Métodos","Laboratorio de Mecatrónica","Laboratorio de Procesos de Manufactura","Laboratorio de Química","Laboratorio Sistemas Digitales","Laboratorio Telecomunicaciones","Oficina Central de Registros y Matrícula","Oficina Central de Seguimiento del Egresado y Empleabilidad - OCSEE","Secretaría Académica","Taller de Construcción","Taller de Metal Mecánica","Unidad de Calidad y Acreditación Académica","Unidad de Extensión Cultural y Proyección Social","Unidad de Grados y Títulos","Unidad de Investigación","Unidad de Planificación","Unidad de Producción de Bienes y Prestación de Servicios","Unidad de Registros y Matrícula","Unidad de Servicios Administrativos","Unidad de Tutoría y Asesoría Académica"];
@@ -1402,6 +1423,10 @@ async function guardarIndicadoresMatriz(){
       const ind=AG_INDS[i];
       const campos={};
       campos[MAT.indicador_txt.id]=ind.texto;
+      // Ruta completa hasta el análisis: ruta de la ficha + componente (parte antes de " — ")
+      const comp=(ind.texto.split(' — ')[0]||'').trim();
+      const rutaCompleta = AG_CTX.ruta + (comp? ' › '+comp : '');
+      campos[MAT.proceso_ruta.id]=rutaCompleta;
       if(formula) campos[MAT.formula.id]=formula;
       if(fuente) campos[MAT.fuente_info.id]=fuente;
       if(frecMed) campos[MAT.frecuencia_medicion.id]=frecMed;
@@ -1474,8 +1499,10 @@ async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
   try{
     const data=await API.records(CONFIG.ENTITIES.PROG_METAS);
+    console.log('[ProgMeta] cargar: total registros leídos:', (data.records||[]).length, '| buscando matId:', MT_CTX.matId);
+    (data.records||[]).forEach((r,i)=>{ console.log('[ProgMeta]   reg'+i, 'rel raw:', JSON.stringify((r.values||{})[PM.rel_matriz.id]), '| ¿match?:', relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id)); });
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
-    console.log('[ProgMeta] cargar: total', (data.records||[]).length, '| de este indicador:', mias.length, '| matId:', MT_CTX.matId);
+    console.log('[ProgMeta] cargar: de este indicador:', mias.length);
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
     if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación'); return `<option value="${r.id}">Meta ${m||'—'} (${f||'s/f'})</option>`; }).join(''); }
