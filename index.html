@@ -546,7 +546,7 @@ window.detectarSubprocesoSIPOC=detectarSubprocesoSIPOC;
 
 function toggleSipocForm(cb){
   const nombre=cb.value;
-  if(cb.checked){ if(!SIPOC_FORM[nombre]) SIPOC_FORM[nombre]={prov:'',entr:'',prod:'',recep:'',indicador:''}; }
+  if(cb.checked){ if(!SIPOC_FORM[nombre]) SIPOC_FORM[nombre]={prov:'',entr:'',prod:'',recep:'',indicadores:['']}; }
   else { delete SIPOC_FORM[nombre]; }
   renderSipocCardsForm();
   sincronizarSubtitulos('fi', Object.keys(SIPOC_FORM));
@@ -597,6 +597,12 @@ function renderSipocCardsForm(){
   cont.innerHTML = nombres.map((nombre,i)=>{
     const d=SIPOC_FORM[nombre];
     const safe=nombre.replace(/"/g,'&quot;');
+    if(!Array.isArray(d.indicadores)) d.indicadores = d.indicador!==undefined?[d.indicador]:[''];
+    const indsHtml = d.indicadores.map((ind,j)=>`
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input style="flex:1" value="${(ind||'').replace(/"/g,'&quot;')}" oninput="SIPOC_FORM['${safe}'].indicadores[${j}]=this.value" placeholder="Indicador ${j+1}…">
+        <button type="button" class="icon-btn" title="Quitar" onclick="quitarIndComp('fi','${safe}',${j})" ${d.indicadores.length<=1?'style="visibility:hidden"':''}>✕</button>
+      </div>`).join('');
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
@@ -606,12 +612,31 @@ function renderSipocCardsForm(){
         <div class="field"><label>Receptor final del producto</label><textarea oninput="SIPOC_FORM['${safe}'].recep=this.value">${d.recep||''}</textarea></div>
       </div>
       <div class="ind-row">
-        <div class="field"><label>Indicador de desempeño de este componente <span class="req">*</span></label>
-        <input value="${(d.indicador||'').replace(/"/g,'&quot;')}" oninput="SIPOC_FORM['${safe}'].indicador=this.value" placeholder="Ej: Tiempo promedio de atención al usuario"></div>
+        <div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span></label>
+        ${indsHtml}
+        <button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('fi','${safe}')">+ Añadir indicador</button>
+        </div>
       </div>
     </div>`;
   }).join('');
 }
+// Añadir/quitar indicadores dentro de un componente (sirve para 'fi' y 'ed')
+function anadirIndComp(prefijo, nombre){
+  const store = prefijo==='fi'?SIPOC_FORM:SIPOC_ED;
+  if(!store[nombre]) return;
+  if(!Array.isArray(store[nombre].indicadores)) store[nombre].indicadores=[''];
+  store[nombre].indicadores.push('');
+  prefijo==='fi'?renderSipocCardsForm():renderSipocModal();
+}
+window.anadirIndComp=anadirIndComp;
+function quitarIndComp(prefijo, nombre, j){
+  const store = prefijo==='fi'?SIPOC_FORM:SIPOC_ED;
+  if(!store[nombre]||!Array.isArray(store[nombre].indicadores)) return;
+  store[nombre].indicadores.splice(j,1);
+  if(!store[nombre].indicadores.length) store[nombre].indicadores=[''];
+  prefijo==='fi'?renderSipocCardsForm():renderSipocModal();
+}
+window.quitarIndComp=quitarIndComp;
 window.SIPOC_FORM=SIPOC_FORM;
 // Arma la ruta de texto a partir de los niveles visibles según el nivel de ficha.
 // Ruta del proceso = SOLO hasta el nivel de la ficha (lógica del analista):
@@ -694,8 +719,8 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
   const dueno=g('fi_dueno');
 
   // Validar que cada componente marcado tenga indicador
-  const sinInd = comps.filter(n=>!(SIPOC_FORM[n].indicador||'').trim());
-  if(comps.length && sinInd.length){ toast('Falta el indicador en: '+sinInd.join(', '), true); return; }
+  const sinInd = comps.filter(n=>{ const inds=(SIPOC_FORM[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
+  if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', '), true); return; }
 
   const btn=document.getElementById('btnFichaGuardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
@@ -711,7 +736,11 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
     if(comps.length && fichaId){
       const SUB = F.subform_indicador.id;
       const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
-      comps.forEach(n=>{ const txt=n+' — '+(SIPOC_FORM[n].indicador||'').trim(); subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: txt }; });
+      comps.forEach(n=>{
+        (SIPOC_FORM[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean).forEach(ind=>{
+          subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: n+' — '+ind };
+        });
+      });
       await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) });
     }
     toast(EDIT_FICHA?'Ficha actualizada.':'Ficha guardada correctamente.');
@@ -849,7 +878,8 @@ async function editarFicha(nivel, id){
   await initCascadaModal();
   const ruta=rutaFicha(r,nivel);
   await reconstruirCascadaModal(ruta, nivel);
-  // Reconstruir SIPOC por componente desde los indicadores guardados ("Componente — Indicador")
+  // Reconstruir SIPOC por componente desde los indicadores guardados ("Componente — Indicador").
+  // Agrupa varios indicadores del mismo componente en su array.
   SIPOC_ED={};
   const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
   if(subIds.length){
@@ -860,10 +890,14 @@ async function editarFicha(nivel, id){
           const partes=String(txt).split(' — ');
           const comp=partes.length>1?partes[0].trim():txt.trim();
           const ind=partes.length>1?partes.slice(1).join(' — ').trim():'';
-          SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicador:ind, _sid:sid};
+          if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[]};
+          if(ind) SIPOC_ED[comp].indicadores.push(ind);
+          SIPOC_ED[comp]._sids.push(sid);
         }
       }catch(_){}
     }
+    // Asegurar al menos un campo por componente
+    Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
   }
   renderSipocModal();
   // Abrir modal
@@ -954,7 +988,7 @@ function detectarSubprocesoModal(){
 }
 function toggleSipocEd(cb){
   const nombre=cb.value;
-  if(cb.checked){ if(!SIPOC_ED[nombre]) SIPOC_ED[nombre]={prov:'',entr:'',prod:'',recep:'',indicador:''}; }
+  if(cb.checked){ if(!SIPOC_ED[nombre]) SIPOC_ED[nombre]={prov:'',entr:'',prod:'',recep:'',indicadores:['']}; }
   else { delete SIPOC_ED[nombre]; }
   renderSipocModal();
   sincronizarSubtitulos('ed', Object.keys(SIPOC_ED));
@@ -967,6 +1001,12 @@ function renderSipocModal(){
   if(!nombres.length){ cont.innerHTML=''; return; }
   cont.innerHTML = nombres.map((nombre,i)=>{
     const d=SIPOC_ED[nombre]; const safe=nombre.replace(/"/g,'&quot;').replace(/'/g,"\\'");
+    if(!Array.isArray(d.indicadores)) d.indicadores = d.indicador!==undefined?[d.indicador]:[''];
+    const indsHtml = d.indicadores.map((ind,j)=>`
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <input style="flex:1" value="${(ind||'').replace(/"/g,'&quot;')}" oninput="SIPOC_ED['${safe}'].indicadores[${j}]=this.value" placeholder="Indicador ${j+1}…">
+        <button type="button" class="icon-btn" title="Quitar" onclick="quitarIndComp('ed','${safe}',${j})" ${d.indicadores.length<=1?'style="visibility:hidden"':''}>✕</button>
+      </div>`).join('');
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
@@ -975,8 +1015,10 @@ function renderSipocModal(){
         <div class="field"><label>Producto</label><textarea oninput="SIPOC_ED['${safe}'].prod=this.value">${d.prod||''}</textarea></div>
         <div class="field"><label>Receptor final del producto</label><textarea oninput="SIPOC_ED['${safe}'].recep=this.value">${d.recep||''}</textarea></div>
       </div>
-      <div class="ind-row"><div class="field"><label>Indicador de desempeño de este componente <span class="req">*</span></label>
-        <input value="${(d.indicador||'').replace(/"/g,'&quot;')}" oninput="SIPOC_ED['${safe}'].indicador=this.value" placeholder="Ej: Tiempo promedio de atención"></div></div>
+      <div class="ind-row"><div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span></label>
+        ${indsHtml}
+        <button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('ed','${safe}')">+ Añadir indicador</button>
+        </div></div>
     </div>`;
   }).join('');
 }
@@ -1009,22 +1051,27 @@ async function guardarEdicion(){
     put(F.producto, join('prod')); put(F.receptor, join('recep'));
   }
   const dueno=g('ed_dueno');
-  const sinInd=comps.filter(n=>!(SIPOC_ED[n].indicador||'').trim());
-  if(comps.length && sinInd.length){ toast('Falta indicador en: '+sinInd.join(', '), true); return; }
+  const sinInd=comps.filter(n=>{ const inds=(SIPOC_ED[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
+  if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', '), true); return; }
   const btn=document.getElementById('ed_guardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(id, campos, entFicha(nivel));
     if(dueno && F.dueno){ try{ await API.saveForm(id, { [F.dueno.id]:[dueno] }); }catch(_){} }
-    // Indicadores: recrear desde SIPOC_ED. Como QuintaDB no permite borrar fácil subregistros,
-    // creamos los que son nuevos (sin _sid). Los existentes se conservan.
-    const nuevos = comps.filter(n=>!SIPOC_ED[n]._sid);
-    if(nuevos.length){
-      const SUB=F.subform_indicador.id;
-      const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
-      nuevos.forEach(n=>{ const txt=n+' — '+(SIPOC_ED[n].indicador||'').trim(); subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: txt }; });
-      await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) });
-    }
+    // Indicadores nuevos: componentes recién añadidos (sin _sids) o nuevos indicadores
+    // en componentes existentes. Para los componentes nuevos creamos todas sus filas.
+    const SUB=F.subform_indicador.id;
+    const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
+    let hayNuevos=false;
+    comps.forEach(n=>{
+      const inds=(SIPOC_ED[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean);
+      const yaExistentes = SIPOC_ED[n]._sids ? SIPOC_ED[n]._sids.length : 0;
+      // Crear filas para indicadores que superan los que ya estaban guardados
+      inds.forEach((ind,idx)=>{
+        if(idx >= yaExistentes){ subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: n+' — '+ind }; hayNuevos=true; }
+      });
+    });
+    if(hayNuevos){ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) }); }
     toast('Ficha actualizada.');
     STATE.fichas[nivel]=[];
     cerrarModalEdit();
