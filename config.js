@@ -149,7 +149,8 @@ const CONFIG = {
     frecuencia_calculo:  { id: "ddNCkwW5PcMOoKW5tcUduy", type: "select", options: ["Mensual","Bimensual","Trimestral","Semestral","Anual","A demanda"] },
     prog_metas:          { id: "dcP8kTvSnks4kQWQmXWPTj", type: "linked_records", entity: "PROG_METAS", readOnly: true },
     seg_metas:           { id: "ddR8orW4XdJAdcU39nFmk9", type: "linked_records", entity: "SEG_METAS", readOnly: true },
-    indicador_txt:       { id: "ddJCkVBmjlW5JcSX3dKmo6", type: "text" } // indicador concreto (texto, robusto)
+    indicador_txt:       { id: "ddJCkVBmjlW5JcSX3dKmo6", type: "text" }, // indicador concreto (texto, robusto)
+    proceso_ruta:        { id: "cOowddJCnixyJcQCosCXbO", type: "text" } // ruta completa hasta el análisis
   },
 
   // ---- PROGRAMACIÓN DE METAS ---------------------------------------------
