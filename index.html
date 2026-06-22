@@ -995,7 +995,7 @@ async function renderListado(){
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
         return `<tr>
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
-          <td class="mono" style="max-width:340px;font-size:12px">${ruta.length>70?ruta.slice(0,70)+'…':ruta}</td>
+          <td class="mono" style="max-width:220px;font-size:12px" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>55?ruta.slice(0,55)+'…':ruta}</td>
           <td style="max-width:260px">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
           <td style="text-align:center"><strong>${nInd}</strong></td>
           <td style="text-align:right;white-space:nowrap">
@@ -1382,7 +1382,7 @@ async function renderMatriz(){
       return `<tr>
         <td>${nivelBadge}</td>
         <td style="max-width:260px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
-        <td style="max-width:240px;font-size:11px" class="mono">${(rutaFull||'').replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
+        <td style="max-width:200px;font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?(rutaFull.length>50?rutaFull.slice(0,50)+'…':rutaFull).replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
         <td style="max-width:180px;font-size:12px">${(formula||'').slice(0,60).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
         <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
         <td>${avance}</td>
