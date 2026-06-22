@@ -282,15 +282,17 @@
 
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
       <thead><tr>
-        <th style="width:90px">Nivel</th>
+        <th style="width:70px">Nivel</th>
         <th>Indicador</th>
         <th>Proceso</th>
         <th>Fórmula</th>
+        <th>Oficina medición</th>
+        <th>Oficina dueña</th>
         <th>Frecuencia</th>
-        <th style="width:130px">Avance</th>
+        <th style="width:120px">Avance</th>
         <th style="text-align:right">Acciones</th>
       </tr></thead>
-      <tbody id="tablaMatriz"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <tbody id="tablaMatriz"><tr><td colspan="9" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 </main>
@@ -317,6 +319,7 @@
         <label style="font-size:13px;font-weight:500;color:var(--slate);display:block;margin-bottom:10px">3. Definición común (se aplica a los indicadores marcados)</label>
         <div class="grid">
           <div class="field"><label>Oficina/área de la medición</label><select id="ag_oficina" onchange="autocompletarRespMatriz()"></select></div>
+          <div class="field"><label>Oficina dueña del indicador</label><select id="ag_oficina_dueno"></select></div>
           <div class="field"><label>Responsable de la medición</label><input id="ag_responsable" readonly style="background:var(--paper)" placeholder="— se autocompleta según oficina —"></div>
           <div class="field"><label>Celular del responsable</label><input id="ag_celular" readonly style="background:var(--paper)" placeholder="—"></div>
           <div class="field"><label>Correo del responsable</label><input id="ag_correo" readonly style="background:var(--paper)" placeholder="—"></div>
@@ -331,6 +334,35 @@
     <div class="modal-foot">
       <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalAgregar')">Cancelar</button>
       <button type="button" class="btn btn-primary" id="ag_guardar" onclick="guardarIndicadoresMatriz()">Agregar a la matriz</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: EDITAR DEFINICIÓN DE INDICADOR (MATRIZ) ===================== -->
+<div class="modal-bg" id="modalEditMat">
+  <div class="modal" style="max-width:880px;position:relative">
+    <div class="modal-head">
+      <div><div class="eyebrow">Editar definición del indicador</div><h2>Matriz de indicadores</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalEditMat')" title="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid">
+        <div class="field full"><label>Indicador</label><input id="em_indicador" placeholder="Nombre del indicador"></div>
+        <div class="field full"><label>Propósito del indicador <span style="color:var(--mist);font-weight:400">(opcional)</span></label><input id="em_proposito" placeholder="¿Para qué se mide este indicador?"></div>
+        <div class="field full"><label>Fórmula de cálculo</label><textarea id="em_formula" rows="2"></textarea></div>
+        <div class="field full"><label>Fuente de información</label><textarea id="em_fuente" rows="2"></textarea></div>
+        <div class="field"><label>Oficina/área de la medición</label><select id="em_oficina" onchange="autocompletarRespMatrizEdit()"></select></div>
+        <div class="field"><label>Oficina dueña del indicador</label><select id="em_oficina_dueno"></select></div>
+        <div class="field"><label>Responsable de la medición</label><input id="em_responsable" readonly style="background:var(--paper)"></div>
+        <div class="field"><label>Celular del responsable</label><input id="em_celular" readonly style="background:var(--paper)"></div>
+        <div class="field"><label>Correo del responsable</label><input id="em_correo" readonly style="background:var(--paper)"></div>
+        <div class="field"><label>Frecuencia de medición</label><select id="em_frec_med"></select></div>
+        <div class="field"><label>Frecuencia de cálculo</label><select id="em_frec_calc"></select></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="cerrarModal('modalEditMat')">Cancelar</button>
+      <button class="btn btn-primary" id="em_guardar" onclick="guardarEdicionMatriz()">Actualizar indicador</button>
     </div>
   </div>
 </div>
@@ -359,11 +391,11 @@
             <div class="field full"><label>Plan de acción (enlace a Drive/SharePoint)</label><input type="url" id="pm_plan" placeholder="https://…"></div>
             <div class="field full"><label>Observación</label><textarea id="pm_obs"></textarea></div>
           </div>
-          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" onclick="guardarProgMeta()">+ Guardar programación</button></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
         </div>
         <div class="tabla-wrap"><table>
-          <thead><tr><th>Fecha</th><th>Referencia</th><th>Meta</th><th>Observación</th></tr></thead>
-          <tbody id="mt_prog_tabla"><tr><td colspan="4" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr></tbody>
+          <thead><tr><th>Fecha</th><th>Referencia</th><th>Meta</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
+          <tbody id="mt_prog_tabla"><tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr></tbody>
         </table></div>
       </div>
 
@@ -374,16 +406,20 @@
           <div class="grid">
             <div class="field"><label>Meta de referencia</label><select id="sm_prog" onchange="evaluarRemediacion()"></select></div>
             <div class="field"><label>Fecha de evaluación</label><input type="date" id="sm_fecha"></div>
+          </div>
+          <div id="sm_meta_info" class="hidden" style="background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 14px;margin:10px 0;font-size:13px;color:var(--slate)"></div>
+          <div class="grid">
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
+            <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
             <div class="field full"><label>Evidencias (enlace a Drive/SharePoint)</label><input type="url" id="sm_evid" placeholder="https://…"></div>
             <div class="field full hidden" id="sm_remed_box"><label>Plan de remediación (enlace) <span class="hint" style="font-weight:400">— requerido si el avance es menor a 100%</span></label><input type="url" id="sm_remed" placeholder="https://…"></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
           </div>
-          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
         </div>
         <div class="tabla-wrap"><table>
-          <thead><tr><th>Fecha eval.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th></tr></thead>
-          <tbody id="mt_seg_tabla"><tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr></tbody>
+          <thead><tr><th>Fecha eval.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
+          <tbody id="mt_seg_tabla"><tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr></tbody>
         </table></div>
       </div>
     </div>
@@ -499,7 +535,7 @@ const API = {
 /* ============================================================
    ESTADO + utilidades
    ============================================================ */
-const STATE = { inventario:[], fichas:{N0:[],N1:[],N2:[]}, maestras:{}, matriz:[], progMetas:[] };
+const STATE = { inventario:[], fichas:{N0:[],N1:[],N2:[]}, maestras:{}, matriz:[], progMetas:[], segMetas:[] };
 let NIVEL = 'N0';                 // nivel de ficha activo en el formulario
 let INDICADORES = [];             // indicadores capturados para la ficha en curso
 let EDIT_FICHA = null;            // {nivel, id} si se está editando
@@ -1366,32 +1402,47 @@ async function renderMatriz(){
       if(!filtro) return true;
       return ind.toLowerCase().includes(filtro);
     });
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
-    tb.innerHTML = filas.map(r=>{
-      const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
-      const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
-      const frec=leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
-      const resp=leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición');
-      const rutaFull=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)');
-      const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
-      // Nivel: deducir de la relación a ficha; si falla, del nº de segmentos de la ruta
-      let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
-      if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
-      const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
-      const avance = r._avance!==undefined && r._avance!==null ? barraAvance(r._avance) : '<span class="hint" style="font-size:12px">Ver metas</span>';
-      return `<tr>
-        <td>${nivelBadge}</td>
-        <td style="max-width:260px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
-        <td style="max-width:200px;font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?(rutaFull.length>50?rutaFull.slice(0,50)+'…':rutaFull).replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
-        <td style="max-width:180px;font-size:12px">${(formula||'').slice(0,60).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
-        <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
-        <td>${avance}</td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
-          <button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>
-        </td>
-      </tr>`;
-    }).join('');
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="9"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
+    // Agrupar por Oficina de medición
+    const ofiDe=r=>leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición') || '(Sin oficina de medición)';
+    const grupos={};
+    filas.forEach(r=>{ const o=ofiDe(r); (grupos[o]=grupos[o]||[]).push(r); });
+    const nombresOrd=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
+    let html='';
+    nombresOrd.forEach(ofi=>{
+      const items=grupos[ofi];
+      html+=`<tr style="background:var(--paper)"><td colspan="9" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
+      html+=items.map(r=>{
+        const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
+        const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
+        const frec=leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
+        const resp=leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición');
+        const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+        const ofiDueno=leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador');
+        const rutaFull=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)');
+        const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
+        let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
+        if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
+        const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
+        const avance = r._avance!==undefined && r._avance!==null ? barraAvance(r._avance) : '<span class="hint" style="font-size:12px">Ver metas</span>';
+        return `<tr>
+          <td>${nivelBadge}</td>
+          <td style="max-width:240px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
+          <td style="max-width:180px;font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?(rutaFull.length>45?rutaFull.slice(0,45)+'…':rutaFull).replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
+          <td style="max-width:160px;font-size:12px">${(formula||'').slice(0,50).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
+          <td style="font-size:11px">${ofiMed?ofiMed.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
+          <td style="font-size:11px">${ofiDueno?ofiDueno.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
+          <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
+          <td>${avance}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
+            <button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>
+            <button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>
+          </td>
+        </tr>`;
+      }).join('');
+    });
+    tb.innerHTML=html;
     setConn(true);
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="7"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
@@ -1435,7 +1486,9 @@ async function abrirAgregarIndicador(){
   document.getElementById('ag_def_box').classList.add('hidden');
   fillSelect(document.getElementById('ag_frec_med'), FREC_OPTS.map(o=>({value:o,label:o})));
   fillSelect(document.getElementById('ag_frec_calc'), FREC_OPTS.map(o=>({value:o,label:o})));
-  fillSelect(document.getElementById('ag_oficina'), OFICINAS_MEDICION.map(o=>({value:o,label:o})));
+  const oficinasOpts = await cargarOficinasOpts();
+  fillSelect(document.getElementById('ag_oficina'), oficinasOpts);
+  fillSelect(document.getElementById('ag_oficina_dueno'), oficinasOpts);
   ['ag_responsable','ag_celular','ag_correo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('modalAgregar').classList.add('show'); document.body.style.overflow='hidden';
   const opts=[];
@@ -1483,6 +1536,25 @@ function toggleDefBox(){
 }
 window.toggleDefBox=toggleDefBox;
 
+// Carga las oficinas desde la tabla Oficina/Dependencia (RESPONSABLES) como opciones de TEXTO
+// (value = nombre, para guardar texto robusto, no relación).
+let OFICINAS_CACHE = null;
+async function cargarOficinasOpts(){
+  if(OFICINAS_CACHE) return OFICINAS_CACHE;
+  try{
+    const data=await API.records(CONFIG.ENTITIES.RESPONSABLES);
+    const norm=s=>String(s||'').replace(/\s+/g,' ').trim();
+    const nombres=[...new Set((data.records||[]).map(r=>{
+      const v=r.values||{};
+      let n=v['Oficina o Dependencia'];
+      if(!n||n==='Oficina o Dependencia'){ for(const k in v){ const x=v[k]; if(typeof x==='string'&&x&&x!==k&&!esBasura(x)&&x!=='Oficina o Dependencia'){ n=x; break; } } }
+      return norm(n);
+    }).filter(Boolean))].sort();
+    OFICINAS_CACHE = nombres.map(n=>({value:n,label:n}));
+  }catch(e){ OFICINAS_CACHE = OFICINAS_MEDICION.map(o=>({value:o,label:o})); }
+  return OFICINAS_CACHE;
+}
+
 // Mapa oficina (nombre) → { responsable, celular, correo } desde la tabla Responsable de proceso.
 let MAPA_RESP_PROCESO = null;
 async function cargarMapaRespProceso(){
@@ -1524,7 +1596,7 @@ async function guardarIndicadoresMatriz(){
   if(!marcados.length){ toast('Marca al menos un indicador.', true); return; }
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const formula=g('ag_formula'), fuente=g('ag_fuente'), frecMed=g('ag_frec_med'), frecCalc=g('ag_frec_calc');
-  const oficina=g('ag_oficina'), responsable=g('ag_responsable'), celular=g('ag_celular'), correo=g('ag_correo');
+  const oficina=g('ag_oficina'), responsable=g('ag_responsable'), celular=g('ag_celular'), correo=g('ag_correo'), oficinaDueno=g('ag_oficina_dueno');
   const btn=document.getElementById('ag_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Agregando…';
   try{
     for(const i of marcados){
@@ -1540,6 +1612,7 @@ async function guardarIndicadoresMatriz(){
       if(frecMed) campos[MAT.frecuencia_medicion.id]=frecMed;
       if(frecCalc) campos[MAT.frecuencia_calculo.id]=frecCalc;
       if(oficina) campos[MAT.oficina_medicion.id]=oficina;
+      if(oficinaDueno && MAT.oficina_resp_ind) campos[MAT.oficina_resp_ind.id]=oficinaDueno;
       // Responsable + celular + correo como TEXTO (robusto)
       const respLimpio = (responsable && !responsable.startsWith('(')) ? responsable : '';
       if(respLimpio) campos[MAT.resp_med_txt.id]=respLimpio;
@@ -1560,6 +1633,91 @@ async function guardarIndicadoresMatriz(){
   finally{ btn.disabled=false; btn.textContent='Agregar a la matriz'; }
 }
 window.guardarIndicadoresMatriz=guardarIndicadoresMatriz;
+
+// ===== EDITAR DEFINICIÓN DE INDICADOR EN LA MATRIZ =====
+let EM_ID=null;
+async function abrirEditarMatriz(matId){
+  EM_ID=matId;
+  const modal=document.getElementById('modalEditMat');
+  modal.classList.add('show'); document.body.style.overflow='hidden';
+  const g=id=>{ const el=document.getElementById(id); if(el) el.value=''; };
+  ['em_indicador','em_proposito','em_formula','em_fuente','em_responsable','em_celular','em_correo'].forEach(g);
+  // Llenar selects
+  const oficinasOpts=await cargarOficinasOpts();
+  fillSelect(document.getElementById('em_oficina'), oficinasOpts);
+  fillSelect(document.getElementById('em_oficina_dueno'), oficinasOpts);
+  fillSelect(document.getElementById('em_frec_med'), FREC_OPTS.map(o=>({value:o,label:o})));
+  fillSelect(document.getElementById('em_frec_calc'), FREC_OPTS.map(o=>({value:o,label:o})));
+  // Leer el registro fresco
+  try{
+    const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+matId+'.json','GET',{name_value:1});
+    const r=d.record; if(!r) return;
+    const set=(id,val)=>{ const el=document.getElementById(id); if(el) el.value=val||''; };
+    const indTxt=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
+    // El indicador puede venir como "Componente — Indicador"; mostramos completo para editar
+    set('em_indicador', indTxt);
+    if(MAT.proposito_ind) set('em_proposito', leerCampo(r, MAT.proposito_ind.id, 'Propósito indicador'));
+    set('em_formula', leerCampo(r, MAT.formula.id, 'Fórmula'));
+    set('em_fuente', leerCampo(r, MAT.fuente_info.id, 'Fuente de información'));
+    const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+    const ofiDueno=leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador');
+    selectByText('em_oficina', ofiMed);
+    selectByText('em_oficina_dueno', ofiDueno);
+    set('em_frec_med', leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición'));
+    set('em_frec_calc', leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo'));
+    set('em_responsable', leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición'));
+    set('em_celular', leerCampo(r, MAT.resp_celular.id, 'Celular responsable'));
+    set('em_correo', leerCampo(r, MAT.resp_correo.id, 'Correo responsable'));
+  }catch(e){ toast('Error al abrir: '+e.message, true); }
+}
+window.abrirEditarMatriz=abrirEditarMatriz;
+
+// Selecciona en un <select> la opción cuyo texto coincide (flexible)
+function selectByText(selId, txt){
+  const sel=document.getElementById(selId); if(!sel||!txt) return;
+  const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const opt=[...sel.options].find(o=>norm(o.text)===norm(txt) || norm(o.value)===norm(txt));
+  if(opt) sel.value=opt.value;
+}
+
+async function autocompletarRespMatrizEdit(){
+  const sel=document.getElementById('em_oficina');
+  const oficina=sel&&sel.value?sel.value:'';
+  const elR=document.getElementById('em_responsable'), elC=document.getElementById('em_celular'), elE=document.getElementById('em_correo');
+  if(!oficina){ [elR,elC,elE].forEach(e=>{ if(e) e.value=''; }); return; }
+  const mapa=await cargarMapaRespProceso();
+  const info=mapa[String(oficina).replace(/\s+/g,' ').trim().toLowerCase()]||{};
+  if(elR) elR.value=info.responsable||'(sin responsable registrado)';
+  if(elC) elC.value=info.celular||'';
+  if(elE) elE.value=info.correo||'';
+}
+window.autocompletarRespMatrizEdit=autocompletarRespMatrizEdit;
+
+async function guardarEdicionMatriz(){
+  if(!EM_ID) return;
+  const g=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+  const campos={};
+  if(g('em_indicador')) campos[MAT.indicador_txt.id]=g('em_indicador');
+  if(MAT.proposito_ind) campos[MAT.proposito_ind.id]=g('em_proposito');
+  campos[MAT.formula.id]=g('em_formula');
+  campos[MAT.fuente_info.id]=g('em_fuente');
+  if(g('em_oficina')) campos[MAT.oficina_medicion.id]=g('em_oficina');
+  if(MAT.oficina_resp_ind) campos[MAT.oficina_resp_ind.id]=g('em_oficina_dueno');
+  if(g('em_frec_med')) campos[MAT.frecuencia_medicion.id]=g('em_frec_med');
+  if(g('em_frec_calc')) campos[MAT.frecuencia_calculo.id]=g('em_frec_calc');
+  const resp=g('em_responsable'); const respLimpio=(resp&&!resp.startsWith('('))?resp:'';
+  campos[MAT.resp_med_txt.id]=respLimpio;
+  campos[MAT.resp_celular.id]=g('em_celular');
+  campos[MAT.resp_correo.id]=g('em_correo');
+  const btn=document.getElementById('em_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  try{
+    await API.saveForm(EM_ID, campos);
+    toast('Indicador actualizado.');
+    STATE.matriz=[]; cerrarModal('modalEditMat'); renderMatriz();
+  }catch(err){ toast('Error al actualizar: '+err.message, true); }
+  finally{ btn.disabled=false; btn.textContent='Actualizar indicador'; }
+}
+window.guardarEdicionMatriz=guardarEdicionMatriz;
 
 async function eliminarMatriz(matId){
   if(!confirm('¿Eliminar este indicador de la matriz?')) return;
@@ -1618,7 +1776,7 @@ async function cargarProgMetas(){
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
     if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación'); return `<option value="${r.id}">Meta ${m||'—'} (${f||'s/f'})</option>`; }).join(''); }
-    if(!mias.length){ tb.innerHTML='<tr><td colspan="4" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; return; }
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; return; }
     tb.innerHTML=mias.map(r=>{
       const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación');
       const ref=leerCampo(r,PM.valor_ref.id,'Valor de referencia');
@@ -1626,50 +1784,89 @@ async function cargarProgMetas(){
       const obs=limpiarEtiqueta(leerCampo(r,PM.observacion.id,'Observación'));
       const plan=leerCampo(r,PM.plan_accion.id,'Plan de acción');
       const planLink=plan?` · <a href="${plan}" target="_blank" style="color:var(--brand);font-size:11px">plan ↗</a>`:'';
-      return `<tr><td>${f||'—'}</td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td></tr>`;
+      return `<tr><td>${f||'—'}</td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="icon-btn" title="Editar" onclick="editarProgMeta('${r.id}')">✏️</button>
+          <button class="icon-btn" title="Eliminar" onclick="eliminarProgMeta('${r.id}')">🗑️</button>
+        </td></tr>`;
     }).join('');
-  }catch(e){ tb.innerHTML=`<tr><td colspan="4" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
+  }catch(e){ tb.innerHTML=`<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
+
+// Editar una programación: carga sus valores en el formulario y cambia a modo edición
+let PM_EDIT_ID=null;
+function editarProgMeta(progId){
+  const p=(STATE.progMetas||[]).find(x=>x.id===progId); if(!p) return;
+  PM_EDIT_ID=progId;
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
+  set('pm_fecha', leerCampo(p,PM.fecha_prog.id,'Fecha programación'));
+  set('pm_ref', leerCampo(p,PM.valor_ref.id,'Valor de referencia'));
+  set('pm_meta', leerCampo(p,PM.valor_meta.id,'Valor meta'));
+  set('pm_plan', leerCampo(p,PM.plan_accion.id,'Plan de acción'));
+  set('pm_obs', limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación')));
+  const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='✓ Actualizar programación';
+  document.getElementById('pm_fecha').scrollIntoView({behavior:'smooth',block:'center'});
+}
+window.editarProgMeta=editarProgMeta;
+
+async function eliminarProgMeta(progId){
+  if(!confirm('¿Eliminar esta programación de meta?')) return;
+  try{
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+progId+'.json','DELETE',{});
+    toast('Programación eliminada.');
+    await cargarProgMetas();
+  }catch(err){ toast('Error al eliminar: '+err.message, true); }
+}
+window.eliminarProgMeta=eliminarProgMeta;
 
 async function guardarProgMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan');
   if(!meta){ toast('Indica el valor meta.', true); return; }
   const campos={};
-  campos[PM.rel_matriz.id]=[MT_CTX.matId];
+  if(!PM_EDIT_ID) campos[PM.rel_matriz.id]=[MT_CTX.matId];
   if(fecha) campos[PM.fecha_prog.id]=fecha;
-  if(ref) campos[PM.valor_ref.id]=ref;
+  campos[PM.valor_ref.id]=ref||'';
   campos[PM.valor_meta.id]=meta;
-  if(plan) campos[PM.plan_accion.id]=plan;
+  campos[PM.plan_accion.id]=plan||'';
   // Etiqueta robusta: el matId va al inicio de la observación (los textos SÍ se leen bien)
   campos[PM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   try{
-    const resp = await API.saveForm(null, campos, CONFIG.ENTITIES.PROG_METAS);
-    toast('Programación guardada.');
+    await API.saveForm(PM_EDIT_ID||null, campos, PM_EDIT_ID?undefined:CONFIG.ENTITIES.PROG_METAS);
+    toast(PM_EDIT_ID?'Programación actualizada.':'Programación guardada.');
+    PM_EDIT_ID=null;
+    const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     await cargarProgMetas();
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
 }
 window.guardarProgMeta=guardarProgMeta;
 
-// Muestra el plan de remediación si el avance proyectado es < 100%
+// Al elegir meta o cambiar el valor real: muestra meta/referencia, calcula % y controla remediación
 function evaluarRemediacion(){
-  const real=parseFloat(document.getElementById('sm_real').value);
   const selProg=document.getElementById('sm_prog');
+  const info=document.getElementById('sm_meta_info');
+  const elAvance=document.getElementById('sm_avance');
   const box=document.getElementById('sm_remed_box');
-  if(!box) return;
-  // Obtener el valor meta de la programación seleccionada
-  let meta=null;
+  const real=parseFloat(document.getElementById('sm_real').value);
+  let meta=null, ref=null;
   if(selProg && selProg.value && STATE.progMetas){
     const p=STATE.progMetas.find(x=>x.id===selProg.value);
-    if(p) meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta'));
+    if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); }
   }
-  if(!isNaN(real) && meta && meta>0){
-    const pct=real/meta*100;
-    box.classList.toggle('hidden', pct>=100);
-  } else {
-    box.classList.add('hidden');
+  // Panel informativo de la meta seleccionada
+  if(info){
+    if(!isNaN(meta)){
+      info.classList.remove('hidden');
+      info.innerHTML=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(ref)?'—':ref} &nbsp;·&nbsp; <strong>Meta:</strong> ${meta}`;
+    } else { info.classList.add('hidden'); info.innerHTML=''; }
   }
+  // Cálculo del % de avance en vivo
+  let pct=null;
+  if(!isNaN(real) && meta && meta>0){ pct=Math.round((real/meta*100)*100)/100; }
+  if(elAvance) elAvance.value = pct!==null ? pct+'%' : '';
+  // Remediación si <100%
+  if(box){ box.classList.toggle('hidden', !(pct!==null && pct<100)); }
 }
 window.evaluarRemediacion=evaluarRemediacion;
 
@@ -1678,24 +1875,58 @@ async function cargarSegMetas(){
   try{
     const data=await API.records(CONFIG.ENTITIES.SEG_METAS);
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
-    if(!mias.length){ tb.innerHTML='<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
+    STATE.segMetas=mias;
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
     let ultimoAvance=null;
     tb.innerHTML=mias.map(r=>{
       const f=leerCampo(r,SM.fecha_eval.id,'Fecha de evaluación');
-      const meta=leerCampo(r,SM.valor_meta.id,'Valor meta');
-      const real=leerCampo(r,SM.valor_real.id,'Valor real');
-      let pct=leerCampo(r,SM.pct_avance.id,'% de avance');
-      if(pct===''&&meta&&real) pct=Math.round(real/meta*100);
+      // Meta y avance desde campos propios (se leen bien); fallback al cálculo
+      const meta=SM.meta_seg?leerCampo(r,SM.meta_seg.id,'Meta seguimiento'):'';
+      const real=leerCampo(r,SM.valor_real.id,'Valor real obtenido');
+      let pct=SM.avance_app?leerCampo(r,SM.avance_app.id,'Avance app'):'';
+      if((pct===''||pct===undefined)&&meta&&real&&parseFloat(meta)>0) pct=Math.round(real/meta*100*100)/100;
       const obs=limpiarEtiqueta(leerCampo(r,SM.observacion.id,'Observación'));
       const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
       const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
       const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
-      if(pct!==''&&pct!==undefined) ultimoAvance=parseFloat(pct);
-      return `<tr><td>${f||'—'}</td><td>${meta||'—'}</td><td><strong>${real||'—'}</strong></td><td>${pct!==''&&pct!==undefined?barraAvance(pct):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td></tr>`;
+      if(pct!==''&&pct!==undefined&&pct!==null) ultimoAvance=parseFloat(pct);
+      const pctNum = (pct!==''&&pct!==undefined&&pct!==null)?parseFloat(pct):null;
+      return `<tr><td>${f||'—'}</td><td>${meta||'—'}</td><td><strong>${real||'—'}</strong></td><td>${pctNum!==null?barraAvance(pctNum):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')">✏️</button>
+          <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')">🗑️</button>
+        </td></tr>`;
     }).join('');
     actualizarAvanceMatriz(ultimoAvance);
-  }catch(e){ tb.innerHTML=`<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
+  }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
+
+let SM_EDIT_ID=null;
+function editarSegMeta(segId){
+  const s=(STATE.segMetas||[]).find(x=>x.id===segId); if(!s) return;
+  SM_EDIT_ID=segId;
+  const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
+  // Seleccionar la programación vinculada si se puede deducir por meta
+  set('sm_fecha', leerCampo(s,SM.fecha_eval.id,'Fecha de evaluación'));
+  set('sm_real', leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
+  set('sm_evid', leerCampo(s,SM.evidencias.id,'Evidencias'));
+  set('sm_remed', leerCampo(s,SM.plan_remediacion.id,'Plan de remediación'));
+  set('sm_obs', limpiarEtiqueta(leerCampo(s,SM.observacion.id,'Observación')));
+  evaluarRemediacion();
+  const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='✓ Actualizar seguimiento';
+  document.getElementById('sm_real').scrollIntoView({behavior:'smooth',block:'center'});
+}
+window.editarSegMeta=editarSegMeta;
+
+async function eliminarSegMeta(segId){
+  if(!confirm('¿Eliminar este seguimiento?')) return;
+  try{
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+segId+'.json','DELETE',{});
+    toast('Seguimiento eliminado.');
+    await cargarSegMetas(); renderMatriz();
+  }catch(err){ toast('Error al eliminar: '+err.message, true); }
+}
+window.eliminarSegMeta=eliminarSegMeta;
 function actualizarAvanceMatriz(avance){
   if(STATE.matriz){ const r=STATE.matriz.find(x=>x.id===MT_CTX.matId); if(r){ r._avance=avance; } }
 }
@@ -1704,22 +1935,33 @@ async function guardarSegMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs'), evid=g('sm_evid'), remed=g('sm_remed');
   if(!real){ toast('Indica el valor real.', true); return; }
+  // Obtener meta y referencia de la programación elegida
+  let meta=null, ref=null;
+  if(progId && STATE.progMetas){ const p=STATE.progMetas.find(x=>x.id===progId); if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); } }
+  const pct = (meta && meta>0) ? Math.round((parseFloat(real)/meta*100)*100)/100 : null;
   const campos={};
-  campos[SM.rel_matriz.id]=[MT_CTX.matId];
-  if(progId) campos[SM.rel_prog_meta.id]=[progId];
+  if(!SM_EDIT_ID){ campos[SM.rel_matriz.id]=[MT_CTX.matId]; if(progId) campos[SM.rel_prog_meta.id]=[progId]; }
   if(fecha) campos[SM.fecha_eval.id]=fecha;
   campos[SM.valor_real.id]=real;
-  if(evid) campos[SM.evidencias.id]=evid;
-  if(remed) campos[SM.plan_remediacion.id]=remed;
+  campos[SM.evidencias.id]=evid||'';
+  campos[SM.plan_remediacion.id]=remed||'';
+  // Campos propios (robustos) si existen en el config
+  if(SM.meta_seg && !isNaN(meta)) campos[SM.meta_seg.id]=meta;
+  if(SM.ref_seg && !isNaN(ref)) campos[SM.ref_seg.id]=ref;
+  if(SM.avance_app && pct!==null) campos[SM.avance_app.id]=pct;
   campos[SM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
+  const btn=document.getElementById('sm_guardar'); if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…'; }
   try{
-    const resp=await API.saveForm(null, campos, CONFIG.ENTITIES.SEG_METAS);
-    toast('Seguimiento guardado.');
-    ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-    document.getElementById('sm_remed_box').classList.add('hidden');
+    await API.saveForm(SM_EDIT_ID||null, campos, SM_EDIT_ID?undefined:CONFIG.ENTITIES.SEG_METAS);
+    toast(SM_EDIT_ID?'Seguimiento actualizado.':'Seguimiento guardado.');
+    SM_EDIT_ID=null;
+    ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
+    const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
     await cargarSegMetas();
     renderMatriz();
   }catch(err){ console.error('Error guardando seguimiento:', err); toast('Error: '+err.message, true); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='+ Guardar seguimiento'; } }
 }
 window.guardarSegMeta=guardarSegMeta;
 
