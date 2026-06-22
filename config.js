@@ -162,7 +162,7 @@ const CONFIG = {
     fecha_prog:    { id: "cTAmo-oSjbWRHAicVdQCoB", type: "date" },
     valor_ref:     { id: "aFW7RdKSjlWRZcRvG3FSoX", type: "float" }, // ✅ conservado
     valor_meta:    { id: "cJWP0pW7jdHykGW6BcNSoQ", type: "float" },
-    plan_accion:   { id: "dcSmosW6rpr6NcIdnRyCkJ", type: "file" },
+    plan_accion:   { id: "dcSmosW6rpr6NcIdnRyCkJ", type: "url" },
     observacion:   { id: "aIW4tdIG9cQ5hdTJaVrSk-", type: "text" }
   },
 
@@ -178,9 +178,9 @@ const CONFIG = {
     valor_meta:      { id: "cQsmo-W41duykKWPm9fveR", type: "linked_column", readOnly: true },
     fecha_eval:      { id: "cElXS8WObcNyofqdzKWRbl", type: "date" },
     valor_real:      { id: "dcQXmLW6ndUQhcLttdQmox", type: "float" },
-    evidencias:      { id: "bvWPRcReDcMRZdTdJdVCoY", type: "file" },
+    evidencias:      { id: "bvWPRcReDcMRZdTdJdVCoY", type: "url" },
     pct_avance:      { id: "bkWRiHlK1dJ4kyzCoTp2WJ", type: "formula", readOnly: true }, // (real/meta)*100
-    plan_remediacion:{ id: "dcJ8ooWPDhW6hdKvGIWRmk", type: "file" },
+    plan_remediacion:{ id: "dcJ8ooWPDhW6hdKvGIWRmk", type: "url" },
     observacion:     { id: "dcRSk6W5Lbnyk_WQGPBCk7", type: "text" }
   }
 };
