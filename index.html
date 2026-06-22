@@ -799,7 +799,6 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
   const F=FF();
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const ruta = valoresCascada().filter(Boolean).join(' › ');
-  console.log('[guardarFicha] NIVEL:', NIVEL, '| ruta construida:', JSON.stringify(ruta), '| campo proceso_txt:', F.proceso_txt && F.proceso_txt.id);
   if(!g('fi_tipo')||!g('fi_n0')){ toast('Indica al menos Tipo de proceso y Proceso nivel 0.', true); return; }
 
   // Campos de la ficha. Guardamos relaciones de jerarquía Y la ruta de texto.
@@ -838,7 +837,6 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
 
   const btn=document.getElementById('btnFichaGuardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
-  console.log('[guardarFicha] campos a enviar:', JSON.stringify(campos));
   try{
     let fichaId = EDIT_FICHA ? EDIT_FICHA.id : null;
     // 1) Guardar campos base (texto + ruta)
@@ -1020,7 +1018,6 @@ async function editarFicha(nivel, id){
   // Agrupa varios indicadores del mismo componente en su array.
   SIPOC_ED={};
   const subIds=getSubIds(r, F);
-  console.log('[editarFicha] subIds indicadores:', subIds.length);
   if(subIds.length){
     for(const sid of subIds){
       try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
@@ -1042,7 +1039,7 @@ async function editarFicha(nivel, id){
   // Abrir modal
   document.getElementById('modalEdit').classList.add('show');
   document.body.style.overflow='hidden';
- }catch(err){ console.error('[editarFicha]', err); toast('Error al abrir edición: '+err.message, true); }
+ }catch(err){ console.error('Error al abrir edición:', err); toast('Error al abrir edición: '+err.message, true); }
 }
 window.editarFicha=editarFicha;
 
@@ -1386,17 +1383,13 @@ async function cargarIndicadoresFicha(){
   const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
   const ruta=rutaFicha(r,nivel);
   const subIds=getSubIds(r, F);
-  console.log('[Matriz] subIds encontrados:', subIds.length, subIds);
   for(const sid of subIds){
     try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
       const vals=d.record && d.record.values || {};
-      console.log('[Matriz] subregistro', sid, '→', JSON.stringify(vals).slice(0,200));
       const txt=leerTextoIndicador(vals);
-      console.log('[Matriz]   texto extraído:', JSON.stringify(txt));
       if(txt && !esBasura(txt) && txt!=='Indicador') AG_INDS.push({ texto:txt });
-    }catch(e){ console.warn('[Matriz] error leyendo subregistro', sid, e.message); }
+    }catch(e){ console.warn('Error leyendo subregistro', sid, e.message); }
   }
-  console.log('[Matriz] AG_INDS final:', AG_INDS.length);
   AG_CTX={ nivel, fichaId:id, ruta };
   const list=document.getElementById('ag_inds_list');
   if(!AG_INDS.length){ list.innerHTML='<p class="hint">Esta ficha no tiene indicadores definidos.</p>'; box.classList.remove('hidden'); defb.classList.add('hidden'); return; }
@@ -1502,15 +1495,7 @@ async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
   try{
     const data=await API.records(CONFIG.ENTITIES.PROG_METAS);
-    console.log('[ProgMeta] cargar: total leídas:', (data.records||[]).length, '| buscando matId:', MT_CTX.matId);
-    (data.records||[]).forEach((r,i)=>{
-      const v=r.values||{}; let obs='';
-      for(const k in v){ if(/observaci/i.test(k) && typeof v[k]==='string' && v[k]!=='Observación'){ obs=v[k]; break; } }
-      const match=relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id);
-      if(match || (obs&&obs.includes('[#'))) console.log('[ProgMeta]   reg'+i, '| obs:', JSON.stringify(obs).slice(0,60), '| match:', match);
-    });
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
-    console.log('[ProgMeta] cargar: de este indicador:', mias.length);
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
     if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación'); return `<option value="${r.id}">Meta ${m||'—'} (${f||'s/f'})</option>`; }).join(''); }
@@ -1539,14 +1524,12 @@ async function guardarProgMeta(){
   if(plan) campos[PM.plan_accion.id]=plan;
   // Etiqueta robusta: el matId va al inicio de la observación (los textos SÍ se leen bien)
   campos[PM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
-  console.log('[ProgMeta] matId:', MT_CTX.matId, '| campos:', JSON.stringify(campos), '| entity:', CONFIG.ENTITIES.PROG_METAS);
   try{
     const resp = await API.saveForm(null, campos, CONFIG.ENTITIES.PROG_METAS);
-    console.log('[ProgMeta] respuesta:', JSON.stringify(resp).slice(0,300));
     toast('Programación guardada.');
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     await cargarProgMetas();
-  }catch(err){ console.error('[ProgMeta] ERROR:', err); toast('Error: '+err.message, true); }
+  }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
 }
 window.guardarProgMeta=guardarProgMeta;
 
@@ -1610,16 +1593,14 @@ async function guardarSegMeta(){
   if(evid) campos[SM.evidencias.id]=evid;
   if(remed) campos[SM.plan_remediacion.id]=remed;
   campos[SM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
-  console.log('[SegMeta] matId:', MT_CTX.matId, '| campos:', JSON.stringify(campos));
   try{
     const resp=await API.saveForm(null, campos, CONFIG.ENTITIES.SEG_METAS);
-    console.log('[SegMeta] respuesta:', JSON.stringify(resp).slice(0,300));
     toast('Seguimiento guardado.');
     ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     document.getElementById('sm_remed_box').classList.add('hidden');
     await cargarSegMetas();
     renderMatriz();
-  }catch(err){ console.error('[SegMeta] ERROR:', err); toast('Error: '+err.message, true); }
+  }catch(err){ console.error('Error guardando seguimiento:', err); toast('Error: '+err.message, true); }
 }
 window.guardarSegMeta=guardarSegMeta;
 
@@ -1638,10 +1619,9 @@ window.cerrarModal=cerrarModal;
     const tipo=document.getElementById('fi_tipo');
     if(!tipo || tipo.options.length<=1){
       toast('La cascada no cargó opciones del inventario. Revisa la consola (F12).', true);
-      console.warn('[SGC] Inventario cargó', STATE.inventario.length, 'registros, pero el desplegable Tipo quedó vacío. Columna esperada:', INV_COLS.tipo);
-      if(STATE.inventario[0]) console.warn('[SGC] Columnas reales del inventario:', Object.keys(STATE.inventario[0].values||{}).filter(k=>!/^[a-zA-Z0-9_\-]{22}$/.test(k)));
+      console.warn('Inventario cargó', STATE.inventario.length, 'registros, pero el desplegable Tipo quedó vacío. Columna esperada:', INV_COLS.tipo);
+      if(STATE.inventario[0]) console.warn('Columnas reales del inventario:', Object.keys(STATE.inventario[0].values||{}).filter(k=>!/^[a-zA-Z0-9_\-]{22}$/.test(k)));
     } else {
-      console.log('[SGC] Cascada lista. Tipos cargados:', tipo.options.length-1);
     }
     // Cargar dueños (responsables) para el desplegable
     try{ const duenos=await loadMaestra('RESPONSABLES'); fillSelect(document.getElementById('fi_dueno'), duenos); }catch(_){}
@@ -1649,7 +1629,7 @@ window.cerrarModal=cerrarModal;
   }catch(e){
     setConn(false, e.message);
     toast('Error al iniciar: '+e.message, true);
-    console.error('[SGC] Error en init:', e);
+    console.error('Error en init:', e);
   }
 })();
 </script>
