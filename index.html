@@ -1031,8 +1031,18 @@ async function editarFicha(nivel, id){
   setIII('ed_registros', cur(F.registros,'Registros'));
   setIII('ed_instalaciones', cur(F.instalaciones,'Instalaciones'));
   setIII('ed_equipos', cur(F.equipos,'Equipos'));
-  // Dueño
-  try{ const duenos=await loadMaestra('RESPONSABLES'); fillSelect(document.getElementById('ed_dueno'), duenos); }catch(_){}
+  // Dueño: cargar opciones y seleccionar según el texto guardado (dueno_txt, que se lee bien)
+  try{
+    const duenos=await loadMaestra('RESPONSABLES');
+    const selD=document.getElementById('ed_dueno');
+    fillSelect(selD, duenos);
+    const duenoTxt = F.dueno_txt ? leerCampo(r, F.dueno_txt.id, 'Dueño del proceso') || leerCampo(r, F.dueno_txt.id, 'Nombre Dueño del proceso') : '';
+    if(duenoTxt && selD){
+      const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+      const opt=[...selD.options].find(o=>norm(o.text)===norm(duenoTxt));
+      if(opt) selD.value=opt.value;
+    }
+  }catch(_){}
   // Cascada del modal + reconstrucción desde la ruta
   await initCascadaModal();
   const ruta=rutaFicha(r,nivel);
