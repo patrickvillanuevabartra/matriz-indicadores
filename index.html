@@ -316,8 +316,10 @@
       <div id="ag_def_box" class="hidden" style="border-top:1px solid var(--line);margin-top:16px;padding-top:16px">
         <label style="font-size:13px;font-weight:500;color:var(--slate);display:block;margin-bottom:10px">3. Definición común (se aplica a los indicadores marcados)</label>
         <div class="grid">
-          <div class="field"><label>Oficina/área de la medición</label><select id="ag_oficina"></select></div>
-          <div class="field"><label>Responsable de la medición</label><select id="ag_responsable"></select></div>
+          <div class="field"><label>Oficina/área de la medición</label><select id="ag_oficina" onchange="autocompletarRespMatriz()"></select></div>
+          <div class="field"><label>Responsable de la medición</label><input id="ag_responsable" readonly style="background:var(--paper)" placeholder="— se autocompleta según oficina —"></div>
+          <div class="field"><label>Celular del responsable</label><input id="ag_celular" readonly style="background:var(--paper)" placeholder="—"></div>
+          <div class="field"><label>Correo del responsable</label><input id="ag_correo" readonly style="background:var(--paper)" placeholder="—"></div>
           <div class="field"><label>Frecuencia de medición</label><select id="ag_frec_med"></select></div>
           <div class="field"><label>Frecuencia de cálculo</label><select id="ag_frec_calc"></select></div>
           <div class="field full"><label>Fórmula de cálculo</label><textarea id="ag_formula" placeholder="Ej: (N° atenciones resueltas / N° atenciones totales) × 100"></textarea></div>
@@ -669,6 +671,22 @@ window.toggleSipocForm=toggleSipocForm;
 
 // Campos de la sección III que llevan subtítulos por componente (prefijo fi_ o ed_)
 const CAMPOS_SUBTITULO = ['controles','docs_int','docs_ext','rrhh','sistemas','registros','instalaciones','equipos'];
+// Quita los subtítulos 【...】 de un texto, dejando solo el contenido real bajo cada uno.
+function quitarSubtitulosTexto(texto){
+  if(!texto) return '';
+  const re=/【\s*.+?\s*】/g;
+  const matches=[...texto.matchAll(re)];
+  if(!matches.length) return texto.trim();
+  // Concatenar solo el contenido entre subtítulos (lo que el usuario escribió)
+  let partes=[];
+  for(let i=0;i<matches.length;i++){
+    const ini=matches[i].index+matches[i][0].length;
+    const fin=(i+1<matches.length)?matches[i+1].index:texto.length;
+    const cont=texto.slice(ini,fin).replace(/^\n+|\n+$/g,'').trim();
+    if(cont) partes.push(cont);
+  }
+  return partes.join('\n').trim();
+}
 // Inserta/actualiza los subtítulos 【 Componente 】 en cada campo, conservando el texto
 // que el usuario ya escribió bajo cada subtítulo. Quita los subtítulos de componentes desmarcados.
 function sincronizarSubtitulos(prefijo, componentes){
@@ -844,6 +862,8 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
     if(!fichaId){ fichaId = resp.record && resp.record.id; }
     // 2) Dueño (relación) en llamada aparte si se eligió
     if(dueno && F.dueno){ try{ await API.saveForm(fichaId, { [F.dueno.id]: [dueno] }); }catch(err){ console.warn('Dueño no guardado:', err.message); } }
+    // Dueño como TEXTO (robusto): tomar el nombre del option seleccionado
+    if(dueno && F.dueno_txt){ const selD=document.getElementById('fi_dueno'); const nom=selD&&selD.selectedOptions[0]?selD.selectedOptions[0].text:''; if(nom){ try{ await API.saveForm(fichaId, { [F.dueno_txt.id]: nom }); }catch(_){} } }
     // 3) Indicadores (subformulario): uno por cada componente del SIPOC → "Componente — Indicador"
     if(comps.length && fichaId){
       const SUB = F.subform_indicador.id;
@@ -997,58 +1017,53 @@ async function editarFicha(nivel, id){
   // Lectura robusta (igual que el listado)
   const cur=(def,nombre)=>{ if(!def) return ''; const cand=[v[def.id], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x)); return cand||''; };
   const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
+  // Para los campos de sección III, quitamos los subtítulos 【...】 al cargar;
+  // se regeneran solos al marcar los componentes (sincronizarSubtitulos).
+  const setIII=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=quitarSubtitulosTexto(val||''); };
   set('ed_objetivo', cur(F.objetivo,'Objetivo del proceso'));
   set('ed_alcance', cur(F.alcance,'Alcance'));
   set('ed_base_legal', cur(F.base_legal,'Base legal'));
-  set('ed_controles', cur(F.controles,'Controles'));
-  set('ed_docs_int', cur(F.docs_internos,'Documentos internos '));
-  set('ed_docs_ext', cur(F.docs_externos,'Documentos externos'));
-  set('ed_rrhh', cur(F.rrhh,'Recursos Humanos'));
-  set('ed_sistemas', cur(F.sistemas,'Sistemas Informáticos'));
-  set('ed_registros', cur(F.registros,'Registros'));
-  set('ed_instalaciones', cur(F.instalaciones,'Instalaciones'));
-  set('ed_equipos', cur(F.equipos,'Equipos'));
+  setIII('ed_controles', cur(F.controles,'Controles'));
+  setIII('ed_docs_int', cur(F.docs_internos,'Documentos internos '));
+  setIII('ed_docs_ext', cur(F.docs_externos,'Documentos externos'));
+  setIII('ed_rrhh', cur(F.rrhh,'Recursos Humanos'));
+  setIII('ed_sistemas', cur(F.sistemas,'Sistemas Informáticos'));
+  setIII('ed_registros', cur(F.registros,'Registros'));
+  setIII('ed_instalaciones', cur(F.instalaciones,'Instalaciones'));
+  setIII('ed_equipos', cur(F.equipos,'Equipos'));
   // Dueño
   try{ const duenos=await loadMaestra('RESPONSABLES'); fillSelect(document.getElementById('ed_dueno'), duenos); }catch(_){}
   // Cascada del modal + reconstrucción desde la ruta
   await initCascadaModal();
   const ruta=rutaFicha(r,nivel);
   await reconstruirCascadaModal(ruta, nivel);
-  // Leer los indicadores guardados (texto "Componente — Indicador")
+  // Leer los indicadores guardados (texto "Componente — Indicador") EN PARALELO (rápido)
   SIPOC_ED={};
   const subIds=getSubIds(r, F);
   const indicadoresGuardados=[]; // {comp, ind, sid}
   if(subIds.length){
-    for(const sid of subIds){
-      try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
-        const txt=leerTextoIndicador(d.record && d.record.values);
-        if(txt && !esBasura(txt) && txt!=='Indicador'){
-          const partes=String(txt).split(' — ');
-          const comp=partes.length>1?partes[0].trim():'';
-          const ind=partes.length>1?partes.slice(1).join(' — ').trim():txt.trim();
-          indicadoresGuardados.push({comp, ind, sid});
-        }
-      }catch(_){}
-    }
+    const lecturas = await Promise.all(subIds.map(sid=>
+      API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
+        .then(d=>({sid, vals:d.record && d.record.values})).catch(()=>({sid, vals:null}))
+    ));
+    lecturas.forEach(({sid, vals})=>{
+      const txt=leerTextoIndicador(vals);
+      if(txt && !esBasura(txt) && txt!=='Indicador'){
+        const partes=String(txt).split(' — ');
+        const comp=partes.length>1?partes[0].trim():'';
+        const ind=partes.length>1?partes.slice(1).join(' — ').trim():txt.trim();
+        indicadoresGuardados.push({comp, ind, sid});
+      }
+    });
   }
-  // Detectar los componentes disponibles desde la cascada (igual que en creación)
+  // Detectar los componentes disponibles desde la cascada (igual que en creación).
+  // Guardamos los indicadores pendientes para asociarlos tras detectar.
+  ED_PENDIENTES = indicadoresGuardados.filter(g=>g.comp);
   detectarSubprocesoModal();
-  // Marcar automáticamente los componentes que tienen indicadores guardados y asociarlos.
-  // Ignoramos indicadores huérfanos viejos (sin formato "Componente — Indicador").
-  indicadoresGuardados.forEach(g=>{
-    if(!g.comp) return; // huérfano: dato viejo sin componente, se ignora
-    const comp = g.comp;
-    if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[]};
-    if(g.ind) SIPOC_ED[comp].indicadores.push(g.ind);
-    SIPOC_ED[comp]._sids.push(g.sid);
-  });
-  Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
-  // Marcar los checkboxes de los componentes que tienen indicadores
-  setTimeout(()=>{
-    document.querySelectorAll('#ed_sipoc_checks input[type=checkbox]').forEach(cb=>{ if(SIPOC_ED[cb.value]) cb.checked=true; });
-    renderSipocModal();
-  }, 50);
+  // detectarSubprocesoModal ya asoció los componentes guardados a SIPOC_ED y marcó checkboxes.
   renderSipocModal();
+  // Regenerar subtítulos SOLO para los componentes marcados (coherencia: sin marca, sin subtítulo)
+  sincronizarSubtitulos('ed', Object.keys(SIPOC_ED));
   // Abrir modal
   document.getElementById('modalEdit').classList.add('show');
   document.body.style.overflow='hidden';
@@ -1118,6 +1133,7 @@ function trasCascadaModal(){
   detectarSubprocesoModal();
 }
 let SIPOC_ED = {}; // SIPOC por componente en el modal
+let ED_PENDIENTES = null; // indicadores guardados pendientes de asociar al editar
 function detectarSubprocesoModal(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const picker=document.getElementById('ed_sipoc_picker');
@@ -1128,6 +1144,21 @@ function detectarSubprocesoModal(){
   if(!det){ picker.classList.add('hidden'); checks.innerHTML=''; return; }
   picker.classList.remove('hidden');
   nivelLbl.textContent=det.nivelLabel;
+  // Asociar indicadores guardados pendientes a los componentes detectados (coincidencia flexible)
+  if(typeof ED_PENDIENTES!=='undefined' && ED_PENDIENTES && ED_PENDIENTES.length){
+    const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    ED_PENDIENTES.forEach(gp=>{
+      // Buscar el componente detectado que mejor coincida con el comp guardado
+      let comp = det.elementos.find(e=>norm(e)===norm(gp.comp))
+              || det.elementos.find(e=>norm(e).includes(norm(gp.comp)) || norm(gp.comp).includes(norm(e)))
+              || gp.comp;
+      if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[]};
+      if(gp.ind) SIPOC_ED[comp].indicadores.push(gp.ind);
+      SIPOC_ED[comp]._sids.push(gp.sid);
+    });
+    Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores || !SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
+    ED_PENDIENTES=null; // ya asociados
+  }
   // Marca como checked los componentes que ya estaban en SIPOC_ED
   checks.innerHTML = det.elementos.map(el=>{
     const checked = Object.keys(SIPOC_ED).includes(el) ? 'checked' : '';
@@ -1207,6 +1238,8 @@ async function guardarEdicion(){
   try{
     await API.saveForm(id, campos, entFicha(nivel));
     if(dueno && F.dueno){ try{ const rd=await API.saveForm(id, { [F.dueno.id]:[dueno] }); console.log('[dueno] guardado:', dueno, '| resp:', JSON.stringify(rd).slice(0,200)); }catch(e){ console.warn('[dueno] error:', e.message); } }
+    // Dueño como TEXTO (robusto)
+    if(dueno && F.dueno_txt){ const selD=document.getElementById('ed_dueno'); const nom=selD&&selD.selectedOptions[0]?selD.selectedOptions[0].text:''; if(nom){ try{ await API.saveForm(id, { [F.dueno_txt.id]: nom }); }catch(_){} } }
     // Indicadores nuevos: componentes recién añadidos (sin _sids) o nuevos indicadores
     // en componentes existentes. Para los componentes nuevos creamos todas sus filas.
     const SUB=F.subform_indicador.id;
@@ -1307,6 +1340,7 @@ async function renderMatriz(){
       const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
       const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
       const frec=leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
+      const resp=leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición');
       const rutaFull=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)');
       const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
       // Nivel: deducir de la relación a ficha; si falla, del nº de segmentos de la ruta
@@ -1319,7 +1353,7 @@ async function renderMatriz(){
         <td style="max-width:260px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
         <td style="max-width:240px;font-size:11px" class="mono">${(rutaFull||'').replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
         <td style="max-width:180px;font-size:12px">${(formula||'').slice(0,60).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
-        <td style="font-size:12px">${frec||'<span class=hint>—</span>'}</td>
+        <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
         <td>${avance}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
@@ -1370,8 +1404,8 @@ async function abrirAgregarIndicador(){
   document.getElementById('ag_def_box').classList.add('hidden');
   fillSelect(document.getElementById('ag_frec_med'), FREC_OPTS.map(o=>({value:o,label:o})));
   fillSelect(document.getElementById('ag_frec_calc'), FREC_OPTS.map(o=>({value:o,label:o})));
-  try{ const resp=await loadMaestra('RESP_PROCESO'); fillSelect(document.getElementById('ag_responsable'), resp); }catch(_){}
   fillSelect(document.getElementById('ag_oficina'), OFICINAS_MEDICION.map(o=>({value:o,label:o})));
+  ['ag_responsable','ag_celular','ag_correo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('modalAgregar').classList.add('show'); document.body.style.overflow='hidden';
   const opts=[];
   for(const n of ['N0','N1','N2']){
@@ -1396,13 +1430,14 @@ async function cargarIndicadoresFicha(){
   const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
   const ruta=rutaFicha(r,nivel);
   const subIds=getSubIds(r, F);
-  for(const sid of subIds){
-    try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
-      const vals=d.record && d.record.values || {};
-      const txt=leerTextoIndicador(vals);
-      if(txt && !esBasura(txt) && txt!=='Indicador') AG_INDS.push({ texto:txt });
-    }catch(e){ console.warn('Error leyendo subregistro', sid, e.message); }
-  }
+  const lecturas = await Promise.all(subIds.map(sid=>
+    API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
+      .then(d=>(d.record && d.record.values)||{}).catch(()=>({}))
+  ));
+  lecturas.forEach(vals=>{
+    const txt=leerTextoIndicador(vals);
+    if(txt && !esBasura(txt) && txt!=='Indicador') AG_INDS.push({ texto:txt });
+  });
   AG_CTX={ nivel, fichaId:id, ruta };
   const list=document.getElementById('ag_inds_list');
   if(!AG_INDS.length){ list.innerHTML='<p class="hint">Esta ficha no tiene indicadores definidos.</p>'; box.classList.remove('hidden'); defb.classList.add('hidden'); return; }
@@ -1417,12 +1452,48 @@ function toggleDefBox(){
 }
 window.toggleDefBox=toggleDefBox;
 
+// Mapa oficina (nombre) → { responsable, celular, correo } desde la tabla Responsable de proceso.
+let MAPA_RESP_PROCESO = null;
+async function cargarMapaRespProceso(){
+  if (MAPA_RESP_PROCESO) return MAPA_RESP_PROCESO;
+  MAPA_RESP_PROCESO = {};
+  try {
+    const data = await API.records(CONFIG.ENTITIES.RESP_PROCESO);
+    const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const limpio = x => (x && !/^[a-zA-Z0-9_\-]{22}$/.test(String(x)) && x!=='Unidad responsable' && x!=='Responsable proceso' && x!=='Celular responsable proceso' && x!=='Correo electrónico responsable proceso') ? String(x) : '';
+    (data.records||[]).forEach(r=>{
+      const v = r.values||{};
+      const oficina = v['Unidad responsable'];
+      if (!oficina || oficina === 'Unidad responsable') return;
+      MAPA_RESP_PROCESO[norm(oficina)] = {
+        responsable: limpio(v['Responsable proceso']),
+        celular: limpio(v['Celular responsable proceso']),
+        correo: limpio(v['Correo electrónico responsable proceso'])
+      };
+    });
+  } catch(e){ /* si falla, los campos quedan vacíos */ }
+  return MAPA_RESP_PROCESO;
+}
+// Autocompleta responsable + celular + correo según la oficina elegida en la Matriz.
+async function autocompletarRespMatriz(){
+  const sel=document.getElementById('ag_oficina');
+  const oficina = sel && sel.value ? sel.value : '';
+  const elRep=document.getElementById('ag_responsable'), elCel=document.getElementById('ag_celular'), elCor=document.getElementById('ag_correo');
+  if(!oficina){ [elRep,elCel,elCor].forEach(e=>{ if(e) e.value=''; }); return; }
+  const mapa=await cargarMapaRespProceso();
+  const info=mapa[String(oficina).replace(/\s+/g,' ').trim().toLowerCase()] || {};
+  if(elRep) elRep.value = info.responsable || '(sin responsable registrado)';
+  if(elCel) elCel.value = info.celular || '';
+  if(elCor) elCor.value = info.correo || '';
+}
+window.autocompletarRespMatriz=autocompletarRespMatriz;
+
 async function guardarIndicadoresMatriz(){
   const marcados=[...document.querySelectorAll('#ag_inds_list input:checked')].map(c=>parseInt(c.value));
   if(!marcados.length){ toast('Marca al menos un indicador.', true); return; }
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const formula=g('ag_formula'), fuente=g('ag_fuente'), frecMed=g('ag_frec_med'), frecCalc=g('ag_frec_calc');
-  const oficina=g('ag_oficina'), responsable=g('ag_responsable');
+  const oficina=g('ag_oficina'), responsable=g('ag_responsable'), celular=g('ag_celular'), correo=g('ag_correo');
   const btn=document.getElementById('ag_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Agregando…';
   try{
     for(const i of marcados){
@@ -1438,13 +1509,17 @@ async function guardarIndicadoresMatriz(){
       if(frecMed) campos[MAT.frecuencia_medicion.id]=frecMed;
       if(frecCalc) campos[MAT.frecuencia_calculo.id]=frecCalc;
       if(oficina) campos[MAT.oficina_medicion.id]=oficina;
+      // Responsable + celular + correo como TEXTO (robusto)
+      const respLimpio = (responsable && !responsable.startsWith('(')) ? responsable : '';
+      if(respLimpio) campos[MAT.resp_med_txt.id]=respLimpio;
+      if(celular) campos[MAT.resp_celular.id]=celular;
+      if(correo) campos[MAT.resp_correo.id]=correo;
       const resp=await API.saveForm(null, campos, CONFIG.ENTITIES.MATRIZ_IND);
       const matId = resp.record && resp.record.id;
       if(matId){
         const rel={};
         const relFicha = AG_CTX.nivel==='N0'?MAT.indicador_n0 : AG_CTX.nivel==='N1'?MAT.indicador_n1 : MAT.indicador_n2;
         if(relFicha) rel[relFicha.id]=[AG_CTX.fichaId];
-        if(responsable && MAT.responsable_medicion) rel[MAT.responsable_medicion.id]=[responsable];
         if(Object.keys(rel).length){ try{ await API.saveForm(matId, rel); }catch(_){} }
       }
     }
