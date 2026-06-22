@@ -1485,22 +1485,30 @@ window.setMetaTab=setMetaTab;
 function relMencionaMatriz(r, matId, relFieldId){
   if(!matId) return false;
   const v=r.values||{};
-  // 1) Por field-id directo
-  const candidatos=[v[relFieldId], v['Matriz de indicadores'], v['Matriz indicadores'], v['Indicador']];
-  for(const c of candidatos){ if(c && JSON.stringify(c).includes(matId)) return true; }
-  // 2) Buscar en cualquier campo del registro que contenga el ID de 22 chars
+  // Vía principal y confiable: etiqueta [#matId] en la observación (texto, se lee bien).
+  // El valor real puede estar bajo el nombre "Observación" o bajo el field-id.
+  let obs='';
+  for(const k in v){ if(/observaci/i.test(k) && typeof v[k]==='string' && v[k]!=='Observación'){ obs=v[k]; break; } }
+  if(typeof obs==='string' && obs.includes('[#'+matId+']')) return true;
+  // Respaldos (por si la relación llegara a leerse): buscar el matId en todo el registro
   for(const k in v){ const s=JSON.stringify(v[k]||''); if(s.includes(matId)) return true; }
-  // 3) Buscar en subform/otros
   if(r.subform_values && JSON.stringify(r.subform_values).includes(matId)) return true;
   return false;
 }
+// Quita la etiqueta [#matId] de un texto de observación para mostrarlo limpio
+function limpiarEtiqueta(txt){ return String(txt||'').replace(/\[#[a-zA-Z0-9_\-]{22}\]\s*/,'').trim(); }
 
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
   try{
     const data=await API.records(CONFIG.ENTITIES.PROG_METAS);
-    console.log('[ProgMeta] cargar: total registros leídos:', (data.records||[]).length, '| buscando matId:', MT_CTX.matId);
-    (data.records||[]).forEach((r,i)=>{ console.log('[ProgMeta]   reg'+i, 'rel raw:', JSON.stringify((r.values||{})[PM.rel_matriz.id]), '| ¿match?:', relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id)); });
+    console.log('[ProgMeta] cargar: total leídas:', (data.records||[]).length, '| buscando matId:', MT_CTX.matId);
+    (data.records||[]).forEach((r,i)=>{
+      const v=r.values||{}; let obs='';
+      for(const k in v){ if(/observaci/i.test(k) && typeof v[k]==='string' && v[k]!=='Observación'){ obs=v[k]; break; } }
+      const match=relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id);
+      if(match || (obs&&obs.includes('[#'))) console.log('[ProgMeta]   reg'+i, '| obs:', JSON.stringify(obs).slice(0,60), '| match:', match);
+    });
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
     console.log('[ProgMeta] cargar: de este indicador:', mias.length);
     STATE.progMetas=mias;
@@ -1511,7 +1519,7 @@ async function cargarProgMetas(){
       const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación');
       const ref=leerCampo(r,PM.valor_ref.id,'Valor de referencia');
       const meta=leerCampo(r,PM.valor_meta.id,'Valor meta');
-      const obs=leerCampo(r,PM.observacion.id,'Observación');
+      const obs=limpiarEtiqueta(leerCampo(r,PM.observacion.id,'Observación'));
       const plan=leerCampo(r,PM.plan_accion.id,'Plan de acción');
       const planLink=plan?` · <a href="${plan}" target="_blank" style="color:var(--brand);font-size:11px">plan ↗</a>`:'';
       return `<tr><td>${f||'—'}</td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td></tr>`;
@@ -1529,7 +1537,8 @@ async function guardarProgMeta(){
   if(ref) campos[PM.valor_ref.id]=ref;
   campos[PM.valor_meta.id]=meta;
   if(plan) campos[PM.plan_accion.id]=plan;
-  if(obs) campos[PM.observacion.id]=obs;
+  // Etiqueta robusta: el matId va al inicio de la observación (los textos SÍ se leen bien)
+  campos[PM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   console.log('[ProgMeta] matId:', MT_CTX.matId, '| campos:', JSON.stringify(campos), '| entity:', CONFIG.ENTITIES.PROG_METAS);
   try{
     const resp = await API.saveForm(null, campos, CONFIG.ENTITIES.PROG_METAS);
@@ -1575,7 +1584,7 @@ async function cargarSegMetas(){
       const real=leerCampo(r,SM.valor_real.id,'Valor real');
       let pct=leerCampo(r,SM.pct_avance.id,'% de avance');
       if(pct===''&&meta&&real) pct=Math.round(real/meta*100);
-      const obs=leerCampo(r,SM.observacion.id,'Observación');
+      const obs=limpiarEtiqueta(leerCampo(r,SM.observacion.id,'Observación'));
       const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
       const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
       const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
@@ -1600,7 +1609,7 @@ async function guardarSegMeta(){
   campos[SM.valor_real.id]=real;
   if(evid) campos[SM.evidencias.id]=evid;
   if(remed) campos[SM.plan_remediacion.id]=remed;
-  if(obs) campos[SM.observacion.id]=obs;
+  campos[SM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   console.log('[SegMeta] matId:', MT_CTX.matId, '| campos:', JSON.stringify(campos));
   try{
     const resp=await API.saveForm(null, campos, CONFIG.ENTITIES.SEG_METAS);
