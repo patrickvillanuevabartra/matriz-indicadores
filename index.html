@@ -915,8 +915,19 @@ function objFicha(r, nivel){
 }
 function nIndFicha(r, nivel){
   const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
-  const sub=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
-  return sub.length;
+  return getSubIds(r, F).length;
+}
+// Obtiene los IDs de subregistros del subformulario de indicadores, de forma robusta.
+// QuintaDB a veces los pone bajo el field-id, a veces bajo el nombre del subformulario.
+function getSubIds(r, F){
+  const sv = r.subform_values || {};
+  const nombreSub = 'Indicadores de desempeño ficha de procesos';
+  let arr = sv[F.subform_indicador.id] || sv[nombreSub];
+  // Si no está en subform_values, buscar cualquier array de IDs dentro de subform_values
+  if(!arr){
+    for(const k in sv){ if(Array.isArray(sv[k]) && sv[k].length && /^[a-zA-Z0-9_\-]{22}$/.test(String(sv[k][0]))){ arr=sv[k]; break; } }
+  }
+  return Array.isArray(arr)?arr:[];
 }
 
 async function renderListado(){
@@ -957,10 +968,11 @@ const EDF = n => n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIEL
 
 async function editarFicha(nivel, id){
  try{
-  // 1) Buscar la ficha (con recarga forzada si no está en cache).
-  let fichas = await loadFichas(nivel);
-  let r = fichas.find(x=>x.id===id);
-  if(!r){ fichas = await loadFichas(nivel, true); r = fichas.find(x=>x.id===id); }
+  // 1) Leer la ficha FRESCA e individual desde QuintaDB (trae subform_values completos,
+  //    que la lista masiva no siempre incluye).
+  let r;
+  try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','GET',{name_value:1}); r=d.record; }catch(_){}
+  if(!r){ let fichas = await loadFichas(nivel, true); r = fichas.find(x=>x.id===id); }
   if(!r){ toast('No se encontró la ficha.', true); return; }
   ED_STATE = { nivel, id, indicadores:[] };
   const F=EDF(nivel); const v=r.values||{};
@@ -992,7 +1004,8 @@ async function editarFicha(nivel, id){
   // Reconstruir SIPOC por componente desde los indicadores guardados ("Componente — Indicador").
   // Agrupa varios indicadores del mismo componente en su array.
   SIPOC_ED={};
-  const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
+  const subIds=getSubIds(r, F);
+  console.log('[editarFicha] subIds indicadores:', subIds.length);
   if(subIds.length){
     for(const sid of subIds){
       try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
@@ -1329,18 +1342,25 @@ async function cargarIndicadoresFicha(){
   AG_INDS=[];
   if(!val){ box.classList.add('hidden'); defb.classList.add('hidden'); return; }
   const [nivel,id]=val.split('|');
-  const fichas=await loadFichas(nivel);
-  const r=fichas.find(x=>x.id===id);
+  // Leer la ficha FRESCA desde QuintaDB (no del cache) para asegurar subform_values
+  let r;
+  try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','GET',{name_value:1}); r=d.record; }catch(_){}
+  if(!r){ const fichas=await loadFichas(nivel); r=fichas.find(x=>x.id===id); }
   if(!r){ box.classList.add('hidden'); return; }
   const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
   const ruta=rutaFicha(r,nivel);
-  const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
+  const subIds=getSubIds(r, F);
+  console.log('[Matriz] subIds encontrados:', subIds.length, subIds);
   for(const sid of subIds){
     try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
-      const txt=(d.record.values||{})[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || (d.record.values||{})['Indicador'] || '';
+      const vals=d.record && d.record.values || {};
+      console.log('[Matriz] subregistro', sid, '→', JSON.stringify(vals).slice(0,200));
+      const txt=vals[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || vals['Indicador'] || '';
+      console.log('[Matriz]   texto extraído:', JSON.stringify(txt));
       if(txt && !esBasura(txt) && txt!=='Indicador') AG_INDS.push({ texto:txt });
-    }catch(_){}
+    }catch(e){ console.warn('[Matriz] error leyendo subregistro', sid, e.message); }
   }
+  console.log('[Matriz] AG_INDS final:', AG_INDS.length);
   AG_CTX={ nivel, fichaId:id, ruta };
   const list=document.getElementById('ag_inds_list');
   if(!AG_INDS.length){ list.innerHTML='<p class="hint">Esta ficha no tiene indicadores definidos.</p>'; box.classList.remove('hidden'); defb.classList.add('hidden'); return; }
