@@ -1033,10 +1033,11 @@ async function editarFicha(nivel, id){
   }
   // Detectar los componentes disponibles desde la cascada (igual que en creación)
   detectarSubprocesoModal();
-  // Marcar automáticamente los componentes que tienen indicadores guardados y asociarlos
+  // Marcar automáticamente los componentes que tienen indicadores guardados y asociarlos.
+  // Ignoramos indicadores huérfanos viejos (sin formato "Componente — Indicador").
   indicadoresGuardados.forEach(g=>{
-    // Buscar el componente: por coincidencia con uno detectado, o usar el comp guardado
-    const comp = g.comp || '(sin componente)';
+    if(!g.comp) return; // huérfano: dato viejo sin componente, se ignora
+    const comp = g.comp;
     if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[]};
     if(g.ind) SIPOC_ED[comp].indicadores.push(g.ind);
     SIPOC_ED[comp]._sids.push(g.sid);
@@ -1205,7 +1206,7 @@ async function guardarEdicion(){
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(id, campos, entFicha(nivel));
-    if(dueno && F.dueno){ try{ await API.saveForm(id, { [F.dueno.id]:[dueno] }); }catch(_){} }
+    if(dueno && F.dueno){ try{ const rd=await API.saveForm(id, { [F.dueno.id]:[dueno] }); console.log('[dueno] guardado:', dueno, '| resp:', JSON.stringify(rd).slice(0,200)); }catch(e){ console.warn('[dueno] error:', e.message); } }
     // Indicadores nuevos: componentes recién añadidos (sin _sids) o nuevos indicadores
     // en componentes existentes. Para los componentes nuevos creamos todas sus filas.
     const SUB=F.subform_indicador.id;
