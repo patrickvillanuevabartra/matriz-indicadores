@@ -894,6 +894,34 @@ async function initCascadaModal(){
   n1.onchange=()=>{ [n2].forEach(reset); if(n1.value && nivel()==='N2'){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } trasCascadaModal(); };
   n2.onchange=trasCascadaModal;
 }
+// Reconstruye la cascada del modal hasta el nivel de la ficha, desde la ruta de texto.
+async function reconstruirCascadaModal(ruta, nivel){
+  const inv=await loadInventario(); const C=INV_COLS;
+  const tipo=document.getElementById('ed_tipo'), n0=document.getElementById('ed_n0'),
+        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2');
+  const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
+  [n0,n1,n2].forEach(reset);
+  if(tipo && tipo.options.length<=1) fillSelect(tipo, opcionesInv(inv,{},C.tipo));
+  if(!ruta||ruta==='—'){ trasCascadaModal(); return; }
+  const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+  const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
+  const seg=i=>(segs[i]&&!generico.test(segs[i]))?segs[i]:'';
+  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3);
+  const fijar=(el,val)=>{ if(!el||!val) return false; const ok=[...el.options].some(o=>o.value===val); if(ok){ el.value=val; return true; } return false; };
+  if(fijar(tipo,vTipo)){
+    fillSelect(n0, opcionesInv(inv,{[C.tipo]:vTipo},C.n0)); n0.disabled=false;
+    if(fijar(n0,vN0)){
+      if(nivel==='N1'||nivel==='N2'){
+        fillSelect(n1, opcionesInv(inv,{[C.tipo]:vTipo,[C.n0]:vN0},C.n1)); n1.disabled=false;
+        if(fijar(n1,vN1) && nivel==='N2'){
+          fillSelect(n2, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1},C.n2)); n2.disabled=false;
+          fijar(n2,vN2);
+        }
+      }
+    }
+  }
+  trasCascadaModal();
+}
 function valoresCascadaModal(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const n=ED_STATE.nivel;
