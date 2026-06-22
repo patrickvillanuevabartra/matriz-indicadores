@@ -126,6 +126,15 @@
   .modal-close{background:transparent;border:0;font-size:24px;line-height:1;color:var(--mist);cursor:pointer;padding:2px 8px;border-radius:8px;transition:.15s}
   .modal-close:hover{background:var(--paper);color:var(--ink)}
   .modal-body{padding:8px 26px 4px}
+  /* SIPOC por componente */
+  .sipoc-check{display:flex;align-items:flex-start;gap:9px;font-size:14px;color:var(--slate);cursor:pointer;line-height:1.4}
+  .sipoc-check input{width:auto;margin-top:3px;flex:none;cursor:pointer}
+  .sipoc-card{border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:14px;background:var(--card)}
+  .sipoc-card-head{display:flex;align-items:center;gap:9px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+  .sipoc-card-head .badge-comp{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;color:#fff;background:var(--brand-2);padding:3px 9px;border-radius:5px;flex:none}
+  .sipoc-card-head .comp-name{font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:14px;color:var(--ink)}
+  .sipoc-card .ind-row{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+
   .modal-foot{display:flex;gap:12px;justify-content:flex-end;padding:18px 26px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--paper);border-radius:0 0 16px 16px}
 
   @media(max-width:820px){body{zoom:1}.grid{grid-template-columns:1fr}.bar{flex-direction:column;align-items:stretch;gap:10px}nav{margin-left:0;overflow-x:auto}nav button{flex:1 0 auto;white-space:nowrap}}
@@ -201,33 +210,19 @@
       </div>
 
       <div class="section">
-        <div class="section-title"><span class="section-num">II</span>Estructura operativa (SIPOC)</div>
-        <div class="section-desc" id="fi_sipoc_desc">El sistema detecta el siguiente subproceso con información para analizar su SIPOC.</div>
-        <div id="fi_subproc_box" class="hidden" style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:16px">
-          <div style="font-size:12px;color:var(--mist);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Subproceso en análisis</div>
-          <div class="mono" id="fi_subproc_txt" style="font-size:13px;color:var(--brand)">—</div>
+        <div class="section-title"><span class="section-num">II</span>Estructura operativa (SIPOC) por componente</div>
+        <div class="section-desc" id="fi_sipoc_desc">El sistema detecta el primer nivel hacia abajo con procesos reales. Marca los componentes a analizar; cada uno tendrá su SIPOC y su indicador.</div>
+        <div id="fi_sipoc_picker" class="hidden" style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+          <div style="font-size:12px;color:var(--mist);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Nivel de análisis: <span id="fi_sipoc_nivel" style="color:var(--brand)">—</span></div>
+          <div id="fi_sipoc_checks" style="display:flex;flex-direction:column;gap:7px"></div>
         </div>
-        <div class="grid">
-          <div class="field"><label>Proveedores / Cliente</label><textarea id="fi_proveedores"></textarea></div>
-          <div class="field"><label>Entrada / Insumo</label><textarea id="fi_entrada"></textarea></div>
-          <div class="field"><label>Producto</label><textarea id="fi_producto"></textarea></div>
-          <div class="field"><label>Receptor final del producto</label><textarea id="fi_receptor"></textarea></div>
-        </div>
+        <div id="fi_sipoc_cards"></div>
       </div>
 
       <div class="section">
         <div class="section-title"><span class="section-num">III</span>Recursos y control del desempeño</div>
-        <div class="section-desc">Los indicadores de desempeño que registres aquí alimentarán la Matriz de Indicadores.</div>
+        <div class="section-desc">Recursos del proceso. (Los indicadores se definen arriba, por cada componente del SIPOC.)</div>
         <div class="grid">
-          <div class="field full">
-            <label>Indicadores de desempeño (ficha de procesos)</label>
-            <div class="ind-list" id="fi_ind_list"></div>
-            <div class="ind-add">
-              <input id="fi_ind_nuevo" placeholder="Escribe un indicador y pulsa Añadir…" onkeydown="if(event.key==='Enter'){event.preventDefault();anadirIndicador();}">
-              <button type="button" class="btn btn-accent btn-sm" onclick="anadirIndicador()">+ Añadir</button>
-            </div>
-            <p class="hint">Cada indicador se guarda como una fila del subformulario de la ficha.</p>
-          </div>
           <div class="field"><label>Controles</label><textarea id="fi_controles"></textarea></div>
           <div class="field"><label>Documentos internos</label><textarea id="fi_docs_int"></textarea></div>
           <div class="field"><label>Documentos externos</label><textarea id="fi_docs_ext"></textarea></div>
@@ -311,30 +306,18 @@
       </div>
 
       <div style="margin-bottom:16px">
-        <div class="section-title" style="margin-bottom:6px"><span class="section-num">II</span>Estructura operativa (SIPOC)</div>
-        <div id="ed_subproc_box" class="hidden" style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:16px">
-          <div style="font-size:12px;color:var(--mist);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Subproceso en análisis</div>
-          <div class="mono" id="ed_subproc_txt" style="font-size:13px;color:var(--brand)">—</div>
+        <div class="section-title" style="margin-bottom:6px"><span class="section-num">II</span>Estructura operativa (SIPOC) por componente</div>
+        <div class="section-desc">Marca los componentes a analizar; cada uno tiene su SIPOC e indicador.</div>
+        <div id="ed_sipoc_picker" class="hidden" style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+          <div style="font-size:12px;color:var(--mist);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Nivel de análisis: <span id="ed_sipoc_nivel" style="color:var(--brand)">—</span></div>
+          <div id="ed_sipoc_checks" style="display:flex;flex-direction:column;gap:7px"></div>
         </div>
-        <div class="grid">
-          <div class="field"><label>Proveedores / Cliente</label><textarea id="ed_proveedores"></textarea></div>
-          <div class="field"><label>Entrada / Insumo</label><textarea id="ed_entrada"></textarea></div>
-          <div class="field"><label>Producto</label><textarea id="ed_producto"></textarea></div>
-          <div class="field"><label>Receptor final del producto</label><textarea id="ed_receptor"></textarea></div>
-        </div>
+        <div id="ed_sipoc_cards"></div>
       </div>
 
       <div style="margin-bottom:8px">
         <div class="section-title" style="margin-bottom:6px"><span class="section-num">III</span>Recursos y control del desempeño</div>
         <div class="grid">
-          <div class="field full">
-            <label>Indicadores de desempeño (ficha de procesos)</label>
-            <div class="ind-list" id="ed_ind_list"></div>
-            <div class="ind-add">
-              <input id="ed_ind_nuevo" placeholder="Escribe un indicador y pulsa Añadir…" onkeydown="if(event.key==='Enter'){event.preventDefault();anadirIndicadorEd();}">
-              <button type="button" class="btn btn-accent btn-sm" onclick="anadirIndicadorEd()">+ Añadir</button>
-            </div>
-          </div>
           <div class="field"><label>Controles</label><textarea id="ed_controles"></textarea></div>
           <div class="field"><label>Documentos internos</label><textarea id="ed_docs_int"></textarea></div>
           <div class="field"><label>Documentos externos</label><textarea id="ed_docs_ext"></textarea></div>
@@ -472,6 +455,33 @@ async function loadMaestra(entityKey, labelCol){
 
 // Inventario: misma fuente única de la cascada que en riesgos.
 const INV_COLS = { tipo:'Tipo de proceso', n0:'Proceso nivel 0', n1:'Procesos nivel 1', n2:'Proceso nivel 2', n3:'Proceso nivel 3', proc:'Procedimiento' };
+
+// Detecta el PRIMER nivel hacia abajo con datos reales (ignorando "N.D.").
+// Recibe el nivel de la ficha y los valores de cascada elegidos.
+// Devuelve { nivelCol, nivelLabel, elementos:[...] } o null si no hay nada.
+function detectarNivelAnalisis(nivel, vTipo, vN0, vN1, vN2){
+  const inv = STATE.inventario||[];
+  const C = INV_COLS;
+  const coincide = r => {
+    const v=r.values||{};
+    if(vTipo && v[C.tipo]!==vTipo) return false;
+    if(vN0 && v[C.n0]!==vN0) return false;
+    if((nivel==='N1'||nivel==='N2') && vN1 && v[C.n1]!==vN1) return false;
+    if(nivel==='N2' && vN2 && v[C.n2]!==vN2) return false;
+    return true;
+  };
+  const filas = inv.filter(coincide);
+  // Desde dónde buscar hacia abajo según el nivel de la ficha.
+  const orden = nivel==='N0' ? [[C.n1,'Proceso nivel 1'],[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
+              : nivel==='N1' ? [[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
+              : [[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]; // N2
+  const noVacio = x => x && !esBasura(x) && !/N\.?D\.?\s*$/i.test(String(x).trim()); // ignora "N.D."
+  for(const [col,label] of orden){
+    const elementos=[...new Set(filas.map(r=>(r.values||{})[col]).filter(noVacio))].sort();
+    if(elementos.length) return { nivelCol:col, nivelLabel:label, elementos };
+  }
+  return null;
+}
 async function loadInventario(){
   if(STATE.inventario.length) return STATE.inventario;
   const data = await API.records(CONFIG.ENTITIES.PROCEDIMIENTO); // tabla integradora (inventario)
@@ -512,49 +522,97 @@ function trasCascada(){
   detectarSubprocesoSIPOC();
 }
 
-// Detecta el SIGUIENTE subproceso con información, partiendo del nivel de la ficha.
-// Busca hacia abajo en el inventario: ¿hay N2 con datos? si no, ¿N3? si no, Procedimiento.
-// Muestra el subproceso encontrado en el recuadro de la sección SIPOC.
+// SIPOC del formulario de creación. Estado de las tarjetas por componente.
+let SIPOC_FORM = {}; // { nombreComponente: {prov, entr, prod, recep, indicador} }
 function detectarSubprocesoSIPOC(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const box=document.getElementById('fi_subproc_box');
-  const txt=document.getElementById('fi_subproc_txt');
-  if(!box||!txt) return;
-  const inv = STATE.inventario||[];
-  const C = INV_COLS;
-  // Valores actuales de la cascada (hasta el nivel de la ficha)
-  const vTipo=g('fi_tipo'), vN0=g('fi_n0'), vN1=g('fi_n1'), vN2=g('fi_n2');
-  // El "nivel de la ficha" determina desde dónde buscamos hacia abajo:
-  //   N0 → busca desde N1   ·   N1 → busca desde N2   ·   N2 → busca desde N3
-  // Filtro: registros del inventario que coinciden con la cascada elegida.
-  const coincide = r => {
-    const v=r.values||{};
-    if(vTipo && v[C.tipo]!==vTipo) return false;
-    if(vN0 && v[C.n0]!==vN0) return false;
-    if((NIVEL==='N1'||NIVEL==='N2') && vN1 && v[C.n1]!==vN1) return false;
-    if(NIVEL==='N2' && vN2 && v[C.n2]!==vN2) return false;
-    return true;
-  };
-  const filas = inv.filter(coincide);
-  // Orden de búsqueda del siguiente nivel con datos según el nivel de la ficha.
-  const orden = NIVEL==='N0' ? [C.n1,C.n2,C.n3,C.proc]
-              : NIVEL==='N1' ? [C.n2,C.n3,C.proc]
-              : [C.n3,C.proc]; // N2
-  const noVacio = x => x && !esBasura(x) && !/N\.D\.?$/i.test(String(x).trim()); // ignora "N.D."
-  let encontrado='', nivelNombre='';
-  for(const col of orden){
-    const valores=[...new Set(filas.map(r=>(r.values||{})[col]).filter(noVacio))];
-    if(valores.length){ encontrado=valores.join(' · '); nivelNombre=col; break; }
-  }
-  if(encontrado){
-    box.classList.remove('hidden');
-    txt.textContent = nivelNombre+': '+encontrado;
-  } else {
-    box.classList.add('hidden');
-    txt.textContent='—';
-  }
+  const picker=document.getElementById('fi_sipoc_picker');
+  const checks=document.getElementById('fi_sipoc_checks');
+  const nivelLbl=document.getElementById('fi_sipoc_nivel');
+  if(!picker||!checks) return;
+  const det = detectarNivelAnalisis(NIVEL, g('fi_tipo'), g('fi_n0'), g('fi_n1'), g('fi_n2'));
+  if(!det){ picker.classList.add('hidden'); checks.innerHTML=''; document.getElementById('fi_sipoc_cards').innerHTML=''; SIPOC_FORM={}; return; }
+  picker.classList.remove('hidden');
+  nivelLbl.textContent = det.nivelLabel;
+  // Checkboxes de los elementos detectados
+  checks.innerHTML = det.elementos.map((el,i)=>`
+    <label class="sipoc-check">
+      <input type="checkbox" value="${el.replace(/"/g,'&quot;')}" onchange="toggleSipocForm(this)">
+      <span>${el.replace(/</g,'&lt;')}</span>
+    </label>`).join('');
+  renderSipocCardsForm();
 }
 window.detectarSubprocesoSIPOC=detectarSubprocesoSIPOC;
+
+function toggleSipocForm(cb){
+  const nombre=cb.value;
+  if(cb.checked){ if(!SIPOC_FORM[nombre]) SIPOC_FORM[nombre]={prov:'',entr:'',prod:'',recep:'',indicador:''}; }
+  else { delete SIPOC_FORM[nombre]; }
+  renderSipocCardsForm();
+  sincronizarSubtitulos('fi', Object.keys(SIPOC_FORM));
+}
+window.toggleSipocForm=toggleSipocForm;
+
+// Campos de la sección III que llevan subtítulos por componente (prefijo fi_ o ed_)
+const CAMPOS_SUBTITULO = ['controles','docs_int','docs_ext','rrhh','sistemas','registros','instalaciones','equipos'];
+// Inserta/actualiza los subtítulos 【 Componente 】 en cada campo, conservando el texto
+// que el usuario ya escribió bajo cada subtítulo. Quita los subtítulos de componentes desmarcados.
+function sincronizarSubtitulos(prefijo, componentes){
+  CAMPOS_SUBTITULO.forEach(campo=>{
+    const el=document.getElementById(prefijo+'_'+campo);
+    if(!el) return;
+    // Parsear el contenido actual en secciones por subtítulo
+    const texto=el.value||'';
+    const bloques={}; // nombre → contenido
+    let sinTitulo='';
+    const re=/【\s*(.+?)\s*】/g;
+    let matches=[...texto.matchAll(re)];
+    if(matches.length){
+      for(let i=0;i<matches.length;i++){
+        const nombre=matches[i][1].trim();
+        const ini=matches[i].index+matches[i][0].length;
+        const fin=(i+1<matches.length)?matches[i+1].index:texto.length;
+        bloques[nombre]=texto.slice(ini,fin).replace(/^\n+|\n+$/g,'');
+      }
+      sinTitulo=texto.slice(0,matches[0].index).trim();
+    } else {
+      sinTitulo=texto.trim();
+    }
+    // Reconstruir: un subtítulo por cada componente marcado, conservando su contenido previo
+    if(!componentes.length){ return; } // sin componentes, no tocar
+    let nuevo='';
+    componentes.forEach(n=>{
+      const contenido=bloques[n]!==undefined?bloques[n]:'';
+      nuevo += '【 '+n+' 】\n'+(contenido?contenido+'\n':'\n')+'\n';
+    });
+    el.value=nuevo.replace(/\n+$/,'\n');
+  });
+}
+window.sincronizarSubtitulos=sincronizarSubtitulos;
+
+function renderSipocCardsForm(){
+  const cont=document.getElementById('fi_sipoc_cards');
+  const nombres=Object.keys(SIPOC_FORM);
+  if(!nombres.length){ cont.innerHTML=''; return; }
+  cont.innerHTML = nombres.map((nombre,i)=>{
+    const d=SIPOC_FORM[nombre];
+    const safe=nombre.replace(/"/g,'&quot;');
+    return `<div class="sipoc-card">
+      <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
+      <div class="grid">
+        <div class="field"><label>Proveedores / Cliente</label><textarea oninput="SIPOC_FORM['${safe}'].prov=this.value">${d.prov||''}</textarea></div>
+        <div class="field"><label>Entrada / Insumo</label><textarea oninput="SIPOC_FORM['${safe}'].entr=this.value">${d.entr||''}</textarea></div>
+        <div class="field"><label>Producto</label><textarea oninput="SIPOC_FORM['${safe}'].prod=this.value">${d.prod||''}</textarea></div>
+        <div class="field"><label>Receptor final del producto</label><textarea oninput="SIPOC_FORM['${safe}'].recep=this.value">${d.recep||''}</textarea></div>
+      </div>
+      <div class="ind-row">
+        <div class="field"><label>Indicador de desempeño de este componente <span class="req">*</span></label>
+        <input value="${(d.indicador||'').replace(/"/g,'&quot;')}" oninput="SIPOC_FORM['${safe}'].indicador=this.value" placeholder="Ej: Tiempo promedio de atención al usuario"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.SIPOC_FORM=SIPOC_FORM;
 // Arma la ruta de texto a partir de los niveles visibles según el nivel de ficha.
 // Ruta del proceso = SOLO hasta el nivel de la ficha (lógica del analista):
 //   N0 → Tipo › N0        N1 → Tipo › N0 › N1        N2 → Tipo › N0 › N1 › N2
@@ -584,6 +642,7 @@ function quitarIndicador(i){ INDICADORES.splice(i,1); renderIndicadores(); }
 window.anadirIndicador=anadirIndicador; window.quitarIndicador=quitarIndicador;
 function renderIndicadores(){
   const cont=document.getElementById('fi_ind_list');
+  if(!cont) return; // ya no existe (SIPOC por componente lo reemplazó)
   if(!INDICADORES.length){ cont.innerHTML='<p class="hint">Aún no has añadido indicadores.</p>'; return; }
   cont.innerHTML = INDICADORES.map((ind,i)=>`
     <div class="ind-item">
@@ -614,10 +673,6 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
   put(F.objetivo, g('fi_objetivo'));
   put(F.alcance, g('fi_alcance'));
   put(F.base_legal, g('fi_base_legal'));
-  put(F.proveedores, g('fi_proveedores'));
-  put(F.entrada, g('fi_entrada'));
-  put(F.producto, g('fi_producto'));
-  put(F.receptor, g('fi_receptor'));
   put(F.controles, g('fi_controles'));
   put(F.docs_internos, g('fi_docs_int'));
   put(F.docs_externos, g('fi_docs_ext'));
@@ -626,8 +681,21 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
   put(F.registros, g('fi_registros'));
   put(F.instalaciones, g('fi_instalaciones'));
   put(F.equipos, g('fi_equipos'));
+  // SIPOC general: concatenamos los SIPOC de cada componente en los campos de la ficha.
+  const comps=Object.keys(SIPOC_FORM);
+  if(comps.length){
+    const join=(k)=>comps.map(n=>{ const d=SIPOC_FORM[n]; return d[k]?('['+n+'] '+d[k]):''; }).filter(Boolean).join('\n');
+    put(F.proveedores, join('prov'));
+    put(F.entrada, join('entr'));
+    put(F.producto, join('prod'));
+    put(F.receptor, join('recep'));
+  }
   // Dueño (relación) — se manda como relación si se eligió
   const dueno=g('fi_dueno');
+
+  // Validar que cada componente marcado tenga indicador
+  const sinInd = comps.filter(n=>!(SIPOC_FORM[n].indicador||'').trim());
+  if(comps.length && sinInd.length){ toast('Falta el indicador en: '+sinInd.join(', '), true); return; }
 
   const btn=document.getElementById('btnFichaGuardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
@@ -639,12 +707,11 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
     if(!fichaId){ fichaId = resp.record && resp.record.id; }
     // 2) Dueño (relación) en llamada aparte si se eligió
     if(dueno && F.dueno){ try{ await API.saveForm(fichaId, { [F.dueno.id]: [dueno] }); }catch(err){ console.warn('Dueño no guardado:', err.message); } }
-    // 3) Indicadores (subformulario) — crear los nuevos
-    const nuevos = INDICADORES.filter(x=>!x.id && x.texto);
-    if(nuevos.length && fichaId){
+    // 3) Indicadores (subformulario): uno por cada componente del SIPOC → "Componente — Indicador"
+    if(comps.length && fichaId){
       const SUB = F.subform_indicador.id;
       const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
-      nuevos.forEach(ind=>{ subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: ind.texto }; });
+      comps.forEach(n=>{ const txt=n+' — '+(SIPOC_FORM[n].indicador||'').trim(); subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: txt }; });
       await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) });
     }
     toast(EDIT_FICHA?'Ficha actualizada.':'Ficha guardada correctamente.');
@@ -657,16 +724,19 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
 function resetFicha(){
   EDIT_FICHA=null;
   INDICADORES=[];
+  SIPOC_FORM={};
   document.getElementById('formFicha').reset();
   // Vaciar SOLO los desplegables dependientes (no el de Tipo, que es la raíz de la cascada).
   ['fi_n0','fi_n1','fi_n2','fi_n3','fi_proc'].forEach(id=>{ const el=document.getElementById(id); if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } });
-  // Repoblar el desplegable de Tipo desde el inventario ya cargado (form.reset() borró su selección,
-  // pero las <option> siguen; aun así lo regeneramos por si quedó vacío).
+  // Repoblar el desplegable de Tipo desde el inventario ya cargado.
   if(STATE.inventario.length){
     const tipo=document.getElementById('fi_tipo');
     if(tipo && tipo.options.length<=1){ fillSelect(tipo, opcionesInv(STATE.inventario,{},INV_COLS.tipo)); }
   }
-  renderIndicadores();
+  // Limpiar SIPOC
+  const picker=document.getElementById('fi_sipoc_picker'); if(picker) picker.classList.add('hidden');
+  const checks=document.getElementById('fi_sipoc_checks'); if(checks) checks.innerHTML='';
+  const cards=document.getElementById('fi_sipoc_cards'); if(cards) cards.innerHTML='';
   actualizarRuta();
   const banner=document.getElementById('editBanner'); if(banner) banner.classList.add('hidden');
   const btn=document.getElementById('btnFichaGuardar'); if(btn){ btn.disabled=false; btn.textContent='Guardar ficha'; }
@@ -765,10 +835,6 @@ async function editarFicha(nivel, id){
   set('ed_objetivo', cur(F.objetivo,'Objetivo del proceso'));
   set('ed_alcance', cur(F.alcance,'Alcance'));
   set('ed_base_legal', cur(F.base_legal,'Base legal'));
-  set('ed_proveedores', cur(F.proveedores,'Proveedores/Cliente'));
-  set('ed_entrada', cur(F.entrada,'Entrada/Insumo'));
-  set('ed_producto', cur(F.producto,'Producto'));
-  set('ed_receptor', cur(F.receptor,'Receptor final del producto'));
   set('ed_controles', cur(F.controles,'Controles'));
   set('ed_docs_int', cur(F.docs_internos,'Documentos internos '));
   set('ed_docs_ext', cur(F.docs_externos,'Documentos externos'));
@@ -783,18 +849,23 @@ async function editarFicha(nivel, id){
   await initCascadaModal();
   const ruta=rutaFicha(r,nivel);
   await reconstruirCascadaModal(ruta, nivel);
-  // Indicadores existentes
-  ED_STATE.indicadores=[];
+  // Reconstruir SIPOC por componente desde los indicadores guardados ("Componente — Indicador")
+  SIPOC_ED={};
   const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
   if(subIds.length){
     for(const sid of subIds){
       try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
         const txt=(d.record.values||{})[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || (d.record.values||{})['Indicador'] || '';
-        if(txt && !esBasura(txt) && txt!=='Indicador') ED_STATE.indicadores.push({id:sid, texto:txt});
+        if(txt && !esBasura(txt) && txt!=='Indicador'){
+          const partes=String(txt).split(' — ');
+          const comp=partes.length>1?partes[0].trim():txt.trim();
+          const ind=partes.length>1?partes.slice(1).join(' — ').trim():'';
+          SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicador:ind, _sid:sid};
+        }
       }catch(_){}
     }
   }
-  renderIndicadoresEd();
+  renderSipocModal();
   // Abrir modal
   document.getElementById('modalEdit').classList.add('show');
   document.body.style.overflow='hidden';
@@ -835,74 +906,53 @@ function trasCascadaModal(){
   document.getElementById('ed_ruta').textContent = ruta || '—';
   detectarSubprocesoModal();
 }
+let SIPOC_ED = {}; // SIPOC por componente en el modal
 function detectarSubprocesoModal(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const box=document.getElementById('ed_subproc_box'), txt=document.getElementById('ed_subproc_txt');
-  if(!box||!txt) return;
-  const inv=STATE.inventario||[], C=INV_COLS, n=ED_STATE.nivel;
-  const vTipo=g('ed_tipo'), vN0=g('ed_n0'), vN1=g('ed_n1'), vN2=g('ed_n2');
-  const coincide=r=>{ const v=r.values||{};
-    if(vTipo&&v[C.tipo]!==vTipo) return false;
-    if(vN0&&v[C.n0]!==vN0) return false;
-    if((n==='N1'||n==='N2')&&vN1&&v[C.n1]!==vN1) return false;
-    if(n==='N2'&&vN2&&v[C.n2]!==vN2) return false;
-    return true; };
-  const filas=inv.filter(coincide);
-  const orden = n==='N0'?[C.n1,C.n2,C.n3,C.proc] : n==='N1'?[C.n2,C.n3,C.proc] : [C.n3,C.proc];
-  const noVacio=x=> x && !esBasura(x) && !/N\.D\.?$/i.test(String(x).trim());
-  let encontrado='',nivelNombre='';
-  for(const col of orden){ const valores=[...new Set(filas.map(r=>(r.values||{})[col]).filter(noVacio))]; if(valores.length){ encontrado=valores.join(' · '); nivelNombre=col; break; } }
-  if(encontrado){ box.classList.remove('hidden'); txt.textContent=nivelNombre+': '+encontrado; }
-  else { box.classList.add('hidden'); txt.textContent='—'; }
+  const picker=document.getElementById('ed_sipoc_picker');
+  const checks=document.getElementById('ed_sipoc_checks');
+  const nivelLbl=document.getElementById('ed_sipoc_nivel');
+  if(!picker||!checks) return;
+  const det = detectarNivelAnalisis(ED_STATE.nivel, g('ed_tipo'), g('ed_n0'), g('ed_n1'), g('ed_n2'));
+  if(!det){ picker.classList.add('hidden'); checks.innerHTML=''; return; }
+  picker.classList.remove('hidden');
+  nivelLbl.textContent=det.nivelLabel;
+  // Marca como checked los componentes que ya estaban en SIPOC_ED
+  checks.innerHTML = det.elementos.map(el=>{
+    const checked = Object.keys(SIPOC_ED).includes(el) ? 'checked' : '';
+    return `<label class="sipoc-check"><input type="checkbox" value="${el.replace(/"/g,'&quot;')}" ${checked} onchange="toggleSipocEd(this)"><span>${el.replace(/</g,'&lt;')}</span></label>`;
+  }).join('');
+  renderSipocModal();
 }
-async function reconstruirCascadaModal(ruta, nivel){
-  const inv=await loadInventario(); const C=INV_COLS;
-  const tipo=document.getElementById('ed_tipo'), n0=document.getElementById('ed_n0'),
-        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2');
-  const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
-  [n0,n1,n2].forEach(reset);
-  if(tipo && tipo.options.length<=1) fillSelect(tipo, opcionesInv(inv,{},C.tipo));
-  if(!ruta||ruta==='—'){ trasCascadaModal(); return; }
-  const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
-  const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
-  const seg=i=>(segs[i]&&!generico.test(segs[i]))?segs[i]:'';
-  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3);
-  const fijar=(el,val)=>{ if(!el||!val) return false; const ok=[...el.options].some(o=>o.value===val); if(ok){ el.value=val; return true; } return false; };
-  if(fijar(tipo,vTipo)){
-    fillSelect(n0, opcionesInv(inv,{[C.tipo]:vTipo},C.n0)); n0.disabled=false;
-    if(fijar(n0,vN0)){
-      if(nivel==='N1'||nivel==='N2'){
-        fillSelect(n1, opcionesInv(inv,{[C.tipo]:vTipo,[C.n0]:vN0},C.n1)); n1.disabled=false;
-        if(fijar(n1,vN1) && nivel==='N2'){
-          fillSelect(n2, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1},C.n2)); n2.disabled=false;
-          fijar(n2,vN2);
-        }
-      }
-    }
-  }
-  trasCascadaModal();
+function toggleSipocEd(cb){
+  const nombre=cb.value;
+  if(cb.checked){ if(!SIPOC_ED[nombre]) SIPOC_ED[nombre]={prov:'',entr:'',prod:'',recep:'',indicador:''}; }
+  else { delete SIPOC_ED[nombre]; }
+  renderSipocModal();
+  sincronizarSubtitulos('ed', Object.keys(SIPOC_ED));
 }
-// Indicadores del modal
-function anadirIndicadorEd(){
-  const inp=document.getElementById('ed_ind_nuevo');
-  const txt=(inp.value||'').trim();
-  if(!txt){ toast('Escribe un indicador antes de añadir.', true); return; }
-  ED_STATE.indicadores.push({ id:null, texto:txt });
-  inp.value=''; inp.focus(); renderIndicadoresEd();
+window.toggleSipocEd=toggleSipocEd;
+function renderSipocModal(){
+  const cont=document.getElementById('ed_sipoc_cards');
+  if(!cont) return;
+  const nombres=Object.keys(SIPOC_ED);
+  if(!nombres.length){ cont.innerHTML=''; return; }
+  cont.innerHTML = nombres.map((nombre,i)=>{
+    const d=SIPOC_ED[nombre]; const safe=nombre.replace(/"/g,'&quot;').replace(/'/g,"\\'");
+    return `<div class="sipoc-card">
+      <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
+      <div class="grid">
+        <div class="field"><label>Proveedores / Cliente</label><textarea oninput="SIPOC_ED['${safe}'].prov=this.value">${d.prov||''}</textarea></div>
+        <div class="field"><label>Entrada / Insumo</label><textarea oninput="SIPOC_ED['${safe}'].entr=this.value">${d.entr||''}</textarea></div>
+        <div class="field"><label>Producto</label><textarea oninput="SIPOC_ED['${safe}'].prod=this.value">${d.prod||''}</textarea></div>
+        <div class="field"><label>Receptor final del producto</label><textarea oninput="SIPOC_ED['${safe}'].recep=this.value">${d.recep||''}</textarea></div>
+      </div>
+      <div class="ind-row"><div class="field"><label>Indicador de desempeño de este componente <span class="req">*</span></label>
+        <input value="${(d.indicador||'').replace(/"/g,'&quot;')}" oninput="SIPOC_ED['${safe}'].indicador=this.value" placeholder="Ej: Tiempo promedio de atención"></div></div>
+    </div>`;
+  }).join('');
 }
-window.anadirIndicadorEd=anadirIndicadorEd;
-function quitarIndicadorEd(i){ ED_STATE.indicadores.splice(i,1); renderIndicadoresEd(); }
-window.quitarIndicadorEd=quitarIndicadorEd;
-function renderIndicadoresEd(){
-  const cont=document.getElementById('ed_ind_list');
-  if(!ED_STATE.indicadores.length){ cont.innerHTML='<p class="hint">Aún no hay indicadores.</p>'; return; }
-  cont.innerHTML=ED_STATE.indicadores.map((ind,i)=>`
-    <div class="ind-item">
-      <span class="ind-num">${String(i+1).padStart(2,'0')}</span>
-      <span class="ind-txt">${(ind.texto||'').replace(/</g,'&lt;')}</span>
-      <button type="button" class="icon-btn" title="Quitar" onclick="quitarIndicadorEd(${i})">✕</button>
-    </div>`).join('');
-}
+window.SIPOC_ED=SIPOC_ED;
 // Guardar la edición
 async function guardarEdicion(){
   const { nivel, id } = ED_STATE;
@@ -916,10 +966,6 @@ async function guardarEdicion(){
   put(F.objetivo, g('ed_objetivo'));
   put(F.alcance, g('ed_alcance'));
   put(F.base_legal, g('ed_base_legal'));
-  put(F.proveedores, g('ed_proveedores'));
-  put(F.entrada, g('ed_entrada'));
-  put(F.producto, g('ed_producto'));
-  put(F.receptor, g('ed_receptor'));
   put(F.controles, g('ed_controles'));
   put(F.docs_internos, g('ed_docs_int'));
   put(F.docs_externos, g('ed_docs_ext'));
@@ -928,22 +974,31 @@ async function guardarEdicion(){
   put(F.registros, g('ed_registros'));
   put(F.instalaciones, g('ed_instalaciones'));
   put(F.equipos, g('ed_equipos'));
+  const comps=Object.keys(SIPOC_ED);
+  if(comps.length){
+    const join=(k)=>comps.map(n=>{ const d=SIPOC_ED[n]; return d[k]?('['+n+'] '+d[k]):''; }).filter(Boolean).join('\n');
+    put(F.proveedores, join('prov')); put(F.entrada, join('entr'));
+    put(F.producto, join('prod')); put(F.receptor, join('recep'));
+  }
   const dueno=g('ed_dueno');
+  const sinInd=comps.filter(n=>!(SIPOC_ED[n].indicador||'').trim());
+  if(comps.length && sinInd.length){ toast('Falta indicador en: '+sinInd.join(', '), true); return; }
   const btn=document.getElementById('ed_guardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(id, campos, entFicha(nivel));
     if(dueno && F.dueno){ try{ await API.saveForm(id, { [F.dueno.id]:[dueno] }); }catch(_){} }
-    // Indicadores nuevos (los que no tienen id)
-    const nuevos = ED_STATE.indicadores.filter(x=>!x.id && x.texto);
+    // Indicadores: recrear desde SIPOC_ED. Como QuintaDB no permite borrar fácil subregistros,
+    // creamos los que son nuevos (sin _sid). Los existentes se conservan.
+    const nuevos = comps.filter(n=>!SIPOC_ED[n]._sid);
     if(nuevos.length){
       const SUB=F.subform_indicador.id;
       const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
-      nuevos.forEach(ind=>{ subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: ind.texto }; });
+      nuevos.forEach(n=>{ const txt=n+' — '+(SIPOC_ED[n].indicador||'').trim(); subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: txt }; });
       await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) });
     }
     toast('Ficha actualizada.');
-    STATE.fichas[nivel]=[]; // invalidar cache
+    STATE.fichas[nivel]=[];
     cerrarModalEdit();
     renderListado();
   }catch(err){ toast('Error al actualizar: '+err.message, true); }
