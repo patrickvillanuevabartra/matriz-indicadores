@@ -354,6 +354,7 @@
             <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha"></div>
             <div class="field"><label>Valor de referencia (línea base)</label><input type="number" step="any" id="pm_ref"></div>
             <div class="field"><label>Valor meta</label><input type="number" step="any" id="pm_meta"></div>
+            <div class="field full"><label>Plan de acción (enlace a Drive/SharePoint)</label><input type="url" id="pm_plan" placeholder="https://…"></div>
             <div class="field full"><label>Observación</label><textarea id="pm_obs"></textarea></div>
           </div>
           <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" onclick="guardarProgMeta()">+ Guardar programación</button></div>
@@ -369,9 +370,11 @@
         <div style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nuevo seguimiento</div>
           <div class="grid">
-            <div class="field"><label>Meta de referencia</label><select id="sm_prog"></select></div>
+            <div class="field"><label>Meta de referencia</label><select id="sm_prog" onchange="evaluarRemediacion()"></select></div>
             <div class="field"><label>Fecha de evaluación</label><input type="date" id="sm_fecha"></div>
-            <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real"></div>
+            <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
+            <div class="field full"><label>Evidencias (enlace a Drive/SharePoint)</label><input type="url" id="sm_evid" placeholder="https://…"></div>
+            <div class="field full hidden" id="sm_remed_box"><label>Plan de remediación (enlace) <span class="hint" style="font-weight:400">— requerido si el avance es menor a 100%</span></label><input type="url" id="sm_remed" placeholder="https://…"></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
           </div>
           <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
@@ -1465,29 +1468,55 @@ async function cargarProgMetas(){
       const ref=leerCampo(r,PM.valor_ref.id,'Valor de referencia');
       const meta=leerCampo(r,PM.valor_meta.id,'Valor meta');
       const obs=leerCampo(r,PM.observacion.id,'Observación');
-      return `<tr><td>${f||'—'}</td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}</td></tr>`;
+      const plan=leerCampo(r,PM.plan_accion.id,'Plan de acción');
+      const planLink=plan?` · <a href="${plan}" target="_blank" style="color:var(--brand);font-size:11px">plan ↗</a>`:'';
+      return `<tr><td>${f||'—'}</td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td></tr>`;
     }).join('');
   }catch(e){ tb.innerHTML=`<tr><td colspan="4" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
 
 async function guardarProgMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs');
+  const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan');
   if(!meta){ toast('Indica el valor meta.', true); return; }
   const campos={};
   campos[PM.rel_matriz.id]=[MT_CTX.matId];
   if(fecha) campos[PM.fecha_prog.id]=fecha;
   if(ref) campos[PM.valor_ref.id]=ref;
   campos[PM.valor_meta.id]=meta;
+  if(plan) campos[PM.plan_accion.id]=plan;
   if(obs) campos[PM.observacion.id]=obs;
+  console.log('[ProgMeta] matId:', MT_CTX.matId, '| campos:', JSON.stringify(campos), '| entity:', CONFIG.ENTITIES.PROG_METAS);
   try{
-    await API.saveForm(null, campos, CONFIG.ENTITIES.PROG_METAS);
+    const resp = await API.saveForm(null, campos, CONFIG.ENTITIES.PROG_METAS);
+    console.log('[ProgMeta] respuesta:', JSON.stringify(resp).slice(0,300));
     toast('Programación guardada.');
-    ['pm_fecha','pm_ref','pm_meta','pm_obs'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     await cargarProgMetas();
-  }catch(err){ toast('Error: '+err.message, true); }
+  }catch(err){ console.error('[ProgMeta] ERROR:', err); toast('Error: '+err.message, true); }
 }
 window.guardarProgMeta=guardarProgMeta;
+
+// Muestra el plan de remediación si el avance proyectado es < 100%
+function evaluarRemediacion(){
+  const real=parseFloat(document.getElementById('sm_real').value);
+  const selProg=document.getElementById('sm_prog');
+  const box=document.getElementById('sm_remed_box');
+  if(!box) return;
+  // Obtener el valor meta de la programación seleccionada
+  let meta=null;
+  if(selProg && selProg.value && STATE.progMetas){
+    const p=STATE.progMetas.find(x=>x.id===selProg.value);
+    if(p) meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta'));
+  }
+  if(!isNaN(real) && meta && meta>0){
+    const pct=real/meta*100;
+    box.classList.toggle('hidden', pct>=100);
+  } else {
+    box.classList.add('hidden');
+  }
+}
+window.evaluarRemediacion=evaluarRemediacion;
 
 async function cargarSegMetas(){
   const tb=document.getElementById('mt_seg_tabla');
@@ -1503,8 +1532,11 @@ async function cargarSegMetas(){
       let pct=leerCampo(r,SM.pct_avance.id,'% de avance');
       if(pct===''&&meta&&real) pct=Math.round(real/meta*100);
       const obs=leerCampo(r,SM.observacion.id,'Observación');
+      const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
+      const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
+      const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
       if(pct!==''&&pct!==undefined) ultimoAvance=parseFloat(pct);
-      return `<tr><td>${f||'—'}</td><td>${meta||'—'}</td><td><strong>${real||'—'}</strong></td><td>${pct!==''&&pct!==undefined?barraAvance(pct):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}</td></tr>`;
+      return `<tr><td>${f||'—'}</td><td>${meta||'—'}</td><td><strong>${real||'—'}</strong></td><td>${pct!==''&&pct!==undefined?barraAvance(pct):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td></tr>`;
     }).join('');
     actualizarAvanceMatriz(ultimoAvance);
   }catch(e){ tb.innerHTML=`<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
@@ -1515,21 +1547,26 @@ function actualizarAvanceMatriz(avance){
 
 async function guardarSegMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs');
+  const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs'), evid=g('sm_evid'), remed=g('sm_remed');
   if(!real){ toast('Indica el valor real.', true); return; }
   const campos={};
   campos[SM.rel_matriz.id]=[MT_CTX.matId];
   if(progId) campos[SM.rel_prog_meta.id]=[progId];
   if(fecha) campos[SM.fecha_eval.id]=fecha;
   campos[SM.valor_real.id]=real;
+  if(evid) campos[SM.evidencias.id]=evid;
+  if(remed) campos[SM.plan_remediacion.id]=remed;
   if(obs) campos[SM.observacion.id]=obs;
+  console.log('[SegMeta] matId:', MT_CTX.matId, '| campos:', JSON.stringify(campos));
   try{
-    await API.saveForm(null, campos, CONFIG.ENTITIES.SEG_METAS);
+    const resp=await API.saveForm(null, campos, CONFIG.ENTITIES.SEG_METAS);
+    console.log('[SegMeta] respuesta:', JSON.stringify(resp).slice(0,300));
     toast('Seguimiento guardado.');
-    ['sm_fecha','sm_real','sm_obs'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    document.getElementById('sm_remed_box').classList.add('hidden');
     await cargarSegMetas();
     renderMatriz();
-  }catch(err){ toast('Error: '+err.message, true); }
+  }catch(err){ console.error('[SegMeta] ERROR:', err); toast('Error: '+err.message, true); }
 }
 window.guardarSegMeta=guardarSegMeta;
 
