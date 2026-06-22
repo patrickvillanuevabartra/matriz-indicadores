@@ -115,6 +115,19 @@
   .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;vertical-align:-2px}
   @keyframes spin{to{transform:rotate(360deg)}}
 
+  /* Modal de edición */
+  .modal-bg{position:fixed;inset:0;background:rgba(16,22,29,.55);z-index:200;display:none;align-items:flex-start;justify-content:center;padding:28px 16px;overflow-y:auto}
+  .modal-bg.show{display:flex}
+  .modal{background:var(--card);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:920px;margin:auto;animation:modalIn .2s ease}
+  @keyframes modalIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 26px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);border-radius:16px 16px 0 0;z-index:2}
+  .modal-head .eyebrow{margin-bottom:4px}
+  .modal-head h2{font-size:20px;color:var(--ink);font-family:'IBM Plex Sans',sans-serif}
+  .modal-close{background:transparent;border:0;font-size:24px;line-height:1;color:var(--mist);cursor:pointer;padding:2px 8px;border-radius:8px;transition:.15s}
+  .modal-close:hover{background:var(--paper);color:var(--ink)}
+  .modal-body{padding:8px 26px 4px}
+  .modal-foot{display:flex;gap:12px;justify-content:flex-end;padding:18px 26px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--paper);border-radius:0 0 16px 16px}
+
   @media(max-width:820px){body{zoom:1}.grid{grid-template-columns:1fr}.bar{flex-direction:column;align-items:stretch;gap:10px}nav{margin-left:0;overflow-x:auto}nav button{flex:1 0 auto;white-space:nowrap}}
 </style>
 </head>
@@ -167,10 +180,6 @@
       </div>
     </div>
 
-    <div id="editBanner" class="hidden" style="background:#fef3e2;border:1px solid var(--accent);border-radius:11px;padding:13px 18px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;gap:12px">
-      <div style="font-size:14px;color:#8a5510"><strong>✏️ Editando ficha</strong> — <span id="editBannerRuta" class="mono" style="font-size:13px"></span></div>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="resetFicha()">Cancelar edición</button>
-    </div>
     <form id="formFicha" class="card">
       <div class="section">
         <div class="section-title"><span class="section-num">I</span>Identificación del proceso</div>
@@ -273,6 +282,76 @@
 </main>
 
 <div class="toast" id="toast"></div>
+
+<!-- ===================== MODAL DE EDICIÓN ===================== -->
+<div class="modal-bg" id="modalEdit">
+  <div class="modal">
+    <div class="modal-head">
+      <div>
+        <div class="eyebrow">Editar ficha · <span id="ed_nivel_lbl">N1</span></div>
+        <h2 id="ed_titulo">Ficha de proceso</h2>
+      </div>
+      <button class="modal-close" onclick="cerrarModalEdit()" title="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <!-- Selector de nivel (informativo, no editable aquí) -->
+      <div style="margin-bottom:16px">
+        <div class="section-title" style="margin-bottom:10px"><span class="section-num">I</span>Identificación del proceso</div>
+        <div class="grid">
+          <div class="field"><label>Tipo de proceso <span class="req">*</span></label><select id="ed_tipo"></select></div>
+          <div class="field"><label>Proceso nivel 0 <span class="req">*</span></label><select id="ed_n0" disabled></select></div>
+          <div class="field" id="ed_w_n1"><label>Proceso nivel 1</label><select id="ed_n1" disabled></select></div>
+          <div class="field" id="ed_w_n2"><label>Proceso nivel 2</label><select id="ed_n2" disabled></select></div>
+          <div class="field full"><label>Ruta del proceso (se arma sola)</label><div class="ruta-pill" id="ed_ruta">—</div></div>
+          <div class="field full"><label>Objetivo del proceso</label><textarea id="ed_objetivo"></textarea></div>
+          <div class="field"><label>Dueño del proceso (unidad orgánica)</label><select id="ed_dueno"></select></div>
+          <div class="field"><label>Alcance</label><textarea id="ed_alcance"></textarea></div>
+          <div class="field full"><label>Base legal</label><textarea id="ed_base_legal"></textarea></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div class="section-title" style="margin-bottom:6px"><span class="section-num">II</span>Estructura operativa (SIPOC)</div>
+        <div id="ed_subproc_box" class="hidden" style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:16px">
+          <div style="font-size:12px;color:var(--mist);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Subproceso en análisis</div>
+          <div class="mono" id="ed_subproc_txt" style="font-size:13px;color:var(--brand)">—</div>
+        </div>
+        <div class="grid">
+          <div class="field"><label>Proveedores / Cliente</label><textarea id="ed_proveedores"></textarea></div>
+          <div class="field"><label>Entrada / Insumo</label><textarea id="ed_entrada"></textarea></div>
+          <div class="field"><label>Producto</label><textarea id="ed_producto"></textarea></div>
+          <div class="field"><label>Receptor final del producto</label><textarea id="ed_receptor"></textarea></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <div class="section-title" style="margin-bottom:6px"><span class="section-num">III</span>Recursos y control del desempeño</div>
+        <div class="grid">
+          <div class="field full">
+            <label>Indicadores de desempeño (ficha de procesos)</label>
+            <div class="ind-list" id="ed_ind_list"></div>
+            <div class="ind-add">
+              <input id="ed_ind_nuevo" placeholder="Escribe un indicador y pulsa Añadir…" onkeydown="if(event.key==='Enter'){event.preventDefault();anadirIndicadorEd();}">
+              <button type="button" class="btn btn-accent btn-sm" onclick="anadirIndicadorEd()">+ Añadir</button>
+            </div>
+          </div>
+          <div class="field"><label>Controles</label><textarea id="ed_controles"></textarea></div>
+          <div class="field"><label>Documentos internos</label><textarea id="ed_docs_int"></textarea></div>
+          <div class="field"><label>Documentos externos</label><textarea id="ed_docs_ext"></textarea></div>
+          <div class="field"><label>Recursos humanos</label><textarea id="ed_rrhh"></textarea></div>
+          <div class="field"><label>Sistemas informáticos</label><textarea id="ed_sistemas"></textarea></div>
+          <div class="field"><label>Registros</label><textarea id="ed_registros"></textarea></div>
+          <div class="field"><label>Instalaciones</label><textarea id="ed_instalaciones"></textarea></div>
+          <div class="field"><label>Equipos</label><textarea id="ed_equipos"></textarea></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModalEdit()">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="ed_guardar" onclick="guardarEdicion()">Actualizar ficha</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ============================================================
@@ -659,84 +738,218 @@ async function renderListado(){
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="5"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 
+/* ============================================================
+   EDICIÓN EN MODAL (como el aplicativo de riesgos)
+   ============================================================ */
+let ED_STATE = { nivel:null, id:null, indicadores:[] };
+
+const EDF = n => n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+
 async function editarFicha(nivel, id){
  try{
-  console.log('[editarFicha] inicio →', nivel, id);
-  // 1) Navegar a la vista de fichas.
-  document.querySelector('nav button[data-view="fichas"]').click();
-  // 2) Buscar la ficha. Si no está en cache, forzar recarga desde QuintaDB.
+  // 1) Buscar la ficha (con recarga forzada si no está en cache).
   let fichas = await loadFichas(nivel);
   let r = fichas.find(x=>x.id===id);
-  if(!r){
-    console.warn('[editarFicha] no estaba en cache, recargando…');
-    fichas = await loadFichas(nivel, true); // forzar
-    r = fichas.find(x=>x.id===id);
-  }
-  if(!r){ toast('No se encontró la ficha (id '+id+').', true); console.error('[editarFicha] id no hallado. IDs:', fichas.map(f=>f.id)); return; }
-  console.log('[editarFicha] ficha encontrada ✓');
-  // 3) Limpiar el formulario y fijar el nivel visual (ya con la ficha en mano).
-  INDICADORES=[];
-  aplicarNivelVisual(nivel);
-  EDIT_FICHA={nivel,id};
-  // 4) Cargar los campos de texto. (NO usamos form.reset() porque puede borrar
-  //    de forma diferida los valores que ponemos justo después.)
-  const F=FF(); const v=r.values||{};
-  // Misma lógica que objFicha (que sí funciona en el listado): busca el valor
-  // por ID y por nombre de columna, y toma el primero que no sea basura ni el nombre.
-  const cur=(def,nombre)=>{
-    if(!def) return '';
-    const cand=[v[def.id], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x));
-    return cand||'';
-  };
+  if(!r){ fichas = await loadFichas(nivel, true); r = fichas.find(x=>x.id===id); }
+  if(!r){ toast('No se encontró la ficha.', true); return; }
+  ED_STATE = { nivel, id, indicadores:[] };
+  const F=EDF(nivel); const v=r.values||{};
+  // Cabecera del modal
+  document.getElementById('ed_nivel_lbl').textContent=nivel;
+  // Visibilidad de niveles en el modal
+  document.getElementById('ed_w_n1').classList.toggle('hidden', !(nivel==='N1'||nivel==='N2'));
+  document.getElementById('ed_w_n2').classList.toggle('hidden', nivel!=='N2');
+  // Lectura robusta (igual que el listado)
+  const cur=(def,nombre)=>{ if(!def) return ''; const cand=[v[def.id], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x)); return cand||''; };
   const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
-  set('fi_objetivo', cur(F.objetivo,'Objetivo del proceso'));
-  set('fi_alcance', cur(F.alcance,'Alcance'));
-  set('fi_base_legal', cur(F.base_legal,'Base legal'));
-  set('fi_proveedores', cur(F.proveedores,'Proveedores/Cliente'));
-  set('fi_entrada', cur(F.entrada,'Entrada/Insumo'));
-  set('fi_producto', cur(F.producto,'Producto'));
-  set('fi_receptor', cur(F.receptor,'Receptor final del producto'));
-  set('fi_controles', cur(F.controles,'Controles'));
-  set('fi_docs_int', cur(F.docs_internos,'Documentos internos '));
-  set('fi_docs_ext', cur(F.docs_externos,'Documentos externos'));
-  set('fi_rrhh', cur(F.rrhh,'Recursos Humanos'));
-  set('fi_sistemas', cur(F.sistemas,'Sistemas Informáticos'));
-  set('fi_registros', cur(F.registros,'Registros'));
-  set('fi_instalaciones', cur(F.instalaciones,'Instalaciones'));
-  set('fi_equipos', cur(F.equipos,'Equipos'));
-  console.log('[editarFicha] campos de texto cargados');
-  // 5) Reconstruir la cascada desde la ruta de texto guardada.
+  set('ed_objetivo', cur(F.objetivo,'Objetivo del proceso'));
+  set('ed_alcance', cur(F.alcance,'Alcance'));
+  set('ed_base_legal', cur(F.base_legal,'Base legal'));
+  set('ed_proveedores', cur(F.proveedores,'Proveedores/Cliente'));
+  set('ed_entrada', cur(F.entrada,'Entrada/Insumo'));
+  set('ed_producto', cur(F.producto,'Producto'));
+  set('ed_receptor', cur(F.receptor,'Receptor final del producto'));
+  set('ed_controles', cur(F.controles,'Controles'));
+  set('ed_docs_int', cur(F.docs_internos,'Documentos internos '));
+  set('ed_docs_ext', cur(F.docs_externos,'Documentos externos'));
+  set('ed_rrhh', cur(F.rrhh,'Recursos Humanos'));
+  set('ed_sistemas', cur(F.sistemas,'Sistemas Informáticos'));
+  set('ed_registros', cur(F.registros,'Registros'));
+  set('ed_instalaciones', cur(F.instalaciones,'Instalaciones'));
+  set('ed_equipos', cur(F.equipos,'Equipos'));
+  // Dueño
+  try{ const duenos=await loadMaestra('RESPONSABLES'); fillSelect(document.getElementById('ed_dueno'), duenos); }catch(_){}
+  // Cascada del modal + reconstrucción desde la ruta
+  await initCascadaModal();
   const ruta=rutaFicha(r,nivel);
-  console.log('[editarFicha] ruta:', ruta);
-  await reconstruirCascadaFicha(ruta);
-  console.log('[editarFicha] cascada reconstruida');
-  // 6) Indicadores existentes.
-  INDICADORES=[];
+  await reconstruirCascadaModal(ruta, nivel);
+  // Indicadores existentes
+  ED_STATE.indicadores=[];
   const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
   if(subIds.length){
     for(const sid of subIds){
       try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
         const txt=(d.record.values||{})[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || (d.record.values||{})['Indicador'] || '';
-        if(txt && !esBasura(txt) && txt!=='Indicador') INDICADORES.push({id:sid, texto:txt});
+        if(txt && !esBasura(txt) && txt!=='Indicador') ED_STATE.indicadores.push({id:sid, texto:txt});
       }catch(_){}
     }
   }
-  renderIndicadores();
-  document.getElementById('btnFichaGuardar').textContent='Actualizar ficha';
-  // Banner visible de edición
-  const banner=document.getElementById('editBanner');
-  if(banner){ banner.classList.remove('hidden'); document.getElementById('editBannerRuta').textContent=ruta||('Ficha '+nivel); }
-  toast('Editando ficha '+nivel+'. Revisa los datos y pulsa «Actualizar ficha».');
-  // Llevar la vista al banner de edición (no al tope) para que se vean los datos cargados.
-  const bn=document.getElementById('editBanner');
-  if(bn) bn.scrollIntoView({behavior:'smooth', block:'start'});
-  console.log('[editarFicha] COMPLETADO ✓');
- }catch(err){
-  console.error('[editarFicha] ERROR:', err);
-  toast('Error al cargar la ficha para editar: '+err.message, true);
- }
+  renderIndicadoresEd();
+  // Abrir modal
+  document.getElementById('modalEdit').classList.add('show');
+  document.body.style.overflow='hidden';
+ }catch(err){ console.error('[editarFicha]', err); toast('Error al abrir edición: '+err.message, true); }
 }
 window.editarFicha=editarFicha;
+
+function cerrarModalEdit(){
+  document.getElementById('modalEdit').classList.remove('show');
+  document.body.style.overflow='';
+  ED_STATE={ nivel:null, id:null, indicadores:[] };
+}
+window.cerrarModalEdit=cerrarModalEdit;
+
+// Cascada del modal (Tipo→N0→N1→N2 según nivel)
+async function initCascadaModal(){
+  const inv = await loadInventario();
+  const C=INV_COLS;
+  const tipo=document.getElementById('ed_tipo'), n0=document.getElementById('ed_n0'),
+        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2');
+  const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
+  fillSelect(tipo, opcionesInv(inv,{},C.tipo));
+  const nivel=()=>ED_STATE.nivel;
+  tipo.onchange=()=>{ [n0,n1,n2].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } trasCascadaModal(); };
+  n0.onchange=()=>{ [n1,n2].forEach(reset); if(n0.value && (nivel()==='N1'||nivel()==='N2')){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; } trasCascadaModal(); };
+  n1.onchange=()=>{ [n2].forEach(reset); if(n1.value && nivel()==='N2'){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } trasCascadaModal(); };
+  n2.onchange=trasCascadaModal;
+}
+function valoresCascadaModal(){
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const n=ED_STATE.nivel;
+  if(n==='N0') return [g('ed_tipo'), g('ed_n0')];
+  if(n==='N1') return [g('ed_tipo'), g('ed_n0'), g('ed_n1')];
+  return [g('ed_tipo'), g('ed_n0'), g('ed_n1'), g('ed_n2')];
+}
+function trasCascadaModal(){
+  const ruta = valoresCascadaModal().filter(Boolean).join(' › ');
+  document.getElementById('ed_ruta').textContent = ruta || '—';
+  detectarSubprocesoModal();
+}
+function detectarSubprocesoModal(){
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const box=document.getElementById('ed_subproc_box'), txt=document.getElementById('ed_subproc_txt');
+  if(!box||!txt) return;
+  const inv=STATE.inventario||[], C=INV_COLS, n=ED_STATE.nivel;
+  const vTipo=g('ed_tipo'), vN0=g('ed_n0'), vN1=g('ed_n1'), vN2=g('ed_n2');
+  const coincide=r=>{ const v=r.values||{};
+    if(vTipo&&v[C.tipo]!==vTipo) return false;
+    if(vN0&&v[C.n0]!==vN0) return false;
+    if((n==='N1'||n==='N2')&&vN1&&v[C.n1]!==vN1) return false;
+    if(n==='N2'&&vN2&&v[C.n2]!==vN2) return false;
+    return true; };
+  const filas=inv.filter(coincide);
+  const orden = n==='N0'?[C.n1,C.n2,C.n3,C.proc] : n==='N1'?[C.n2,C.n3,C.proc] : [C.n3,C.proc];
+  const noVacio=x=> x && !esBasura(x) && !/N\.D\.?$/i.test(String(x).trim());
+  let encontrado='',nivelNombre='';
+  for(const col of orden){ const valores=[...new Set(filas.map(r=>(r.values||{})[col]).filter(noVacio))]; if(valores.length){ encontrado=valores.join(' · '); nivelNombre=col; break; } }
+  if(encontrado){ box.classList.remove('hidden'); txt.textContent=nivelNombre+': '+encontrado; }
+  else { box.classList.add('hidden'); txt.textContent='—'; }
+}
+async function reconstruirCascadaModal(ruta, nivel){
+  const inv=await loadInventario(); const C=INV_COLS;
+  const tipo=document.getElementById('ed_tipo'), n0=document.getElementById('ed_n0'),
+        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2');
+  const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
+  [n0,n1,n2].forEach(reset);
+  if(tipo && tipo.options.length<=1) fillSelect(tipo, opcionesInv(inv,{},C.tipo));
+  if(!ruta||ruta==='—'){ trasCascadaModal(); return; }
+  const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+  const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
+  const seg=i=>(segs[i]&&!generico.test(segs[i]))?segs[i]:'';
+  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3);
+  const fijar=(el,val)=>{ if(!el||!val) return false; const ok=[...el.options].some(o=>o.value===val); if(ok){ el.value=val; return true; } return false; };
+  if(fijar(tipo,vTipo)){
+    fillSelect(n0, opcionesInv(inv,{[C.tipo]:vTipo},C.n0)); n0.disabled=false;
+    if(fijar(n0,vN0)){
+      if(nivel==='N1'||nivel==='N2'){
+        fillSelect(n1, opcionesInv(inv,{[C.tipo]:vTipo,[C.n0]:vN0},C.n1)); n1.disabled=false;
+        if(fijar(n1,vN1) && nivel==='N2'){
+          fillSelect(n2, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1},C.n2)); n2.disabled=false;
+          fijar(n2,vN2);
+        }
+      }
+    }
+  }
+  trasCascadaModal();
+}
+// Indicadores del modal
+function anadirIndicadorEd(){
+  const inp=document.getElementById('ed_ind_nuevo');
+  const txt=(inp.value||'').trim();
+  if(!txt){ toast('Escribe un indicador antes de añadir.', true); return; }
+  ED_STATE.indicadores.push({ id:null, texto:txt });
+  inp.value=''; inp.focus(); renderIndicadoresEd();
+}
+window.anadirIndicadorEd=anadirIndicadorEd;
+function quitarIndicadorEd(i){ ED_STATE.indicadores.splice(i,1); renderIndicadoresEd(); }
+window.quitarIndicadorEd=quitarIndicadorEd;
+function renderIndicadoresEd(){
+  const cont=document.getElementById('ed_ind_list');
+  if(!ED_STATE.indicadores.length){ cont.innerHTML='<p class="hint">Aún no hay indicadores.</p>'; return; }
+  cont.innerHTML=ED_STATE.indicadores.map((ind,i)=>`
+    <div class="ind-item">
+      <span class="ind-num">${String(i+1).padStart(2,'0')}</span>
+      <span class="ind-txt">${(ind.texto||'').replace(/</g,'&lt;')}</span>
+      <button type="button" class="icon-btn" title="Quitar" onclick="quitarIndicadorEd(${i})">✕</button>
+    </div>`).join('');
+}
+// Guardar la edición
+async function guardarEdicion(){
+  const { nivel, id } = ED_STATE;
+  if(!id){ toast('No hay ficha en edición.', true); return; }
+  const F=EDF(nivel);
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const ruta = valoresCascadaModal().filter(Boolean).join(' › ');
+  const campos={};
+  const put=(def,val)=>{ if(def && val) campos[def.id]=val; };
+  put(F.proceso_txt, ruta);
+  put(F.objetivo, g('ed_objetivo'));
+  put(F.alcance, g('ed_alcance'));
+  put(F.base_legal, g('ed_base_legal'));
+  put(F.proveedores, g('ed_proveedores'));
+  put(F.entrada, g('ed_entrada'));
+  put(F.producto, g('ed_producto'));
+  put(F.receptor, g('ed_receptor'));
+  put(F.controles, g('ed_controles'));
+  put(F.docs_internos, g('ed_docs_int'));
+  put(F.docs_externos, g('ed_docs_ext'));
+  put(F.rrhh, g('ed_rrhh'));
+  put(F.sistemas, g('ed_sistemas'));
+  put(F.registros, g('ed_registros'));
+  put(F.instalaciones, g('ed_instalaciones'));
+  put(F.equipos, g('ed_equipos'));
+  const dueno=g('ed_dueno');
+  const btn=document.getElementById('ed_guardar');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  try{
+    await API.saveForm(id, campos, entFicha(nivel));
+    if(dueno && F.dueno){ try{ await API.saveForm(id, { [F.dueno.id]:[dueno] }); }catch(_){} }
+    // Indicadores nuevos (los que no tienen id)
+    const nuevos = ED_STATE.indicadores.filter(x=>!x.id && x.texto);
+    if(nuevos.length){
+      const SUB=F.subform_indicador.id;
+      const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
+      nuevos.forEach(ind=>{ subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: ind.texto }; });
+      await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) });
+    }
+    toast('Ficha actualizada.');
+    STATE.fichas[nivel]=[]; // invalidar cache
+    cerrarModalEdit();
+    renderListado();
+  }catch(err){ toast('Error al actualizar: '+err.message, true); }
+  finally{ btn.disabled=false; btn.textContent='Actualizar ficha'; }
+}
+window.guardarEdicion=guardarEdicion;
 
 // Reconstruye la cascada SOLO hasta el nivel de la ficha, a partir de la ruta
 // de texto "Tipo › N0 › N1 (› N2)". Tras reconstruir, detecta el subproceso SIPOC.
