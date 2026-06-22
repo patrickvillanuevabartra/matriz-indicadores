@@ -1454,11 +1454,28 @@ function setMetaTab(t){
 }
 window.setMetaTab=setMetaTab;
 
+// Determina si un registro de meta está relacionado con un indicador de la matriz.
+// QuintaDB devuelve la relación de formas inconsistentes (array, string JSON, bajo
+// el field-id o bajo el nombre de columna). Buscamos el matId de forma flexible.
+function relMencionaMatriz(r, matId, relFieldId){
+  if(!matId) return false;
+  const v=r.values||{};
+  // 1) Por field-id directo
+  const candidatos=[v[relFieldId], v['Matriz de indicadores'], v['Matriz indicadores'], v['Indicador']];
+  for(const c of candidatos){ if(c && JSON.stringify(c).includes(matId)) return true; }
+  // 2) Buscar en cualquier campo del registro que contenga el ID de 22 chars
+  for(const k in v){ const s=JSON.stringify(v[k]||''); if(s.includes(matId)) return true; }
+  // 3) Buscar en subform/otros
+  if(r.subform_values && JSON.stringify(r.subform_values).includes(matId)) return true;
+  return false;
+}
+
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
   try{
     const data=await API.records(CONFIG.ENTITIES.PROG_METAS);
-    const mias=(data.records||[]).filter(r=>{ const rel=(r.values||{})[PM.rel_matriz.id]; return rel && JSON.stringify(rel).includes(MT_CTX.matId); });
+    const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
+    console.log('[ProgMeta] cargar: total', (data.records||[]).length, '| de este indicador:', mias.length, '| matId:', MT_CTX.matId);
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
     if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación'); return `<option value="${r.id}">Meta ${m||'—'} (${f||'s/f'})</option>`; }).join(''); }
@@ -1522,7 +1539,7 @@ async function cargarSegMetas(){
   const tb=document.getElementById('mt_seg_tabla');
   try{
     const data=await API.records(CONFIG.ENTITIES.SEG_METAS);
-    const mias=(data.records||[]).filter(r=>{ const rel=(r.values||{})[SM.rel_matriz.id]; return rel && JSON.stringify(rel).includes(MT_CTX.matId); });
+    const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
     if(!mias.length){ tb.innerHTML='<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
     let ultimoAvance=null;
     tb.innerHTML=mias.map(r=>{
