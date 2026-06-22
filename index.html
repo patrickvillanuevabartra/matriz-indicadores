@@ -201,7 +201,7 @@
           <!-- N3 y Procedimiento NO van en Identificación; se detectan en SIPOC -->
           <select id="fi_n3" disabled class="hidden"></select>
           <select id="fi_proc" disabled class="hidden"></select>
-          <div class="field full"><label>Ruta del proceso (se arma sola)</label><div class="ruta-pill" id="fi_ruta">Selecciona la jerarquía arriba…</div></div>
+          <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="fi_ruta">Selecciona la jerarquía arriba…</div></div>
           <div class="field full"><label>Objetivo del proceso</label><textarea id="fi_objetivo"></textarea></div>
           <div class="field"><label>Dueño del proceso (unidad orgánica)</label><select id="fi_dueno"></select></div>
           <div class="field"><label>Alcance</label><textarea id="fi_alcance"></textarea></div>
@@ -410,7 +410,7 @@
           <div class="field"><label>Proceso nivel 0 <span class="req">*</span></label><select id="ed_n0" disabled></select></div>
           <div class="field" id="ed_w_n1"><label>Proceso nivel 1</label><select id="ed_n1" disabled></select></div>
           <div class="field" id="ed_w_n2"><label>Proceso nivel 2</label><select id="ed_n2" disabled></select></div>
-          <div class="field full"><label>Ruta del proceso (se arma sola)</label><div class="ruta-pill" id="ed_ruta">—</div></div>
+          <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="ed_ruta">—</div></div>
           <div class="field full"><label>Objetivo del proceso</label><textarea id="ed_objetivo"></textarea></div>
           <div class="field"><label>Dueño del proceso (unidad orgánica)</label><select id="ed_dueno"></select></div>
           <div class="field"><label>Alcance</label><textarea id="ed_alcance"></textarea></div>
@@ -1014,27 +1014,39 @@ async function editarFicha(nivel, id){
   await initCascadaModal();
   const ruta=rutaFicha(r,nivel);
   await reconstruirCascadaModal(ruta, nivel);
-  // Reconstruir SIPOC por componente desde los indicadores guardados ("Componente — Indicador").
-  // Agrupa varios indicadores del mismo componente en su array.
+  // Leer los indicadores guardados (texto "Componente — Indicador")
   SIPOC_ED={};
   const subIds=getSubIds(r, F);
+  const indicadoresGuardados=[]; // {comp, ind, sid}
   if(subIds.length){
     for(const sid of subIds){
       try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
         const txt=leerTextoIndicador(d.record && d.record.values);
         if(txt && !esBasura(txt) && txt!=='Indicador'){
           const partes=String(txt).split(' — ');
-          const comp=partes.length>1?partes[0].trim():txt.trim();
-          const ind=partes.length>1?partes.slice(1).join(' — ').trim():'';
-          if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[]};
-          if(ind) SIPOC_ED[comp].indicadores.push(ind);
-          SIPOC_ED[comp]._sids.push(sid);
+          const comp=partes.length>1?partes[0].trim():'';
+          const ind=partes.length>1?partes.slice(1).join(' — ').trim():txt.trim();
+          indicadoresGuardados.push({comp, ind, sid});
         }
       }catch(_){}
     }
-    // Asegurar al menos un campo por componente
-    Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
   }
+  // Detectar los componentes disponibles desde la cascada (igual que en creación)
+  detectarSubprocesoModal();
+  // Marcar automáticamente los componentes que tienen indicadores guardados y asociarlos
+  indicadoresGuardados.forEach(g=>{
+    // Buscar el componente: por coincidencia con uno detectado, o usar el comp guardado
+    const comp = g.comp || '(sin componente)';
+    if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[]};
+    if(g.ind) SIPOC_ED[comp].indicadores.push(g.ind);
+    SIPOC_ED[comp]._sids.push(g.sid);
+  });
+  Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
+  // Marcar los checkboxes de los componentes que tienen indicadores
+  setTimeout(()=>{
+    document.querySelectorAll('#ed_sipoc_checks input[type=checkbox]').forEach(cb=>{ if(SIPOC_ED[cb.value]) cb.checked=true; });
+    renderSipocModal();
+  }, 50);
   renderSipocModal();
   // Abrir modal
   document.getElementById('modalEdit').classList.add('show');
@@ -1212,7 +1224,7 @@ async function guardarEdicion(){
     STATE.fichas[nivel]=[];
     cerrarModalEdit();
     renderListado();
-  }catch(err){ toast('Error al actualizar: '+err.message, true); }
+  }catch(err){ console.error('[guardarEdicion] ERROR:', err); toast('Error al actualizar: '+err.message, true); }
   finally{ btn.disabled=false; btn.textContent='Actualizar ficha'; }
 }
 window.guardarEdicion=guardarEdicion;
