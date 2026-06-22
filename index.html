@@ -1388,6 +1388,30 @@ async function loadMatriz(forzar){
   if(!forzar && STATE.matriz && STATE.matriz.length) return STATE.matriz;
   const data = await API.records(CONFIG.ENTITIES.MATRIZ_IND);
   STATE.matriz = data.records||[];
+  // Precargar TODOS los seguimientos para calcular, por indicador, el último avance y nº de periodos
+  try{
+    const segData = await API.records(CONFIG.ENTITIES.SEG_METAS);
+    const segs = segData.records||[];
+    const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
+    STATE.matriz.forEach(m=>{
+      const mios = segs.filter(s=>relMencionaMatriz(s, m.id, SM.rel_matriz.id));
+      m._periodos = mios.length;
+      // Último por fecha de evaluación
+      let ultimo=null, ultFecha='';
+      mios.forEach(s=>{
+        const f=leerCampo(s, SM.fecha_eval.id, 'Fecha de evaluación');
+        const fechaVal = (f && !/fecha/i.test(f)) ? f : '';
+        if(!ultimo || (fechaVal && fechaVal>ultFecha)){ ultimo=s; ultFecha=fechaVal||ultFecha; }
+      });
+      if(ultimo){
+        const metaN=SM.meta_seg?numOf(leerCampo(ultimo,SM.meta_seg.id,'Meta seguimiento')):NaN;
+        const realN=numOf(leerCampo(ultimo,SM.valor_real.id,'Valor real obtenido'));
+        let pctN=SM.avance_app?numOf(leerCampo(ultimo,SM.avance_app.id,'Avance')):NaN;
+        if(isNaN(pctN) && !isNaN(metaN) && metaN>0 && !isNaN(realN)) pctN=Math.round(realN/metaN*100*100)/100;
+        m._avance = isNaN(pctN)?null:pctN;
+      } else { m._avance=null; }
+    });
+  }catch(e){ /* si falla, los avances quedan en null */ }
   return STATE.matriz;
 }
 
@@ -1424,7 +1448,9 @@ async function renderMatriz(){
         let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
         if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
         const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
-        const avance = r._avance!==undefined && r._avance!==null ? barraAvance(r._avance) : '<span class="hint" style="font-size:12px">Ver metas</span>';
+        const avance = r._avance!==undefined && r._avance!==null
+          ? barraAvance(r._avance) + (r._periodos>1?`<div style="font-size:10px;color:var(--mist);margin-top:2px">${r._periodos} periodos</div>`:'')
+          : (r._periodos>0?`<span class="hint" style="font-size:11px">${r._periodos} periodo(s)</span>`:'<span class="hint" style="font-size:12px">Ver metas</span>');
         return `<tr>
           <td>${nivelBadge}</td>
           <td style="max-width:240px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
@@ -1878,20 +1904,22 @@ async function cargarSegMetas(){
     STATE.segMetas=mias;
     if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
     let ultimoAvance=null;
+    const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
     tb.innerHTML=mias.map(r=>{
       const f=leerCampo(r,SM.fecha_eval.id,'Fecha de evaluación');
       // Meta y avance desde campos propios (se leen bien); fallback al cálculo
-      const meta=SM.meta_seg?leerCampo(r,SM.meta_seg.id,'Meta seguimiento'):'';
-      const real=leerCampo(r,SM.valor_real.id,'Valor real obtenido');
-      let pct=SM.avance_app?leerCampo(r,SM.avance_app.id,'Avance app'):'';
-      if((pct===''||pct===undefined)&&meta&&real&&parseFloat(meta)>0) pct=Math.round(real/meta*100*100)/100;
+      const metaN=SM.meta_seg?numOf(leerCampo(r,SM.meta_seg.id,'Meta seguimiento')):NaN;
+      const realN=numOf(leerCampo(r,SM.valor_real.id,'Valor real obtenido'));
+      let pctN=SM.avance_app?numOf(leerCampo(r,SM.avance_app.id,'Avance')):NaN;
+      // Si el avance guardado no es válido, recalcular desde meta y real
+      if(isNaN(pctN) && !isNaN(metaN) && metaN>0 && !isNaN(realN)) pctN=Math.round(realN/metaN*100*100)/100;
       const obs=limpiarEtiqueta(leerCampo(r,SM.observacion.id,'Observación'));
       const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
       const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
       const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
-      if(pct!==''&&pct!==undefined&&pct!==null) ultimoAvance=parseFloat(pct);
-      const pctNum = (pct!==''&&pct!==undefined&&pct!==null)?parseFloat(pct):null;
-      return `<tr><td>${f||'—'}</td><td>${meta||'—'}</td><td><strong>${real||'—'}</strong></td><td>${pctNum!==null?barraAvance(pctNum):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
+      if(!isNaN(pctN)) ultimoAvance=pctN;
+      const fechaTxt = (f && !/fecha/i.test(f)) ? f : '—';
+      return `<tr><td>${fechaTxt}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')">✏️</button>
           <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')">🗑️</button>
@@ -1923,7 +1951,7 @@ async function eliminarSegMeta(segId){
   try{
     await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+segId+'.json','DELETE',{});
     toast('Seguimiento eliminado.');
-    await cargarSegMetas(); renderMatriz();
+    await cargarSegMetas(); STATE.matriz=[]; renderMatriz();
   }catch(err){ toast('Error al eliminar: '+err.message, true); }
 }
 window.eliminarSegMeta=eliminarSegMeta;
@@ -1959,7 +1987,7 @@ async function guardarSegMeta(){
     const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
     const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
     await cargarSegMetas();
-    renderMatriz();
+    STATE.matriz=[]; renderMatriz();
   }catch(err){ console.error('Error guardando seguimiento:', err); toast('Error: '+err.message, true); }
   finally{ if(btn){ btn.disabled=false; btn.textContent='+ Guardar seguimiento'; } }
 }
