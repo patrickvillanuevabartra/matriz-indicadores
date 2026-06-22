@@ -188,7 +188,10 @@ const CONFIG = {
     evidencias:      { id: "bvWPRcReDcMRZdTdJdVCoY", type: "url" },
     pct_avance:      { id: "bkWRiHlK1dJ4kyzCoTp2WJ", type: "formula", readOnly: true }, // (real/meta)*100
     plan_remediacion:{ id: "dcJ8ooWPDhW6hdKvGIWRmk", type: "url" },
-    observacion:     { id: "dcRSk6W5Lbnyk_WQGPBCk7", type: "text" }
+    observacion:     { id: "dcRSk6W5Lbnyk_WQGPBCk7", type: "text" },
+    meta_seg:        { id: "btCCo9iCjlrPJcJCkIv8oN", type: "float" }, // copia robusta de la meta
+    ref_seg:         { id: "aUWOiHW5DdWO_cJSovW6bq", type: "float" }, // copia robusta de la referencia
+    avance_app:      { id: "amphC-W5DoW7tcSSkfDvea", type: "float" }  // % avance calculado por la app
   }
 };
 
