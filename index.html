@@ -288,11 +288,12 @@
         <th>Fórmula</th>
         <th>Oficina medición</th>
         <th>Oficina dueña</th>
-        <th>Frecuencia</th>
+        <th>Frec. medición</th>
+        <th>Frec. cálculo</th>
         <th style="width:120px">Avance</th>
         <th style="text-align:right">Acciones</th>
       </tr></thead>
-      <tbody id="tablaMatriz"><tr><td colspan="9" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <tbody id="tablaMatriz"><tr><td colspan="10" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 </main>
@@ -1426,7 +1427,7 @@ async function renderMatriz(){
       if(!filtro) return true;
       return ind.toLowerCase().includes(filtro);
     });
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="9"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="10"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
     // Agrupar por Oficina de medición
     const ofiDe=r=>leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición') || '(Sin oficina de medición)';
     const grupos={};
@@ -1435,11 +1436,12 @@ async function renderMatriz(){
     let html='';
     nombresOrd.forEach(ofi=>{
       const items=grupos[ofi];
-      html+=`<tr style="background:var(--paper)"><td colspan="9" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
+      html+=`<tr style="background:var(--paper)"><td colspan="10" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
       html+=items.map(r=>{
         const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
         const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
         const frec=leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
+        const frecCalc=leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo');
         const resp=leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición');
         const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
         const ofiDueno=leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador');
@@ -1459,6 +1461,7 @@ async function renderMatriz(){
           <td style="font-size:11px">${ofiMed?ofiMed.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="font-size:11px">${ofiDueno?ofiDueno.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
+          <td style="font-size:12px">${frecCalc||'<span class=hint>—</span>'}</td>
           <td>${avance}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
@@ -1470,7 +1473,7 @@ async function renderMatriz(){
     });
     tb.innerHTML=html;
     setConn(true);
-  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="7"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="10"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 window.renderMatriz=renderMatriz;
 
@@ -1754,12 +1757,20 @@ window.eliminarMatriz=eliminarMatriz;
 
 /* ---- Modal de Metas (Programación + Seguimiento) ---- */
 let MT_CTX={ matId:null, indicador:'' };
+let PM_EDIT_ID=null, SM_EDIT_ID=null, SM_EDIT_META=null, SM_EDIT_REF=null;
 async function abrirMetas(matId){
   const recs=await loadMatriz();
   const r=recs.find(x=>x.id===matId);
   if(!r){ toast('No se encontró el indicador.', true); return; }
   const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
   MT_CTX={ matId, indicador:ind };
+  // Resetear cualquier estado de edición previo
+  PM_EDIT_ID=null; SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
+  const bp=document.getElementById('pm_guardar'); if(bp) bp.textContent='+ Guardar programación';
+  const bs=document.getElementById('sm_guardar'); if(bs) bs.textContent='+ Guardar seguimiento';
+  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
+  const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
   document.getElementById('mt_titulo').textContent=ind||'Indicador';
   setMetaTab('prog');
   document.getElementById('modalMetas').classList.add('show'); document.body.style.overflow='hidden';
@@ -1820,7 +1831,6 @@ async function cargarProgMetas(){
 }
 
 // Editar una programación: carga sus valores en el formulario y cambia a modo edición
-let PM_EDIT_ID=null;
 function editarProgMeta(progId){
   const p=(STATE.progMetas||[]).find(x=>x.id===progId); if(!p) return;
   PM_EDIT_ID=progId;
@@ -1929,18 +1939,25 @@ async function cargarSegMetas(){
   }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
 
-let SM_EDIT_ID=null;
 function editarSegMeta(segId){
   const s=(STATE.segMetas||[]).find(x=>x.id===segId); if(!s) return;
   SM_EDIT_ID=segId;
+  const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
+  // Recuperar la meta y referencia PROPIAS de este seguimiento (no del desplegable)
+  SM_EDIT_META = SM.meta_seg?numOf(leerCampo(s,SM.meta_seg.id,'Meta seguimiento')):NaN;
+  SM_EDIT_REF = SM.ref_seg?numOf(leerCampo(s,SM.ref_seg.id,'Referencia seguimiento')):NaN;
   const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
-  // Seleccionar la programación vinculada si se puede deducir por meta
   set('sm_fecha', leerCampo(s,SM.fecha_eval.id,'Fecha de evaluación'));
   set('sm_real', leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
   set('sm_evid', leerCampo(s,SM.evidencias.id,'Evidencias'));
   set('sm_remed', leerCampo(s,SM.plan_remediacion.id,'Plan de remediación'));
   set('sm_obs', limpiarEtiqueta(leerCampo(s,SM.observacion.id,'Observación')));
-  evaluarRemediacion();
+  // Mostrar el panel con la meta propia y calcular % con el real actual
+  const info=document.getElementById('sm_meta_info');
+  if(info && !isNaN(SM_EDIT_META)){ info.classList.remove('hidden'); info.innerHTML=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(SM_EDIT_REF)?'—':SM_EDIT_REF} &nbsp;·&nbsp; <strong>Meta:</strong> ${SM_EDIT_META}`; }
+  const real=numOf(leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
+  const elAv=document.getElementById('sm_avance');
+  if(elAv && !isNaN(SM_EDIT_META) && SM_EDIT_META>0 && !isNaN(real)){ const pct=Math.round(real/SM_EDIT_META*100*100)/100; elAv.value=pct+'%'; const box=document.getElementById('sm_remed_box'); if(box) box.classList.toggle('hidden', !(pct<100)); }
   const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='✓ Actualizar seguimiento';
   document.getElementById('sm_real').scrollIntoView({behavior:'smooth',block:'center'});
 }
@@ -1963,9 +1980,16 @@ async function guardarSegMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs'), evid=g('sm_evid'), remed=g('sm_remed');
   if(!real){ toast('Indica el valor real.', true); return; }
-  // Obtener meta y referencia de la programación elegida
   let meta=null, ref=null;
-  if(progId && STATE.progMetas){ const p=STATE.progMetas.find(x=>x.id===progId); if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); } }
+  if(SM_EDIT_ID){
+    // Edición: usar la meta/referencia PROPIAS del seguimiento (no del desplegable)
+    meta = !isNaN(SM_EDIT_META)?SM_EDIT_META:null;
+    ref = !isNaN(SM_EDIT_REF)?SM_EDIT_REF:null;
+  } else {
+    // Creación: exigir elegir la programación (periodo)
+    if(!progId){ toast('Elige la meta de referencia (periodo) que estás evaluando.', true); return; }
+    if(STATE.progMetas){ const p=STATE.progMetas.find(x=>x.id===progId); if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); } }
+  }
   const pct = (meta && meta>0) ? Math.round((parseFloat(real)/meta*100)*100)/100 : null;
   const campos={};
   if(!SM_EDIT_ID){ campos[SM.rel_matriz.id]=[MT_CTX.matId]; if(progId) campos[SM.rel_prog_meta.id]=[progId]; }
@@ -1973,17 +1997,18 @@ async function guardarSegMeta(){
   campos[SM.valor_real.id]=real;
   campos[SM.evidencias.id]=evid||'';
   campos[SM.plan_remediacion.id]=remed||'';
-  // Campos propios (robustos) si existen en el config
-  if(SM.meta_seg && !isNaN(meta)) campos[SM.meta_seg.id]=meta;
-  if(SM.ref_seg && !isNaN(ref)) campos[SM.ref_seg.id]=ref;
+  // Campos propios (robustos) — siempre se reescriben para mantener consistencia
+  if(SM.meta_seg && meta!==null && !isNaN(meta)) campos[SM.meta_seg.id]=meta;
+  if(SM.ref_seg && ref!==null && !isNaN(ref)) campos[SM.ref_seg.id]=ref;
   if(SM.avance_app && pct!==null) campos[SM.avance_app.id]=pct;
   campos[SM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   const btn=document.getElementById('sm_guardar'); if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…'; }
   try{
     await API.saveForm(SM_EDIT_ID||null, campos, SM_EDIT_ID?undefined:CONFIG.ENTITIES.SEG_METAS);
     toast(SM_EDIT_ID?'Seguimiento actualizado.':'Seguimiento guardado.');
-    SM_EDIT_ID=null;
+    SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
     ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    const selP=document.getElementById('sm_prog'); if(selP) selP.value='';
     const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
     const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
     await cargarSegMetas();
