@@ -929,6 +929,18 @@ function getSubIds(r, F){
   }
   return Array.isArray(arr)?arr:[];
 }
+// Lee el texto real del indicador de un subregistro. QuintaDB a veces invierte:
+// el valor real queda bajo la clave "Indicador" (nombre) y bajo el field-id queda
+// el literal "Indicador". Tomamos el primer valor que NO sea el nombre de la columna.
+function leerTextoIndicador(vals){
+  if(!vals) return '';
+  const idF = CONFIG.SUBIND_FICHA_FIELDS.indicador.id;
+  const candidatos = [vals['Indicador'], vals[idF]];
+  for(const c of candidatos){ if(c && c!=='Indicador' && !esBasura(c)) return c; }
+  // Último recurso: cualquier valor string que no sea basura ni el nombre de columna
+  for(const k in vals){ const v=vals[k]; if(typeof v==='string' && v && v!=='Indicador' && !esBasura(v)) return v; }
+  return '';
+}
 
 async function renderListado(){
   const tb=document.getElementById('tablaListado');
@@ -1009,7 +1021,7 @@ async function editarFicha(nivel, id){
   if(subIds.length){
     for(const sid of subIds){
       try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
-        const txt=(d.record.values||{})[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || (d.record.values||{})['Indicador'] || '';
+        const txt=leerTextoIndicador(d.record && d.record.values);
         if(txt && !esBasura(txt) && txt!=='Indicador'){
           const partes=String(txt).split(' — ');
           const comp=partes.length>1?partes[0].trim():txt.trim();
@@ -1355,7 +1367,7 @@ async function cargarIndicadoresFicha(){
     try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
       const vals=d.record && d.record.values || {};
       console.log('[Matriz] subregistro', sid, '→', JSON.stringify(vals).slice(0,200));
-      const txt=vals[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || vals['Indicador'] || '';
+      const txt=leerTextoIndicador(vals);
       console.log('[Matriz]   texto extraído:', JSON.stringify(txt));
       if(txt && !esBasura(txt) && txt!=='Indicador') AG_INDS.push({ texto:txt });
     }catch(e){ console.warn('[Matriz] error leyendo subregistro', sid, e.message); }
