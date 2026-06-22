@@ -270,13 +270,123 @@
     <div class="page-head">
       <div class="eyebrow">Desempeño</div>
       <h1>Matriz de indicadores</h1>
-      <p>Este módulo se construye en la siguiente fase: jalará los indicadores desde las fichas, añadirá su definición (fórmula, fuente, frecuencias) y gestionará la programación y el seguimiento de metas.</p>
+      <p>Define indicadores jalados de las fichas, su fórmula y frecuencia, y gestiona sus metas (programación y seguimiento).</p>
     </div>
-    <div class="card"><div class="empty"><h3>Próximamente</h3><p>Primero terminamos las fichas; luego conectamos la matriz.</p></div></div>
+
+    <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-primary" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
+      <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
+        <input id="matBuscar" placeholder="Buscar por indicador o proceso…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
+      </div>
+    </div>
+
+    <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
+      <thead><tr>
+        <th style="width:90px">Nivel</th>
+        <th>Indicador</th>
+        <th>Proceso</th>
+        <th>Fórmula</th>
+        <th>Frecuencia</th>
+        <th style="width:130px">Avance</th>
+        <th style="text-align:right">Acciones</th>
+      </tr></thead>
+      <tbody id="tablaMatriz"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+    </table></div></div>
   </section>
 </main>
 
 <div class="toast" id="toast"></div>
+
+<!-- ===================== MODAL: AGREGAR INDICADOR DESDE FICHA ===================== -->
+<div class="modal-bg" id="modalAgregar">
+  <div class="modal">
+    <div class="modal-head">
+      <div><div class="eyebrow">Matriz de indicadores</div><h2>Agregar indicador desde ficha</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalAgregar')" title="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:16px">
+        <label>1. Elige la ficha de proceso</label>
+        <select id="ag_ficha" onchange="cargarIndicadoresFicha()"><option value="">Seleccione una ficha…</option></select>
+      </div>
+      <div id="ag_inds_box" class="hidden">
+        <label style="font-size:13px;font-weight:500;color:var(--slate);display:block;margin-bottom:8px">2. Marca los indicadores a agregar a la matriz</label>
+        <div id="ag_inds_list" style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px"></div>
+      </div>
+      <div id="ag_def_box" class="hidden" style="border-top:1px solid var(--line);margin-top:16px;padding-top:16px">
+        <label style="font-size:13px;font-weight:500;color:var(--slate);display:block;margin-bottom:10px">3. Definición común (se aplica a los indicadores marcados)</label>
+        <div class="grid">
+          <div class="field"><label>Oficina/área de la medición</label><select id="ag_oficina"></select></div>
+          <div class="field"><label>Responsable de la medición</label><select id="ag_responsable"></select></div>
+          <div class="field"><label>Frecuencia de medición</label><select id="ag_frec_med"></select></div>
+          <div class="field"><label>Frecuencia de cálculo</label><select id="ag_frec_calc"></select></div>
+          <div class="field full"><label>Fórmula de cálculo</label><textarea id="ag_formula" placeholder="Ej: (N° atenciones resueltas / N° atenciones totales) × 100"></textarea></div>
+          <div class="field full"><label>Fuente de información</label><textarea id="ag_fuente"></textarea></div>
+        </div>
+        <p class="hint" style="margin-top:8px">La fórmula y fuente puedes ajustarlas luego por cada indicador desde la matriz.</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalAgregar')">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="ag_guardar" onclick="guardarIndicadoresMatriz()">Agregar a la matriz</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: METAS (Programación + Seguimiento) ===================== -->
+<div class="modal-bg" id="modalMetas">
+  <div class="modal" style="max-width:980px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Gestión de metas</div><h2 id="mt_titulo">Indicador</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalMetas')" title="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:4px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:4px;margin-bottom:18px;width:fit-content">
+        <button class="mt-tab active" data-t="prog" onclick="setMetaTab('prog')" style="border:0;background:var(--brand);color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:8px 16px;border-radius:7px;cursor:pointer">Programación</button>
+        <button class="mt-tab" data-t="seg" onclick="setMetaTab('seg')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:8px 16px;border-radius:7px;cursor:pointer">Seguimiento</button>
+      </div>
+
+      <!-- Programación -->
+      <div id="mt_prog">
+        <div style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nueva programación de meta</div>
+          <div class="grid">
+            <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha"></div>
+            <div class="field"><label>Valor de referencia (línea base)</label><input type="number" step="any" id="pm_ref"></div>
+            <div class="field"><label>Valor meta</label><input type="number" step="any" id="pm_meta"></div>
+            <div class="field full"><label>Observación</label><textarea id="pm_obs"></textarea></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" onclick="guardarProgMeta()">+ Guardar programación</button></div>
+        </div>
+        <div class="tabla-wrap"><table>
+          <thead><tr><th>Fecha</th><th>Referencia</th><th>Meta</th><th>Observación</th></tr></thead>
+          <tbody id="mt_prog_tabla"><tr><td colspan="4" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr></tbody>
+        </table></div>
+      </div>
+
+      <!-- Seguimiento -->
+      <div id="mt_seg" class="hidden">
+        <div style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
+          <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nuevo seguimiento</div>
+          <div class="grid">
+            <div class="field"><label>Meta de referencia</label><select id="sm_prog"></select></div>
+            <div class="field"><label>Fecha de evaluación</label><input type="date" id="sm_fecha"></div>
+            <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real"></div>
+            <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
+        </div>
+        <div class="tabla-wrap"><table>
+          <thead><tr><th>Fecha eval.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th></tr></thead>
+          <tbody id="mt_seg_tabla"><tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr></tbody>
+        </table></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalMetas')">Cerrar</button>
+    </div>
+  </div>
+</div>
 
 <!-- ===================== MODAL DE EDICIÓN ===================== -->
 <div class="modal-bg" id="modalEdit">
@@ -381,7 +491,7 @@ const API = {
 /* ============================================================
    ESTADO + utilidades
    ============================================================ */
-const STATE = { inventario:[], fichas:{N0:[],N1:[],N2:[]}, maestras:{} };
+const STATE = { inventario:[], fichas:{N0:[],N1:[],N2:[]}, maestras:{}, matriz:[], progMetas:[] };
 let NIVEL = 'N0';                 // nivel de ficha activo en el formulario
 let INDICADORES = [];             // indicadores capturados para la ficha en curso
 let EDIT_FICHA = null;            // {nivel, id} si se está editando
@@ -404,6 +514,7 @@ document.querySelectorAll('nav button').forEach(b=>{
     b.classList.add('active');
     document.getElementById('view-'+b.dataset.view).classList.add('active');
     if(b.dataset.view==='listado') renderListado();
+    if(b.dataset.view==='matriz') renderMatriz();
   };
 });
 
@@ -1122,6 +1233,276 @@ async function eliminarFicha(nivel, id){
   }catch(e){ toast('Error al eliminar: '+e.message, true); }
 }
 window.eliminarFicha=eliminarFicha;
+
+/* ============================================================
+   MATRIZ DE INDICADORES
+   ============================================================ */
+const MAT = CONFIG.MATRIZ_IND_FIELDS, PM = CONFIG.PROG_METAS_FIELDS, SM = CONFIG.SEG_METAS_FIELDS;
+const FREC_OPTS = ["Mensual","Bimensual","Trimestral","Semestral","Anual","A demanda"];
+
+function leerCampo(r, fieldId, nombre){
+  const v=r.values||{};
+  const cand=[v[fieldId], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x));
+  return cand||'';
+}
+
+async function loadMatriz(forzar){
+  if(!forzar && STATE.matriz && STATE.matriz.length) return STATE.matriz;
+  const data = await API.records(CONFIG.ENTITIES.MATRIZ_IND);
+  STATE.matriz = data.records||[];
+  return STATE.matriz;
+}
+
+async function renderMatriz(){
+  const tb=document.getElementById('tablaMatriz');
+  try{
+    const recs = await loadMatriz();
+    const filtro=(document.getElementById('matBuscar').value||'').toLowerCase();
+    const filas = recs.filter(r=>{
+      const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
+      if(!ind) return false;
+      if(!filtro) return true;
+      return ind.toLowerCase().includes(filtro);
+    });
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
+    tb.innerHTML = filas.map(r=>{
+      const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
+      const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
+      const frec=leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
+      const partes=ind.split(' — '); const comp=partes.length>1?partes[0]:'';
+      const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
+      const nivel = leerCampo(r,MAT.indicador_n1.id,'Indicador proceso nivel 1')?'N1' : leerCampo(r,MAT.indicador_n2.id,'Indicador proceso nivel 2')?'N2' : leerCampo(r,MAT.indicador_n0.id,'Indicador proceso nivel 0')?'N0':'—';
+      const nivelBadge = nivel!=='—'?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
+      const avance = r._avance!==undefined && r._avance!==null ? barraAvance(r._avance) : '<span class="hint" style="font-size:12px">Ver metas</span>';
+      return `<tr>
+        <td>${nivelBadge}</td>
+        <td style="max-width:280px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
+        <td style="max-width:200px;font-size:12px" class="mono">${(comp||'').replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
+        <td style="max-width:200px;font-size:12px">${(formula||'').slice(0,60).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
+        <td style="font-size:12px">${frec||'<span class=hint>—</span>'}</td>
+        <td>${avance}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
+          <button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>
+        </td>
+      </tr>`;
+    }).join('');
+    setConn(true);
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="7"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+}
+window.renderMatriz=renderMatriz;
+
+function barraAvance(pct){
+  const p=Math.max(0,Math.min(100,Math.round(pct)));
+  const color = p>=90?'var(--ok)' : p>=60?'var(--warn)' : 'var(--bad)';
+  return `<div style="display:flex;align-items:center;gap:7px">
+    <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:50px"><div style="width:${p}%;height:100%;background:${color}"></div></div>
+    <span style="font-size:12px;font-weight:600;color:${color}">${p}%</span></div>`;
+}
+
+const OFICINAS_MEDICION = ["Biblioteca Especializada","Biblioteca Virtual","Centro de Prácticas y Desarrollo Profesional","CITDEL","Comisión Consultiva","Comisión de Evaluación Curricular","Comité SGOE","Consejo de Facultad","Coordinación Relaciones Universitarias","Decanato","Defensoría Universitaria","Departamento Académico de Ingeniería","Escuela Profesional de Ingeniería Civil","Escuela Profesional de Ingeniería Electrónica","Escuela Profesional de Ingeniería Industrial","Escuela Profesional de Ingeniería Informática","Escuela Profesional de Ingeniería Mecatrónica","Escuelas profesionales","Laboratorio CIM","Laboratorio Circuitos y Dispositivos","Laboratorio Control","Laboratorio de Cómputo","Laboratorio de Ingeniería de Métodos","Laboratorio de Mecatrónica","Laboratorio de Procesos de Manufactura","Laboratorio de Química","Laboratorio Sistemas Digitales","Laboratorio Telecomunicaciones","Oficina Central de Registros y Matrícula","Oficina Central de Seguimiento del Egresado y Empleabilidad - OCSEE","Secretaría Académica","Taller de Construcción","Taller de Metal Mecánica","Unidad de Calidad y Acreditación Académica","Unidad de Extensión Cultural y Proyección Social","Unidad de Grados y Títulos","Unidad de Investigación","Unidad de Planificación","Unidad de Producción de Bienes y Prestación de Servicios","Unidad de Registros y Matrícula","Unidad de Servicios Administrativos","Unidad de Tutoría y Asesoría Académica"];
+
+/* ---- Modal: Agregar indicador desde ficha ---- */
+let AG_INDS=[], AG_CTX={};
+async function abrirAgregarIndicador(){
+  const sel=document.getElementById('ag_ficha');
+  sel.innerHTML='<option value="">Cargando fichas…</option>';
+  document.getElementById('ag_inds_box').classList.add('hidden');
+  document.getElementById('ag_def_box').classList.add('hidden');
+  fillSelect(document.getElementById('ag_frec_med'), FREC_OPTS.map(o=>({value:o,label:o})));
+  fillSelect(document.getElementById('ag_frec_calc'), FREC_OPTS.map(o=>({value:o,label:o})));
+  try{ const resp=await loadMaestra('RESP_PROCESO'); fillSelect(document.getElementById('ag_responsable'), resp); }catch(_){}
+  fillSelect(document.getElementById('ag_oficina'), OFICINAS_MEDICION.map(o=>({value:o,label:o})));
+  document.getElementById('modalAgregar').classList.add('show'); document.body.style.overflow='hidden';
+  const opts=[];
+  for(const n of ['N0','N1','N2']){
+    const fichas=await loadFichas(n);
+    fichas.forEach(r=>{ const ruta=rutaFicha(r,n); if(ruta&&ruta!=='—') opts.push({value:n+'|'+r.id, label:'['+n+'] '+ruta}); });
+  }
+  sel.innerHTML='<option value="">Seleccione una ficha…</option>'+opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
+}
+window.abrirAgregarIndicador=abrirAgregarIndicador;
+
+async function cargarIndicadoresFicha(){
+  const val=document.getElementById('ag_ficha').value;
+  const box=document.getElementById('ag_inds_box'), defb=document.getElementById('ag_def_box');
+  AG_INDS=[];
+  if(!val){ box.classList.add('hidden'); defb.classList.add('hidden'); return; }
+  const [nivel,id]=val.split('|');
+  const fichas=await loadFichas(nivel);
+  const r=fichas.find(x=>x.id===id);
+  if(!r){ box.classList.add('hidden'); return; }
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const ruta=rutaFicha(r,nivel);
+  const subIds=(r.subform_values&&r.subform_values[F.subform_indicador.id])||[];
+  for(const sid of subIds){
+    try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1});
+      const txt=(d.record.values||{})[CONFIG.SUBIND_FICHA_FIELDS.indicador.id] || (d.record.values||{})['Indicador'] || '';
+      if(txt && !esBasura(txt) && txt!=='Indicador') AG_INDS.push({ texto:txt });
+    }catch(_){}
+  }
+  AG_CTX={ nivel, fichaId:id, ruta };
+  const list=document.getElementById('ag_inds_list');
+  if(!AG_INDS.length){ list.innerHTML='<p class="hint">Esta ficha no tiene indicadores definidos.</p>'; box.classList.remove('hidden'); defb.classList.add('hidden'); return; }
+  list.innerHTML=AG_INDS.map((ind,i)=>`
+    <label class="sipoc-check"><input type="checkbox" value="${i}" onchange="toggleDefBox()"><span>${ind.texto.replace(/</g,'&lt;')}</span></label>`).join('');
+  box.classList.remove('hidden');
+}
+window.cargarIndicadoresFicha=cargarIndicadoresFicha;
+function toggleDefBox(){
+  const marcados=[...document.querySelectorAll('#ag_inds_list input:checked')].length;
+  document.getElementById('ag_def_box').classList.toggle('hidden', marcados===0);
+}
+window.toggleDefBox=toggleDefBox;
+
+async function guardarIndicadoresMatriz(){
+  const marcados=[...document.querySelectorAll('#ag_inds_list input:checked')].map(c=>parseInt(c.value));
+  if(!marcados.length){ toast('Marca al menos un indicador.', true); return; }
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const formula=g('ag_formula'), fuente=g('ag_fuente'), frecMed=g('ag_frec_med'), frecCalc=g('ag_frec_calc');
+  const oficina=g('ag_oficina'), responsable=g('ag_responsable');
+  const btn=document.getElementById('ag_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Agregando…';
+  try{
+    for(const i of marcados){
+      const ind=AG_INDS[i];
+      const campos={};
+      campos[MAT.indicador_txt.id]=ind.texto;
+      if(formula) campos[MAT.formula.id]=formula;
+      if(fuente) campos[MAT.fuente_info.id]=fuente;
+      if(frecMed) campos[MAT.frecuencia_medicion.id]=frecMed;
+      if(frecCalc) campos[MAT.frecuencia_calculo.id]=frecCalc;
+      if(oficina) campos[MAT.oficina_medicion.id]=oficina;
+      const resp=await API.saveForm(null, campos, CONFIG.ENTITIES.MATRIZ_IND);
+      const matId = resp.record && resp.record.id;
+      if(matId){
+        const rel={};
+        const relFicha = AG_CTX.nivel==='N0'?MAT.indicador_n0 : AG_CTX.nivel==='N1'?MAT.indicador_n1 : MAT.indicador_n2;
+        if(relFicha) rel[relFicha.id]=[AG_CTX.fichaId];
+        if(responsable && MAT.responsable_medicion) rel[MAT.responsable_medicion.id]=[responsable];
+        if(Object.keys(rel).length){ try{ await API.saveForm(matId, rel); }catch(_){} }
+      }
+    }
+    toast(marcados.length+' indicador(es) agregado(s) a la matriz.');
+    STATE.matriz=[]; cerrarModal('modalAgregar'); renderMatriz();
+  }catch(err){ toast('Error al agregar: '+err.message, true); }
+  finally{ btn.disabled=false; btn.textContent='Agregar a la matriz'; }
+}
+window.guardarIndicadoresMatriz=guardarIndicadoresMatriz;
+
+async function eliminarMatriz(matId){
+  if(!confirm('¿Eliminar este indicador de la matriz?')) return;
+  try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+matId+'.json','DELETE',{}); toast('Indicador eliminado.'); STATE.matriz=[]; renderMatriz(); }
+  catch(e){ toast('Error: '+e.message, true); }
+}
+window.eliminarMatriz=eliminarMatriz;
+
+/* ---- Modal de Metas (Programación + Seguimiento) ---- */
+let MT_CTX={ matId:null, indicador:'' };
+async function abrirMetas(matId){
+  const recs=await loadMatriz();
+  const r=recs.find(x=>x.id===matId);
+  if(!r){ toast('No se encontró el indicador.', true); return; }
+  const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
+  MT_CTX={ matId, indicador:ind };
+  document.getElementById('mt_titulo').textContent=ind||'Indicador';
+  setMetaTab('prog');
+  document.getElementById('modalMetas').classList.add('show'); document.body.style.overflow='hidden';
+  await cargarProgMetas();
+  await cargarSegMetas();
+}
+window.abrirMetas=abrirMetas;
+
+function setMetaTab(t){
+  document.querySelectorAll('.mt-tab').forEach(b=>{ const on=b.dataset.t===t; b.style.background=on?'var(--brand)':'transparent'; b.style.color=on?'#fff':'var(--slate)'; });
+  document.getElementById('mt_prog').classList.toggle('hidden', t!=='prog');
+  document.getElementById('mt_seg').classList.toggle('hidden', t!=='seg');
+}
+window.setMetaTab=setMetaTab;
+
+async function cargarProgMetas(){
+  const tb=document.getElementById('mt_prog_tabla');
+  try{
+    const data=await API.records(CONFIG.ENTITIES.PROG_METAS);
+    const mias=(data.records||[]).filter(r=>{ const rel=(r.values||{})[PM.rel_matriz.id]; return rel && JSON.stringify(rel).includes(MT_CTX.matId); });
+    STATE.progMetas=mias;
+    const selProg=document.getElementById('sm_prog');
+    if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación'); return `<option value="${r.id}">Meta ${m||'—'} (${f||'s/f'})</option>`; }).join(''); }
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="4" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; return; }
+    tb.innerHTML=mias.map(r=>{
+      const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación');
+      const ref=leerCampo(r,PM.valor_ref.id,'Valor de referencia');
+      const meta=leerCampo(r,PM.valor_meta.id,'Valor meta');
+      const obs=leerCampo(r,PM.observacion.id,'Observación');
+      return `<tr><td>${f||'—'}</td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}</td></tr>`;
+    }).join('');
+  }catch(e){ tb.innerHTML=`<tr><td colspan="4" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
+}
+
+async function guardarProgMeta(){
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs');
+  if(!meta){ toast('Indica el valor meta.', true); return; }
+  const campos={};
+  campos[PM.rel_matriz.id]=[MT_CTX.matId];
+  if(fecha) campos[PM.fecha_prog.id]=fecha;
+  if(ref) campos[PM.valor_ref.id]=ref;
+  campos[PM.valor_meta.id]=meta;
+  if(obs) campos[PM.observacion.id]=obs;
+  try{
+    await API.saveForm(null, campos, CONFIG.ENTITIES.PROG_METAS);
+    toast('Programación guardada.');
+    ['pm_fecha','pm_ref','pm_meta','pm_obs'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    await cargarProgMetas();
+  }catch(err){ toast('Error: '+err.message, true); }
+}
+window.guardarProgMeta=guardarProgMeta;
+
+async function cargarSegMetas(){
+  const tb=document.getElementById('mt_seg_tabla');
+  try{
+    const data=await API.records(CONFIG.ENTITIES.SEG_METAS);
+    const mias=(data.records||[]).filter(r=>{ const rel=(r.values||{})[SM.rel_matriz.id]; return rel && JSON.stringify(rel).includes(MT_CTX.matId); });
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
+    let ultimoAvance=null;
+    tb.innerHTML=mias.map(r=>{
+      const f=leerCampo(r,SM.fecha_eval.id,'Fecha de evaluación');
+      const meta=leerCampo(r,SM.valor_meta.id,'Valor meta');
+      const real=leerCampo(r,SM.valor_real.id,'Valor real');
+      let pct=leerCampo(r,SM.pct_avance.id,'% de avance');
+      if(pct===''&&meta&&real) pct=Math.round(real/meta*100);
+      const obs=leerCampo(r,SM.observacion.id,'Observación');
+      if(pct!==''&&pct!==undefined) ultimoAvance=parseFloat(pct);
+      return `<tr><td>${f||'—'}</td><td>${meta||'—'}</td><td><strong>${real||'—'}</strong></td><td>${pct!==''&&pct!==undefined?barraAvance(pct):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}</td></tr>`;
+    }).join('');
+    actualizarAvanceMatriz(ultimoAvance);
+  }catch(e){ tb.innerHTML=`<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
+}
+function actualizarAvanceMatriz(avance){
+  if(STATE.matriz){ const r=STATE.matriz.find(x=>x.id===MT_CTX.matId); if(r){ r._avance=avance; } }
+}
+
+async function guardarSegMeta(){
+  const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs');
+  if(!real){ toast('Indica el valor real.', true); return; }
+  const campos={};
+  campos[SM.rel_matriz.id]=[MT_CTX.matId];
+  if(progId) campos[SM.rel_prog_meta.id]=[progId];
+  if(fecha) campos[SM.fecha_eval.id]=fecha;
+  campos[SM.valor_real.id]=real;
+  if(obs) campos[SM.observacion.id]=obs;
+  try{
+    await API.saveForm(null, campos, CONFIG.ENTITIES.SEG_METAS);
+    toast('Seguimiento guardado.');
+    ['sm_fecha','sm_real','sm_obs'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    await cargarSegMetas();
+    renderMatriz();
+  }catch(err){ toast('Error: '+err.message, true); }
+}
+window.guardarSegMeta=guardarSegMeta;
+
+function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; }
+window.cerrarModal=cerrarModal;
 
 /* ============================================================
    ARRANQUE
