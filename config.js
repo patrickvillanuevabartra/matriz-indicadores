@@ -40,6 +40,7 @@ const CONFIG = {
     proceso_n0:        { id: "b6W4j3W7DdTBtdJGxdJre8", type: "rel", entity: "NIVEL0" },
     objetivo:          { id: "dcRCkqDmnoW6FcKwdcTcie", type: "text" },
     dueno:             { id: "ddUH4DW55euiDQDMtdJCo9", type: "rel", entity: "RESPONSABLES" },
+    dueno_txt:         { id: "czz03dM0LppRZcG8klW485", type: "string" },
     alcance:           { id: "cTWQilW5fdP4o2dIH8WQDK", type: "text" },
     base_legal:        { id: "cIW5OMW49pW4ekW4ddMsLc", type: "text" },
     proveedores:       { id: "akzCoXFCjblkRcOMxcR8o3", type: "text" },
@@ -68,6 +69,7 @@ const CONFIG = {
     proceso_n1:        { id: "carv3cL8npB4ksEXdcVxyJ", type: "rel", entity: "NIVEL1" },
     objetivo:          { id: "dcH8oaWPPdPykkECovbSk-", type: "text" },
     dueno:             { id: "dcRcjPke1cJyFcHmk-fmkc", type: "rel", entity: "RESPONSABLES" },
+    dueno_txt:         { id: "ddHKZdPmjmWOyTyCkmwmo8", type: "string" },
     alcance:           { id: "cDtmoDW55pW6xcISkgW5Lc", type: "text" },
     base_legal:        { id: "bHW5mZW7vmCiongZddUZKV", type: "text" },
     proveedores:       { id: "bHWRjuWQbcUOkZW7hcVCop", type: "text" },
@@ -99,6 +101,7 @@ const CONFIG = {
     proceso_n2:        { id: "cNW7SWbfbaW7pcV8kzBCo7", type: "rel", entity: "NIVEL2" },
     objetivo:          { id: "cSi8ogW7vop5NdU8oIW583", type: "text" },
     dueno:             { id: "auW74wF3DiW53dINpcGCo3", type: "rel", entity: "RESPONSABLES" },
+    dueno_txt:         { id: "cPsYldN8ndBykApqxcPCoe", type: "string" },
     alcance:           { id: "coW7ZdS2ncI4o_FrjZtSot", type: "text" },
     base_legal:        { id: "a1WRlcSCnkW6qwWOiRiSkm", type: "text" },
     proveedores:       { id: "bds8onW4XaW4eyW7qcbdml", type: "text" },
@@ -150,7 +153,10 @@ const CONFIG = {
     prog_metas:          { id: "dcP8kTvSnks4kQWQmXWPTj", type: "linked_records", entity: "PROG_METAS", readOnly: true },
     seg_metas:           { id: "ddR8orW4XdJAdcU39nFmk9", type: "linked_records", entity: "SEG_METAS", readOnly: true },
     indicador_txt:       { id: "ddJCkVBmjlW5JcSX3dKmo6", type: "text" }, // indicador concreto (texto, robusto)
-    proceso_ruta:        { id: "cOowddJCnixyJcQCosCXbO", type: "text" } // ruta completa hasta el análisis
+    proceso_ruta:        { id: "cOowddJCnixyJcQCosCXbO", type: "text" }, // ruta completa hasta el análisis
+    resp_med_txt:        { id: "ddNCk9dcncT4oxm3fXmCoM", type: "string" }, // responsable medición (texto)
+    resp_celular:        { id: "aea8oPWP5dPikZW73dIMCj", type: "phone" }, // celular del responsable
+    resp_correo:         { id: "ddSSkqW4XdHBVdKvjtWPTy", type: "email" }  // correo del responsable
   },
 
   // ---- PROGRAMACIÓN DE METAS ---------------------------------------------
