@@ -386,7 +386,8 @@
         <div style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nueva programación de meta</div>
           <div class="grid">
-            <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha"></div>
+            <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha" onchange="sugerirPeriodoProg()"></div>
+            <div class="field"><label>Periodo <span style="color:var(--mist);font-weight:400">(se sugiere; ajustable)</span></label><input id="pm_periodo" placeholder="Ej. Enero 2026, 2026-I" oninput="this.dataset.touched='1'"></div>
             <div class="field"><label>Valor de referencia (línea base)</label><input type="number" step="any" id="pm_ref"></div>
             <div class="field"><label>Valor meta</label><input type="number" step="any" id="pm_meta"></div>
             <div class="field full"><label>Plan de acción (enlace a Drive/SharePoint)</label><input type="url" id="pm_plan" placeholder="https://…"></div>
@@ -395,8 +396,8 @@
           <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
         </div>
         <div class="tabla-wrap"><table>
-          <thead><tr><th>Fecha</th><th>Referencia</th><th>Meta</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
-          <tbody id="mt_prog_tabla"><tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr></tbody>
+          <thead><tr><th>Fecha</th><th>Periodo</th><th>Referencia</th><th>Meta</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
+          <tbody id="mt_prog_tabla"><tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr></tbody>
         </table></div>
       </div>
 
@@ -410,6 +411,7 @@
           </div>
           <div id="sm_meta_info" class="hidden" style="background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 14px;margin:10px 0;font-size:13px;color:var(--slate)"></div>
           <div class="grid">
+            <div class="field"><label>Periodo evaluado <span style="color:var(--mist);font-weight:400">(heredado de la meta)</span></label><input id="sm_periodo" readonly style="background:var(--paper)" placeholder="— elige la meta de referencia —"></div>
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
             <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
             <div class="field full"><label>Evidencias (enlace a Drive/SharePoint)</label><input type="url" id="sm_evid" placeholder="https://…"></div>
@@ -1400,7 +1402,7 @@ async function loadMatriz(forzar){
       // Último por fecha de evaluación
       let ultimo=null, ultFecha='';
       mios.forEach(s=>{
-        const f=leerCampo(s, SM.fecha_eval.id, 'Fecha de evaluación');
+        const f=leerCampo(s, SM.fecha_eval.id, 'Fecha evaluación');
         const fechaVal = (f && !/fecha/i.test(f)) ? f : '';
         if(!ultimo || (fechaVal && fechaVal>ultFecha)){ ultimo=s; ultFecha=fechaVal||ultFecha; }
       });
@@ -1768,9 +1770,10 @@ async function abrirMetas(matId){
   PM_EDIT_ID=null; SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
   const bp=document.getElementById('pm_guardar'); if(bp) bp.textContent='+ Guardar programación';
   const bs=document.getElementById('sm_guardar'); if(bs) bs.textContent='+ Guardar seguimiento';
-  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
   const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
+  const ep=document.getElementById('sm_periodo'); if(ep){ ep.value=''; delete ep.dataset.touched; }
   document.getElementById('mt_titulo').textContent=ind||'Indicador';
   setMetaTab('prog');
   document.getElementById('modalMetas').classList.add('show'); document.body.style.overflow='hidden';
@@ -1804,6 +1807,14 @@ function relMencionaMatriz(r, matId, relFieldId){
 }
 // Quita la etiqueta [#matId] de un texto de observación para mostrarlo limpio
 function limpiarEtiqueta(txt){ return String(txt||'').replace(/\[#[a-zA-Z0-9_\-]{22}\]\s*/,'').trim(); }
+// Convierte fecha ISO (aaaa-mm-dd) a dd/mm/aaaa para mostrar. Si no reconoce, devuelve tal cual.
+function fmtFecha(f){
+  if(!f) return '';
+  const s=String(f).trim();
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return m[3]+'/'+m[2]+'/'+m[1];
+  return s;
+}
 
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
@@ -1812,22 +1823,23 @@ async function cargarProgMetas(){
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
-    if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación'); return `<option value="${r.id}">Meta ${m||'—'} (${f||'s/f'})</option>`; }).join(''); }
-    if(!mias.length){ tb.innerHTML='<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; return; }
+    if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const per=PM.periodo?leerCampo(r,PM.periodo.id,'Periodo'):''; return `<option value="${r.id}">${per?per+' · ':''}Meta ${m||'—'}</option>`; }).join(''); }
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; return; }
     tb.innerHTML=mias.map(r=>{
       const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación');
+      const per=PM.periodo?leerCampo(r,PM.periodo.id,'Periodo'):'';
       const ref=leerCampo(r,PM.valor_ref.id,'Valor de referencia');
       const meta=leerCampo(r,PM.valor_meta.id,'Valor meta');
       const obs=limpiarEtiqueta(leerCampo(r,PM.observacion.id,'Observación'));
       const plan=leerCampo(r,PM.plan_accion.id,'Plan de acción');
       const planLink=plan?` · <a href="${plan}" target="_blank" style="color:var(--brand);font-size:11px">plan ↗</a>`:'';
-      return `<tr><td>${f||'—'}</td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td>
+      return `<tr><td>${fmtFecha(f)||'—'}</td><td><strong style="color:var(--brand);font-size:12px">${per?per.replace(/</g,'&lt;'):'—'}</strong></td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="icon-btn" title="Editar" onclick="editarProgMeta('${r.id}')">✏️</button>
           <button class="icon-btn" title="Eliminar" onclick="eliminarProgMeta('${r.id}')">🗑️</button>
         </td></tr>`;
     }).join('');
-  }catch(e){ tb.innerHTML=`<tr><td colspan="5" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
+  }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
 
 // Editar una programación: carga sus valores en el formulario y cambia a modo edición
@@ -1840,6 +1852,7 @@ function editarProgMeta(progId){
   set('pm_meta', leerCampo(p,PM.valor_meta.id,'Valor meta'));
   set('pm_plan', leerCampo(p,PM.plan_accion.id,'Plan de acción'));
   set('pm_obs', limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación')));
+  const ep=document.getElementById('pm_periodo'); if(ep){ ep.value=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; ep.dataset.touched='1'; }
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='✓ Actualizar programación';
   document.getElementById('pm_fecha').scrollIntoView({behavior:'smooth',block:'center'});
 }
@@ -1857,7 +1870,7 @@ window.eliminarProgMeta=eliminarProgMeta;
 
 async function guardarProgMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan');
+  const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan'), periodo=g('pm_periodo');
   if(!meta){ toast('Indica el valor meta.', true); return; }
   const campos={};
   if(!PM_EDIT_ID) campos[PM.rel_matriz.id]=[MT_CTX.matId];
@@ -1865,6 +1878,7 @@ async function guardarProgMeta(){
   campos[PM.valor_ref.id]=ref||'';
   campos[PM.valor_meta.id]=meta;
   campos[PM.plan_accion.id]=plan||'';
+  if(PM.periodo && periodo) campos[PM.periodo.id]=periodo;
   // Etiqueta robusta: el matId va al inicio de la observación (los textos SÍ se leen bien)
   campos[PM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   try{
@@ -1872,7 +1886,8 @@ async function guardarProgMeta(){
     toast(PM_EDIT_ID?'Programación actualizada.':'Programación guardada.');
     PM_EDIT_ID=null;
     const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
-    ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    const ep=document.getElementById('pm_periodo'); if(ep) delete ep.dataset.touched;
     await cargarProgMetas();
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
 }
@@ -1885,11 +1900,14 @@ function evaluarRemediacion(){
   const elAvance=document.getElementById('sm_avance');
   const box=document.getElementById('sm_remed_box');
   const real=parseFloat(document.getElementById('sm_real').value);
-  let meta=null, ref=null;
+  let meta=null, ref=null, periodoProg='';
   if(selProg && selProg.value && STATE.progMetas){
     const p=STATE.progMetas.find(x=>x.id===selProg.value);
-    if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); }
+    if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); periodoProg=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; }
   }
+  // Heredar el periodo de la programación elegida (el seguimiento toma el mismo periodo)
+  const elPer=document.getElementById('sm_periodo');
+  if(elPer && periodoProg){ elPer.value=periodoProg; elPer.dataset.touched='1'; }
   // Panel informativo de la meta seleccionada
   if(info){
     if(!isNaN(meta)){
@@ -1906,6 +1924,43 @@ function evaluarRemediacion(){
 }
 window.evaluarRemediacion=evaluarRemediacion;
 
+// Sugiere el texto del periodo según la fecha de evaluación y la frecuencia de medición del indicador.
+function sugerirPeriodo(){
+  const elP=document.getElementById('sm_periodo');
+  if(!elP || (elP.value && elP.dataset.touched==='1')) return; // no pisar si el usuario ya lo editó
+  const fecha=document.getElementById('sm_fecha').value;
+  let frec='';
+  const rMat=(STATE.matriz||[]).find(x=>x.id===MT_CTX.matId);
+  if(rMat) frec=leerCampo(rMat, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
+  elP.value=generarPeriodo(fecha, frec);
+}
+window.sugerirPeriodo=sugerirPeriodo;
+
+// Genera el texto de periodo según fecha (aaaa-mm-dd) y frecuencia. Reutilizable.
+function generarPeriodo(fecha, frec){
+  if(!fecha) return '';
+  const [a,m]=fecha.split('-').map(Number);
+  frec=(frec||'').toLowerCase();
+  const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  if(/mensual/.test(frec)) return `${meses[m-1]} ${a}`;
+  if(/bimensual|bimestral/.test(frec)) return `${a}-B${Math.ceil(m/2)}`;
+  if(/trimestral/.test(frec)) return `${a}-T${Math.ceil(m/3)}`;
+  if(/semestral/.test(frec)) return `${a}-${m<=6?'I':'II'}`;
+  if(/anual/.test(frec)) return `${a}`;
+  return `${meses[m-1]} ${a}`;
+}
+// Sugiere el periodo en el formulario de PROGRAMACIÓN
+function sugerirPeriodoProg(){
+  const elP=document.getElementById('pm_periodo');
+  if(!elP || (elP.value && elP.dataset.touched==='1')) return;
+  const fecha=document.getElementById('pm_fecha').value;
+  let frec='';
+  const rMat=(STATE.matriz||[]).find(x=>x.id===MT_CTX.matId);
+  if(rMat) frec=leerCampo(rMat, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
+  elP.value=generarPeriodo(fecha, frec);
+}
+window.sugerirPeriodoProg=sugerirPeriodoProg;
+
 async function cargarSegMetas(){
   const tb=document.getElementById('mt_seg_tabla');
   try{
@@ -1913,28 +1968,41 @@ async function cargarSegMetas(){
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
     STATE.segMetas=mias;
     if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
-    let ultimoAvance=null;
+    let ultimoAvance=null, ultimaFecha='';
     const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
-    tb.innerHTML=mias.map(r=>{
-      const f=leerCampo(r,SM.fecha_eval.id,'Fecha de evaluación');
-      // Meta y avance desde campos propios (se leen bien); fallback al cálculo
+    // Preparar filas con su periodo
+    const filas=mias.map(r=>{
+      const f=leerCampo(r,SM.fecha_eval.id,'Fecha evaluación');
       const metaN=SM.meta_seg?numOf(leerCampo(r,SM.meta_seg.id,'Meta seguimiento')):NaN;
       const realN=numOf(leerCampo(r,SM.valor_real.id,'Valor real obtenido'));
       let pctN=SM.avance_app?numOf(leerCampo(r,SM.avance_app.id,'Avance')):NaN;
-      // Si el avance guardado no es válido, recalcular desde meta y real
       if(isNaN(pctN) && !isNaN(metaN) && metaN>0 && !isNaN(realN)) pctN=Math.round(realN/metaN*100*100)/100;
-      const obs=limpiarEtiqueta(leerCampo(r,SM.observacion.id,'Observación'));
-      const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
-      const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
-      const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
-      if(!isNaN(pctN)) ultimoAvance=pctN;
-      const fechaTxt = (f && !/fecha/i.test(f)) ? f : '—';
-      return `<tr><td>${fechaTxt}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
-        <td style="text-align:right;white-space:nowrap">
-          <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')">✏️</button>
-          <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')">🗑️</button>
-        </td></tr>`;
-    }).join('');
+      const periodo=SM.periodo?(leerCampo(r,SM.periodo.id,'Periodo')||'(Sin periodo)'):'(Sin periodo)';
+      const fechaVal=(f && !/fecha/i.test(f))?f:'';
+      if(!isNaN(pctN) && (!ultimaFecha || (fechaVal && fechaVal>=ultimaFecha))){ ultimoAvance=pctN; ultimaFecha=fechaVal||ultimaFecha; }
+      return {r, f:fechaVal, metaN, realN, pctN, periodo};
+    });
+    // Agrupar por periodo
+    const grupos={};
+    filas.forEach(x=>{ (grupos[x.periodo]=grupos[x.periodo]||[]).push(x); });
+    const periodosOrd=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
+    let html='';
+    periodosOrd.forEach(per=>{
+      const items=grupos[per];
+      html+=`<tr style="background:var(--paper)"><td colspan="6" style="padding:8px 12px;font-weight:700;color:var(--brand);font-size:12px">📅 ${per.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} evaluación(es)</span></td></tr>`;
+      html+=items.map(({r,f,metaN,realN,pctN})=>{
+        const obs=limpiarEtiqueta(leerCampo(r,SM.observacion.id,'Observación'));
+        const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
+        const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
+        const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
+        return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
+          <td style="text-align:right;white-space:nowrap">
+            <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')">✏️</button>
+            <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')">🗑️</button>
+          </td></tr>`;
+      }).join('');
+    });
+    tb.innerHTML=html;
     actualizarAvanceMatriz(ultimoAvance);
   }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
@@ -1947,11 +2015,12 @@ function editarSegMeta(segId){
   SM_EDIT_META = SM.meta_seg?numOf(leerCampo(s,SM.meta_seg.id,'Meta seguimiento')):NaN;
   SM_EDIT_REF = SM.ref_seg?numOf(leerCampo(s,SM.ref_seg.id,'Referencia seguimiento')):NaN;
   const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
-  set('sm_fecha', leerCampo(s,SM.fecha_eval.id,'Fecha de evaluación'));
+  set('sm_fecha', leerCampo(s,SM.fecha_eval.id,'Fecha evaluación'));
   set('sm_real', leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
   set('sm_evid', leerCampo(s,SM.evidencias.id,'Evidencias'));
   set('sm_remed', leerCampo(s,SM.plan_remediacion.id,'Plan de remediación'));
   set('sm_obs', limpiarEtiqueta(leerCampo(s,SM.observacion.id,'Observación')));
+  const elPer=document.getElementById('sm_periodo'); if(elPer){ elPer.value=SM.periodo?leerCampo(s,SM.periodo.id,'Periodo'):''; elPer.dataset.touched='1'; }
   // Mostrar el panel con la meta propia y calcular % con el real actual
   const info=document.getElementById('sm_meta_info');
   if(info && !isNaN(SM_EDIT_META)){ info.classList.remove('hidden'); info.innerHTML=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(SM_EDIT_REF)?'—':SM_EDIT_REF} &nbsp;·&nbsp; <strong>Meta:</strong> ${SM_EDIT_META}`; }
@@ -1978,7 +2047,7 @@ function actualizarAvanceMatriz(avance){
 
 async function guardarSegMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
-  const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs'), evid=g('sm_evid'), remed=g('sm_remed');
+  const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs'), evid=g('sm_evid'), remed=g('sm_remed'), periodo=g('sm_periodo');
   if(!real){ toast('Indica el valor real.', true); return; }
   let meta=null, ref=null;
   if(SM_EDIT_ID){
@@ -2001,13 +2070,15 @@ async function guardarSegMeta(){
   if(SM.meta_seg && meta!==null && !isNaN(meta)) campos[SM.meta_seg.id]=meta;
   if(SM.ref_seg && ref!==null && !isNaN(ref)) campos[SM.ref_seg.id]=ref;
   if(SM.avance_app && pct!==null) campos[SM.avance_app.id]=pct;
+  if(SM.periodo && periodo) campos[SM.periodo.id]=periodo;
   campos[SM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   const btn=document.getElementById('sm_guardar'); if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…'; }
   try{
     await API.saveForm(SM_EDIT_ID||null, campos, SM_EDIT_ID?undefined:CONFIG.ENTITIES.SEG_METAS);
     toast(SM_EDIT_ID?'Seguimiento actualizado.':'Seguimiento guardado.');
     SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
-    ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    const elPer=document.getElementById('sm_periodo'); if(elPer) delete elPer.dataset.touched;
     const selP=document.getElementById('sm_prog'); if(selP) selP.value='';
     const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
     const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
