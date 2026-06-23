@@ -170,7 +170,8 @@ const CONFIG = {
     valor_ref:     { id: "aFW7RdKSjlWRZcRvG3FSoX", type: "float" }, // ✅ conservado
     valor_meta:    { id: "cJWP0pW7jdHykGW6BcNSoQ", type: "float" },
     plan_accion:   { id: "dcSmosW6rpr6NcIdnRyCkJ", type: "url" },
-    observacion:   { id: "aIW4tdIG9cQ5hdTJaVrSk-", type: "text" }
+    observacion:   { id: "aIW4tdIG9cQ5hdTJaVrSk-", type: "text" },
+    periodo:       { id: "cuWOXnWPHcTikMc8kmWOWv", type: "string" } // periodo (texto, para heredar al seguimiento)
   },
 
   // ---- SEGUIMIENTO DE METAS ----------------------------------------------
@@ -191,7 +192,8 @@ const CONFIG = {
     observacion:     { id: "dcRSk6W5Lbnyk_WQGPBCk7", type: "text" },
     meta_seg:        { id: "btCCo9iCjlrPJcJCkIv8oN", type: "float" }, // copia robusta de la meta
     ref_seg:         { id: "aUWOiHW5DdWO_cJSovW6bq", type: "float" }, // copia robusta de la referencia
-    avance_app:      { id: "amphC-W5DoW7tcSSkfDvea", type: "float" }  // % avance calculado por la app
+    avance_app:      { id: "amphC-W5DoW7tcSSkfDvea", type: "float" }, // % avance calculado por la app
+    periodo:         { id: "csW5vzvH1dPQrHWQ0CtCkQ", type: "string" } // periodo (texto, para agrupar)
   }
 };
 
