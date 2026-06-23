@@ -1400,21 +1400,22 @@ async function loadMatriz(forzar){
     STATE.matriz.forEach(m=>{
       const mios = segs.filter(s=>relMencionaMatriz(s, m.id, SM.rel_matriz.id));
       m._periodos = mios.length;
-      // Último por fecha de evaluación
-      let ultimo=null, ultFecha='';
-      mios.forEach(s=>{
+      // Avance por periodo: { periodo, pct, fecha }
+      const porPeriodo = mios.map(s=>{
+        const metaN=SM.meta_seg?numOf(leerCampo(s,SM.meta_seg.id,'Meta seguimiento')):NaN;
+        const refN=SM.ref_seg?numOf(leerCampo(s,SM.ref_seg.id,'Referencia seguimiento')):NaN;
+        const realN=numOf(leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
+        let pctN=SM.avance_app?numOf(leerCampo(s,SM.avance_app.id,'Avance')):NaN;
+        if(isNaN(pctN)){ const c=calcAvance(realN, metaN, refN); pctN=(c===null)?NaN:c; }
+        const per=SM.periodo?(leerCampo(s,SM.periodo.id,'Periodo')||'(sin periodo)'):'(sin periodo)';
         const f=leerCampo(s, SM.fecha_eval.id, 'Fecha evaluación');
-        const fechaVal = (f && !/fecha/i.test(f)) ? f : '';
-        if(!ultimo || (fechaVal && fechaVal>ultFecha)){ ultimo=s; ultFecha=fechaVal||ultFecha; }
-      });
-      if(ultimo){
-        const metaN=SM.meta_seg?numOf(leerCampo(ultimo,SM.meta_seg.id,'Meta seguimiento')):NaN;
-        const refN=SM.ref_seg?numOf(leerCampo(ultimo,SM.ref_seg.id,'Referencia seguimiento')):NaN;
-        const realN=numOf(leerCampo(ultimo,SM.valor_real.id,'Valor real obtenido'));
-        let pctN=SM.avance_app?numOf(leerCampo(ultimo,SM.avance_app.id,'Avance')):NaN;
-        if(isNaN(pctN)) pctN=calcAvance(realN, metaN, refN);
-        m._avance = (pctN===null||isNaN(pctN))?null:pctN;
-      } else { m._avance=null; }
+        const fechaVal=(f && !/fecha/i.test(f))?f:'';
+        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal };
+      }).filter(x=>x.pct!==null);
+      // Ordenar por fecha ascendente
+      porPeriodo.sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+      m._avancePeriodos = porPeriodo;
+      m._avance = porPeriodo.length ? porPeriodo[porPeriodo.length-1].pct : null;
     });
   }catch(e){ /* si falla, los avances quedan en null */ }
   return STATE.matriz;
@@ -1454,9 +1455,9 @@ async function renderMatriz(){
         let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
         if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
         const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
-        const avance = r._avance!==undefined && r._avance!==null
-          ? barraAvance(r._avance) + (r._periodos>1?`<div style="font-size:10px;color:var(--mist);margin-top:2px">${r._periodos} periodos</div>`:'')
-          : (r._periodos>0?`<span class="hint" style="font-size:11px">${r._periodos} periodo(s)</span>`:'<span class="hint" style="font-size:12px">Ver metas</span>');
+        const avance = (r._avancePeriodos && r._avancePeriodos.length)
+          ? barraAvancePeriodos(r._avancePeriodos)
+          : (r._periodos>0?`<span class="hint" style="font-size:11px">${r._periodos} periodo(s) sin avance</span>`:'<span class="hint" style="font-size:12px">Ver metas</span>');
         return `<tr>
           <td>${nivelBadge}</td>
           <td style="max-width:240px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
@@ -1466,7 +1467,7 @@ async function renderMatriz(){
           <td style="font-size:11px">${ofiDueno?ofiDueno.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
           <td style="font-size:12px">${frecCalc||'<span class=hint>—</span>'}</td>
-          <td>${avance}</td>
+          <td style="min-width:130px">${avance}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
             <button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>
@@ -1487,6 +1488,21 @@ function barraAvance(pct){
   return `<div style="display:flex;align-items:center;gap:7px">
     <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:50px"><div style="width:${p}%;height:100%;background:${color}"></div></div>
     <span style="font-size:12px;font-weight:600;color:${color}">${p}%</span></div>`;
+}
+// Desglose de avance por periodo: una mini-fila por periodo con su nombre, barra y %.
+function barraAvancePeriodos(periodos){
+  if(!periodos || !periodos.length) return '<span class="hint" style="font-size:12px">Ver metas</span>';
+  return periodos.map(x=>{
+    const p=Math.max(0,Math.min(100,Math.round(x.pct)));
+    const color = p>=90?'var(--ok)' : p>=60?'var(--warn)' : 'var(--bad)';
+    const realPct=Math.round(x.pct); // puede pasar de 100
+    return `<div style="margin-bottom:5px">
+      <div style="font-size:10px;color:var(--slate);font-weight:600;margin-bottom:2px">${(x.periodo||'—').replace(/</g,'&lt;')}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="flex:1;height:6px;background:var(--line);border-radius:4px;overflow:hidden;min-width:45px"><div style="width:${p}%;height:100%;background:${color}"></div></div>
+        <span style="font-size:11px;font-weight:600;color:${color};white-space:nowrap">${realPct}%</span>
+      </div></div>`;
+  }).join('');
 }
 // ¿La relación tiene algún valor real (no vacío, no nombre de columna)?
 function relTieneAlgo(r, fieldId){
