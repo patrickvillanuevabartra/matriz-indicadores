@@ -414,6 +414,7 @@
             <div class="field"><label>Periodo evaluado <span style="color:var(--mist);font-weight:400">(heredado de la meta)</span></label><input id="sm_periodo" readonly style="background:var(--paper)" placeholder="— elige la meta de referencia —"></div>
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
             <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
+            <div class="field full"><div style="font-size:11px;color:var(--mist);background:var(--paper);border-radius:8px;padding:8px 12px;line-height:1.5">📐 <strong>Fórmula del % de avance:</strong> (valor alcanzado − referencia) ÷ (meta − referencia) × 100. Funciona para indicadores donde subir es mejor y donde bajar es mejor. 100% = se alcanzó la meta; 0% = sin avance respecto a la línea base.</div></div>
             <div class="field full"><label>Evidencias (enlace a Drive/SharePoint)</label><input type="url" id="sm_evid" placeholder="https://…"></div>
             <div class="field full hidden" id="sm_remed_box"><label>Plan de remediación (enlace) <span class="hint" style="font-weight:400">— requerido si el avance es menor a 100%</span></label><input type="url" id="sm_remed" placeholder="https://…"></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
@@ -1408,10 +1409,11 @@ async function loadMatriz(forzar){
       });
       if(ultimo){
         const metaN=SM.meta_seg?numOf(leerCampo(ultimo,SM.meta_seg.id,'Meta seguimiento')):NaN;
+        const refN=SM.ref_seg?numOf(leerCampo(ultimo,SM.ref_seg.id,'Referencia seguimiento')):NaN;
         const realN=numOf(leerCampo(ultimo,SM.valor_real.id,'Valor real obtenido'));
         let pctN=SM.avance_app?numOf(leerCampo(ultimo,SM.avance_app.id,'Avance')):NaN;
-        if(isNaN(pctN) && !isNaN(metaN) && metaN>0 && !isNaN(realN)) pctN=Math.round(realN/metaN*100*100)/100;
-        m._avance = isNaN(pctN)?null:pctN;
+        if(isNaN(pctN)) pctN=calcAvance(realN, metaN, refN);
+        m._avance = (pctN===null||isNaN(pctN))?null:pctN;
       } else { m._avance=null; }
     });
   }catch(e){ /* si falla, los avances quedan en null */ }
@@ -1815,6 +1817,18 @@ function fmtFecha(f){
   if(m) return m[3]+'/'+m[2]+'/'+m[1];
   return s;
 }
+// % de avance con FÓRMULA DE BRECHA: (alcanzado − referencia) / (meta − referencia) × 100.
+// Funciona para indicadores directos (meta>ref) e inversos (meta<ref). Devuelve número o null.
+function calcAvance(real, meta, ref){
+  const r=parseFloat(real), m=parseFloat(meta), b=parseFloat(ref);
+  if(isNaN(r)||isNaN(m)) return null;
+  // Si no hay referencia válida, se asume línea base 0 (avance = real/meta)
+  const base = isNaN(b)?0:b;
+  const denom = m - base;
+  if(denom===0){ return r>=m ? 100 : 0; } // meta = referencia: cumplió o no
+  const pct = (r - base) / denom * 100;
+  return Math.round(pct*100)/100;
+}
 
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
@@ -1915,9 +1929,9 @@ function evaluarRemediacion(){
       info.innerHTML=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(ref)?'—':ref} &nbsp;·&nbsp; <strong>Meta:</strong> ${meta}`;
     } else { info.classList.add('hidden'); info.innerHTML=''; }
   }
-  // Cálculo del % de avance en vivo
+  // Cálculo del % de avance en vivo (fórmula de brecha)
   let pct=null;
-  if(!isNaN(real) && meta && meta>0){ pct=Math.round((real/meta*100)*100)/100; }
+  if(!isNaN(real) && meta!==null){ pct=calcAvance(real, meta, ref); }
   if(elAvance) elAvance.value = pct!==null ? pct+'%' : '';
   // Remediación si <100%
   if(box){ box.classList.toggle('hidden', !(pct!==null && pct<100)); }
@@ -1974,9 +1988,10 @@ async function cargarSegMetas(){
     const filas=mias.map(r=>{
       const f=leerCampo(r,SM.fecha_eval.id,'Fecha evaluación');
       const metaN=SM.meta_seg?numOf(leerCampo(r,SM.meta_seg.id,'Meta seguimiento')):NaN;
+      const refN=SM.ref_seg?numOf(leerCampo(r,SM.ref_seg.id,'Referencia seguimiento')):NaN;
       const realN=numOf(leerCampo(r,SM.valor_real.id,'Valor real obtenido'));
       let pctN=SM.avance_app?numOf(leerCampo(r,SM.avance_app.id,'Avance')):NaN;
-      if(isNaN(pctN) && !isNaN(metaN) && metaN>0 && !isNaN(realN)) pctN=Math.round(realN/metaN*100*100)/100;
+      if(isNaN(pctN)){ const c=calcAvance(realN, metaN, refN); pctN=(c===null)?NaN:c; }
       const periodo=SM.periodo?(leerCampo(r,SM.periodo.id,'Periodo')||'(Sin periodo)'):'(Sin periodo)';
       const fechaVal=(f && !/fecha/i.test(f))?f:'';
       if(!isNaN(pctN) && (!ultimaFecha || (fechaVal && fechaVal>=ultimaFecha))){ ultimoAvance=pctN; ultimaFecha=fechaVal||ultimaFecha; }
@@ -2026,7 +2041,7 @@ function editarSegMeta(segId){
   if(info && !isNaN(SM_EDIT_META)){ info.classList.remove('hidden'); info.innerHTML=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(SM_EDIT_REF)?'—':SM_EDIT_REF} &nbsp;·&nbsp; <strong>Meta:</strong> ${SM_EDIT_META}`; }
   const real=numOf(leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
   const elAv=document.getElementById('sm_avance');
-  if(elAv && !isNaN(SM_EDIT_META) && SM_EDIT_META>0 && !isNaN(real)){ const pct=Math.round(real/SM_EDIT_META*100*100)/100; elAv.value=pct+'%'; const box=document.getElementById('sm_remed_box'); if(box) box.classList.toggle('hidden', !(pct<100)); }
+  if(elAv && !isNaN(SM_EDIT_META) && !isNaN(real)){ const pct=calcAvance(real, SM_EDIT_META, SM_EDIT_REF); if(pct!==null){ elAv.value=pct+'%'; const box=document.getElementById('sm_remed_box'); if(box) box.classList.toggle('hidden', !(pct<100)); } }
   const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='✓ Actualizar seguimiento';
   document.getElementById('sm_real').scrollIntoView({behavior:'smooth',block:'center'});
 }
@@ -2059,7 +2074,7 @@ async function guardarSegMeta(){
     if(!progId){ toast('Elige la meta de referencia (periodo) que estás evaluando.', true); return; }
     if(STATE.progMetas){ const p=STATE.progMetas.find(x=>x.id===progId); if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); } }
   }
-  const pct = (meta && meta>0) ? Math.round((parseFloat(real)/meta*100)*100)/100 : null;
+  const pct = calcAvance(real, meta, ref);
   const campos={};
   if(!SM_EDIT_ID){ campos[SM.rel_matriz.id]=[MT_CTX.matId]; if(progId) campos[SM.rel_prog_meta.id]=[progId]; }
   if(fecha) campos[SM.fecha_eval.id]=fecha;
