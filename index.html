@@ -98,6 +98,17 @@
   .btn-accent:hover{background:var(--brand-2)}
 
   .tabla-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  /* Filtros avanzados */
+  .filtros-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .filtros-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+  .filtros-head>span{font-weight:600;font-size:15px}
+  .filtros-head>div{display:flex;align-items:center;gap:10px}
+  .filtros-logica{font-size:13px;color:var(--slate);display:flex;align-items:center;gap:6px}
+  .filtros-logica select{padding:5px 8px;font-size:13px;width:auto}
+  .filtro-cond{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+  .filtro-cond select,.filtro-cond input{padding:7px 9px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .filtro-cond select{width:auto;min-width:140px}
+  .filtro-cond input{flex:1;min-width:160px}
   table{width:100%;border-collapse:collapse;font-size:13px}
   th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mist);font-weight:600;padding:10px 12px;border-bottom:2px solid var(--line)}
   td{padding:11px 12px;border-bottom:1px solid var(--line);color:var(--slate);vertical-align:top}
@@ -120,6 +131,18 @@
   .modal-bg.show{display:flex}
   .modal{position:relative;background:var(--card);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:100%;max-width:920px;margin:auto;animation:modalIn .2s ease}
   @keyframes modalIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  /* Filtros avanzados */
+  .filtros-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:16px}
+  .filtros-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+  .filtros-head>span{font-weight:600;font-size:15px}
+  .filtros-head>div{display:flex;align-items:center;gap:10px}
+  .filtros-logica{font-size:13px;color:var(--slate);display:flex;align-items:center;gap:6px}
+  .filtros-logica select{padding:5px 8px;font-size:13px;width:auto}
+  .filtro-cond{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+  .filtro-cond select,.filtro-cond input{padding:7px 9px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .filtro-cond select{width:auto;min-width:140px}
+  .filtro-cond input{flex:1;min-width:160px}
+  @media(max-width:720px){ .filtros-head{flex-direction:column;align-items:stretch} .filtro-cond select,.filtro-cond input{width:100%;min-width:0} }
   .modal-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 26px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);border-radius:16px 16px 0 0;z-index:2}
   .modal-head .eyebrow{margin-bottom:4px}
   .modal-head h2{font-size:20px;color:var(--ink);font-family:'IBM Plex Sans',sans-serif}
@@ -142,6 +165,30 @@
 </head>
 <body>
 
+<!-- ===================== LOGIN ===================== -->
+<div id="loginOverlay" style="position:fixed;inset:0;z-index:9999;background:linear-gradient(135deg,#0f8f5e,#0b5e3f);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:38px 34px;width:100%;max-width:400px">
+    <div style="text-align:center;margin-bottom:22px">
+      <div style="width:54px;height:54px;border-radius:12px;background:#0f8f5e;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;margin:0 auto 14px">I</div>
+      <h2 style="margin:0;font-size:19px;color:#1a2b22">Matriz de Indicadores</h2>
+      <p style="margin:6px 0 0;font-size:13px;color:#6b7d74">Facultad de Ingeniería · URP</p>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Usuario</label>
+        <input id="login_user" type="text" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')document.getElementById('login_pass').focus()">
+      </div>
+      <div>
+        <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Contraseña</label>
+        <input id="login_pass" type="password" autocomplete="current-password" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')hacerLogin()">
+      </div>
+      <div id="login_error" style="display:none;font-size:13px;color:#c0392b;background:#fdecea;border-radius:8px;padding:9px 11px"></div>
+      <button onclick="hacerLogin()" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+    </div>
+    <p style="margin:18px 0 0;font-size:11px;color:#9aa8a0;text-align:center">Acceso restringido al Sistema de Gestión de la Facultad de Ingeniería.</p>
+  </div>
+</div>
+
 <header>
   <div class="bar">
     <div class="logo">
@@ -152,6 +199,7 @@
       <button data-view="fichas" class="active">Fichas de proceso</button>
       <button data-view="listado">Fichas registradas</button>
       <button data-view="matriz" id="navMatriz">Matriz de indicadores</button>
+      <button data-view="administracion" id="navAdmin" style="display:none">Administración</button>
     </nav>
   </div>
 </header>
@@ -259,6 +307,24 @@
         <button class="list-tab" data-f="N2" onclick="setListFiltro('N2')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 2</button>
       </div>
     </div>
+
+    <!-- Filtros avanzados (Fichas) -->
+    <div class="filtros-card">
+      <div class="filtros-head">
+        <span>Filtros avanzados</span>
+        <div>
+          <label class="filtros-logica">Combinar con:
+            <select id="filtroLogicaList" onchange="renderListado()">
+              <option value="AND">Y (todas)</option>
+              <option value="OR">O (alguna)</option>
+            </select>
+          </label>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px" onclick="agregarCondicionList()">+ Condición</button>
+        </div>
+      </div>
+      <div id="filtrosListaList"></div>
+    </div>
+
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
       <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th>Objetivo</th><th>Indicadores</th><th style="text-align:right">Acciones</th></tr></thead>
       <tbody id="tablaListado"><tr><td colspan="5" class="empty"><h3>Cargando…</h3></td></tr></tbody>
@@ -274,10 +340,27 @@
     </div>
 
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-primary" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
+      <button class="btn btn-primary" id="btnAgregarInd" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
         <input id="matBuscar" placeholder="Buscar por indicador o proceso…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
       </div>
+    </div>
+
+    <!-- Filtros avanzados (Matriz) -->
+    <div class="filtros-card">
+      <div class="filtros-head">
+        <span>Filtros avanzados</span>
+        <div>
+          <label class="filtros-logica">Combinar con:
+            <select id="filtroLogicaMat" onchange="renderMatriz()">
+              <option value="AND">Y (todas)</option>
+              <option value="OR">O (alguna)</option>
+            </select>
+          </label>
+          <button class="btn btn-ghost" style="padding:6px 12px;font-size:13px" onclick="agregarCondicionMat()">+ Condición</button>
+        </div>
+      </div>
+      <div id="filtrosListaMat"></div>
     </div>
 
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
@@ -297,7 +380,117 @@
       <tbody id="tablaMatriz"><tr><td colspan="11" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
+  <section class="view" id="view-administracion">
+    <div class="page-head">
+      <div class="eyebrow">Gestión de accesos</div>
+      <h1>Administración</h1>
+      <p>Referencia de los roles del sistema y sus permisos. Los usuarios se gestionan aquí abajo o en la tabla <strong>"Usuarios matriz de indicadores"</strong> de QuintaDB.</p>
+    </div>
+    <div class="card" style="padding:22px">
+      <h3 style="margin:0 0 4px;font-size:16px;color:var(--slate)">Roles y permisos</h3>
+      <p style="margin:0 0 16px;font-size:13px;color:var(--mist)">Cada usuario tiene un rol asignado en el campo <strong>Rol</strong> de la tabla de usuarios.</p>
+      <div class="tabla-wrap">
+        <table style="width:100%;border-collapse:collapse;font-size:14px">
+          <thead>
+            <tr style="background:var(--paper);text-align:left">
+              <th style="padding:11px 13px;border-bottom:2px solid var(--brand)">Rol</th>
+              <th style="padding:11px 13px;border-bottom:2px solid var(--brand);text-align:center">Ver</th>
+              <th style="padding:11px 13px;border-bottom:2px solid var(--brand);text-align:center">Crear</th>
+              <th style="padding:11px 13px;border-bottom:2px solid var(--brand);text-align:center">Editar</th>
+              <th style="padding:11px 13px;border-bottom:2px solid var(--brand);text-align:center">Eliminar</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--line)">
+              <td style="padding:11px 13px"><strong>Administrador</strong><br><span style="font-size:12px;color:var(--mist)">Control total del sistema</span></td>
+              <td style="padding:11px 13px;text-align:center">Todos</td>
+              <td style="padding:11px 13px;text-align:center;color:#0f8f5e;font-weight:700">✓</td>
+              <td style="padding:11px 13px;text-align:center;color:#0f8f5e;font-weight:700">✓</td>
+              <td style="padding:11px 13px;text-align:center;color:#0f8f5e;font-weight:700">✓</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--line)">
+              <td style="padding:11px 13px"><strong>Gestor</strong><br><span style="font-size:12px;color:var(--mist)">Ve y edita todo, sin crear ni eliminar</span></td>
+              <td style="padding:11px 13px;text-align:center">Todos</td>
+              <td style="padding:11px 13px;text-align:center;color:#c0392b;font-weight:700">✗</td>
+              <td style="padding:11px 13px;text-align:center;color:#0f8f5e;font-weight:700">✓</td>
+              <td style="padding:11px 13px;text-align:center;color:#c0392b;font-weight:700">✗</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--line)">
+              <td style="padding:11px 13px"><strong>Oficina</strong><br><span style="font-size:12px;color:var(--mist)">Solo los registros de su unidad u oficina</span></td>
+              <td style="padding:11px 13px;text-align:center">Solo su oficina</td>
+              <td style="padding:11px 13px;text-align:center;color:#c0392b;font-weight:700">✗</td>
+              <td style="padding:11px 13px;text-align:center">Solo su oficina</td>
+              <td style="padding:11px 13px;text-align:center;color:#c0392b;font-weight:700">✗</td>
+            </tr>
+            <tr>
+              <td style="padding:11px 13px"><strong>Usuario libre</strong><br><span style="font-size:12px;color:var(--mist)">Solo consulta: ve todo, no modifica nada</span></td>
+              <td style="padding:11px 13px;text-align:center">Todos</td>
+              <td style="padding:11px 13px;text-align:center;color:#c0392b;font-weight:700">✗</td>
+              <td style="padding:11px 13px;text-align:center;color:#c0392b;font-weight:700">✗</td>
+              <td style="padding:11px 13px;text-align:center;color:#c0392b;font-weight:700">✗</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card" style="padding:22px;margin-top:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+        <div>
+          <h3 style="margin:0;font-size:16px;color:var(--slate)">Usuarios del sistema</h3>
+          <p style="margin:4px 0 0;font-size:13px;color:var(--mist)">Crea, edita, activa/desactiva o elimina usuarios.</p>
+        </div>
+        <button class="btn btn-primary" onclick="abrirFormUsuario()">+ Crear usuario</button>
+      </div>
+      <div id="usuariosLista"><p class="hint">Cargando usuarios…</p></div>
+    </div>
+  </section>
+
 </main>
+
+<!-- Modal crear/editar usuario -->
+<div class="modal-bg" id="modalUsuario">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Gestión de accesos</div><h2 id="modalUsuarioTitulo">Crear usuario</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalUsuario')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="grid">
+        <div class="field full"><label>Usuario</label><input id="us_usuario" placeholder="ej. ind.industrial"></div>
+        <div class="field full"><label>Contraseña</label><input id="us_password" placeholder="clave de acceso"></div>
+        <div class="field full"><label>Rol</label><select id="us_rol" onchange="toggleOficinaUsuario()"><option value="">Seleccione…</option><option>Administrador</option><option>Gestor</option><option>Oficina</option><option>Usuario libre</option></select></div>
+        <div class="field full" id="us_wrap_oficina"><label>Oficina asignada</label><select id="us_oficina"><option value="">Seleccione…</option></select></div>
+        <div class="field full"><label>Activo</label><select id="us_activo"><option>Sí</option><option>No</option></select></div>
+      </div>
+    </div>
+    <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px">
+      <button class="btn btn-ghost" onclick="cerrarModal('modalUsuario')">Cancelar</button>
+      <button class="btn btn-primary" id="us_guardar" onclick="guardarUsuario()">Guardar usuario</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal cambiar mi contraseña -->
+<div class="modal-bg" id="modalCambiarPass">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Mi cuenta</div><h2>Cambiar mi contraseña</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalCambiarPass')">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="margin-top:0">Ingresa tu nueva contraseña. La usarás la próxima vez que inicies sesión.</p>
+      <div class="grid">
+        <div class="field full"><label>Nueva contraseña</label><input id="cp_nueva" type="text" placeholder="nueva clave"></div>
+        <div class="field full"><label>Repite la nueva contraseña</label><input id="cp_repetir" type="text" placeholder="repite la clave"></div>
+      </div>
+    </div>
+    <div class="modal-foot" style="display:flex;justify-content:flex-end;gap:10px;padding:14px 20px">
+      <button class="btn btn-ghost" onclick="cerrarModal('modalCambiarPass')">Cancelar</button>
+      <button class="btn btn-primary" id="cp_guardar" onclick="guardarMiPassword()">Guardar contraseña</button>
+    </div>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -385,7 +578,7 @@
 
       <!-- Programación -->
       <div id="mt_prog">
-        <div style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
+        <div id="mt_prog_form" style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nueva programación de meta</div>
           <div class="grid">
             <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha" onchange="sugerirPeriodoProg()"></div>
@@ -405,7 +598,7 @@
 
       <!-- Seguimiento -->
       <div id="mt_seg" class="hidden">
-        <div style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
+        <div id="mt_seg_form" style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nuevo seguimiento</div>
           <div class="grid">
             <div class="field"><label>Meta de referencia</label><select id="sm_prog" onchange="evaluarRemediacion()"></select></div>
@@ -547,6 +740,300 @@ let INDICADORES = [];             // indicadores capturados para la ficha en cur
 let EDIT_FICHA = null;            // {nivel, id} si se está editando
 
 function toast(msg, isErr){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'+(isErr?' err':''); setTimeout(()=>t.className='toast',3400); }
+
+/* ============================================================
+   LOGIN, SESIÓN Y PERMISOS (4 roles: Administrador/Gestor/Oficina/Usuario libre)
+   ============================================================ */
+// SESION: { rol, usuario, oficina, recordId }
+let SESION = null;
+const _limpioU = x => (x && !/^[a-zA-Z0-9_\-]{22}$/.test(String(x))) ? String(x).trim() : '';
+
+async function hacerLogin(){
+  const u = (document.getElementById('login_user').value||'').trim();
+  const p = (document.getElementById('login_pass').value||'').trim();
+  const err = document.getElementById('login_error');
+  const btn = document.getElementById('login_btn');
+  const mostrarError = (msg)=>{ err.textContent=msg; err.style.display='block'; };
+  err.style.display='none';
+  if(!u || !p){ mostrarError('Ingresa usuario y contraseña.'); return; }
+  btn.disabled=true; btn.textContent='Verificando…';
+  try{
+    const data = await API.records(CONFIG.ENTITIES.USUARIOS);
+    const recs = data.records||[];
+    const encontrado = recs.find(r=>{
+      const v=r.values||{};
+      return _limpioU(v['Usuario'])===u && _limpioU(v['Contraseña'])===p;
+    });
+    if(!encontrado){ mostrarError('Usuario o contraseña incorrectos.'); btn.disabled=false; btn.textContent='Iniciar sesión'; return; }
+    const v = encontrado.values||{};
+    if(_limpioU(v['Activo'])!=='Sí'){ mostrarError('Este usuario está desactivado. Contacta al administrador.'); btn.disabled=false; btn.textContent='Iniciar sesión'; return; }
+    let rol = _limpioU(v['Rol']) || 'Usuario libre';
+    if(!['Administrador','Gestor','Oficina','Usuario libre'].includes(rol)) rol='Usuario libre';
+    SESION = { rol, usuario:_limpioU(v['Usuario']), oficina:_limpioU(v['Oficina asignada']), recordId: encontrado.id };
+    entrarApp();
+  }catch(e){
+    mostrarError('Error al verificar: '+e.message);
+    btn.disabled=false; btn.textContent='Iniciar sesión';
+  }
+}
+window.hacerLogin = hacerLogin;
+
+function entrarApp(){
+  document.getElementById('loginOverlay').style.display='none';
+  aplicarPermisos();
+  mostrarBarraSesion();
+  STATE.matriz=[];
+  if(typeof renderListado==='function'){ /* la vista activa se renderiza al navegar */ }
+}
+
+// Helpers de permisos
+function esAdmin(){ return SESION && SESION.rol==='Administrador'; }
+function puedeCrear(){ return esAdmin(); }
+function puedeEliminar(){ return esAdmin(); }
+function puedeEditar(){ return SESION && (SESION.rol==='Administrador' || SESION.rol==='Gestor' || SESION.rol==='Oficina'); }
+function puedeVerTodo(){ return SESION && (SESION.rol==='Administrador' || SESION.rol==='Gestor' || SESION.rol==='Usuario libre'); }
+function soloLectura(){ return SESION && SESION.rol==='Usuario libre'; }
+window.esAdmin=esAdmin; window.puedeCrear=puedeCrear; window.puedeEliminar=puedeEliminar;
+window.puedeEditar=puedeEditar; window.puedeVerTodo=puedeVerTodo; window.soloLectura=soloLectura;
+
+// Ajusta la interfaz según el rol
+function aplicarPermisos(){
+  // Crear fichas (vista "Fichas de proceso"): solo Administrador
+  const btnFichas = document.querySelector('nav button[data-view="fichas"]');
+  if(btnFichas) btnFichas.style.display = puedeCrear() ? '' : 'none';
+  // Pestaña Administración: solo Administrador
+  const navAdmin = document.getElementById('navAdmin');
+  if(navAdmin) navAdmin.style.display = esAdmin() ? '' : 'none';
+  // Botón "+ Agregar indicador desde ficha": solo quien puede crear
+  const btnAgr = document.getElementById('btnAgregarInd');
+  if(btnAgr) btnAgr.style.display = puedeCrear() ? '' : 'none';
+  // Si quien entra no puede crear, llevarlo a una vista visible (Fichas registradas)
+  if(!puedeCrear()){
+    const actival = document.querySelector('nav button.active');
+    if(actival && actival.dataset.view==='fichas'){
+      const dest = document.querySelector('nav button[data-view="listado"]');
+      if(dest) dest.click();
+    }
+  }
+}
+
+function mostrarBarraSesion(){
+  if(document.getElementById('sesionInfo')) return;
+  const nav = document.querySelector('header nav');
+  if(!nav) return;
+  const cont = document.createElement('div');
+  cont.id='sesionInfo';
+  cont.style.cssText='display:flex;align-items:center;gap:10px;margin-left:14px;font-size:12px;color:rgba(255,255,255,.9)';
+  const quien = (SESION.rol==='Oficina') ? (SESION.oficina||'Oficina') : SESION.rol;
+  cont.innerHTML = `<span title="${SESION.usuario} · ${SESION.rol}">👤 ${quien}</span>`
+    + `<button onclick="abrirCambiarPass()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">🔑 Cambiar contraseña</button>`
+    + `<button onclick="cerrarSesion()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">Salir</button>`;
+  nav.appendChild(cont);
+}
+
+function cerrarSesion(){ SESION = null; location.reload(); }
+window.cerrarSesion = cerrarSesion;
+
+// ¿El registro pertenece a la oficina del usuario? (Admin, Gestor y Usuario libre ven todo)
+function _registroVisibleOficina(oficinaTexto){
+  if(!SESION) return false;
+  if(puedeVerTodo()) return true;
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  return norm(oficinaTexto)===norm(SESION.oficina);
+}
+window._registroVisibleOficina = _registroVisibleOficina;
+
+/* ============================================================
+   GESTIÓN DE USUARIOS (pestaña Administración, solo admin)
+   ============================================================ */
+let _usuariosCache = [];
+let _editandoUsuarioId = null;
+
+async function cargarUsuarios(){
+  const cont = document.getElementById('usuariosLista');
+  if(!cont) return;
+  cont.innerHTML = '<p class="hint">Cargando usuarios…</p>';
+  try{
+    const data = await API.records(CONFIG.ENTITIES.USUARIOS);
+    _usuariosCache = data.records||[];
+    if(!_usuariosCache.length){ cont.innerHTML='<p class="hint">No hay usuarios. Crea el primero con "+ Crear usuario".</p>'; return; }
+    let html = '<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="background:var(--paper);text-align:left">'
+      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Usuario</th>'
+      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Contraseña</th>'
+      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Rol</th>'
+      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Oficina</th>'
+      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand);text-align:center">Activo</th>'
+      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand);text-align:right">Acciones</th></tr></thead><tbody>';
+    _usuariosCache.forEach(r=>{
+      const v=r.values||{};
+      const usuario=_limpioU(v['Usuario']), pass=_limpioU(v['Contraseña']), rol=_limpioU(v['Rol'])||'Usuario libre', oficina=_limpioU(v['Oficina asignada'])||'—', activo=_limpioU(v['Activo']);
+      const activoBadge = activo==='Sí' ? '<span style="color:#0f8f5e;font-weight:600">● Sí</span>' : '<span style="color:#c0392b;font-weight:600">● No</span>';
+      const passEsc = (pass||'').replace(/"/g,'&quot;').replace(/'/g,"\\'");
+      html += `<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:10px 12px"><strong>${usuario}</strong></td>
+        <td style="padding:10px 12px;white-space:nowrap">
+          <span id="pw-${r.id}" data-pw="${passEsc}" data-shown="0" style="font-family:monospace">••••••</span>
+          <button class="icon-btn" title="Mostrar/ocultar" onclick="togglePassVista('${r.id}')" style="margin-left:4px">👁️</button>
+        </td>
+        <td style="padding:10px 12px">${rol}</td>
+        <td style="padding:10px 12px">${rol==='Oficina'?oficina:'<span style=\\"color:var(--mist)\\">(ve todo)</span>'}</td>
+        <td style="padding:10px 12px;text-align:center">${activoBadge}</td>
+        <td style="padding:10px 12px;text-align:right;white-space:nowrap">
+          <button class="icon-btn" title="Editar" onclick="editarUsuario('${r.id}')">✏️</button>
+          <button class="icon-btn" title="${activo==='Sí'?'Desactivar':'Activar'}" onclick="toggleActivoUsuario('${r.id}')">${activo==='Sí'?'🔒':'🔓'}</button>
+          <button class="icon-btn" title="Eliminar" onclick="eliminarUsuario('${r.id}')">🗑️</button>
+        </td></tr>`;
+    });
+    html += '</tbody></table></div>';
+    cont.innerHTML = html;
+  }catch(e){ cont.innerHTML = '<p class="hint">Error al cargar usuarios: '+e.message+'</p>'; }
+}
+window.cargarUsuarios = cargarUsuarios;
+
+function togglePassVista(id){
+  const el = document.getElementById('pw-'+id);
+  if(!el) return;
+  const shown = el.getAttribute('data-shown')==='1';
+  if(shown){ el.textContent='••••••'; el.setAttribute('data-shown','0'); }
+  else { el.textContent = el.getAttribute('data-pw')||'(vacía)'; el.setAttribute('data-shown','1'); }
+}
+window.togglePassVista = togglePassVista;
+
+async function poblarOficinasUsuario(){
+  const sel = document.getElementById('us_oficina');
+  if(!sel) return;
+  try{
+    const oficinas = await cargarOficinasOpts();
+    sel.innerHTML = '<option value="">Seleccione…</option>';
+    (oficinas||[]).forEach(o=>{
+      const nombre = (typeof o==='string') ? o : (o.label || o.value || '');
+      if(nombre && !/^[a-zA-Z0-9_\-]{22}$/.test(nombre)){
+        const op=document.createElement('option'); op.value=nombre; op.textContent=nombre; sel.appendChild(op);
+      }
+    });
+  }catch(e){ toast('No se pudieron cargar las oficinas: '+e.message, true); }
+}
+
+function toggleOficinaUsuario(){
+  const rol = document.getElementById('us_rol').value;
+  const wrap = document.getElementById('us_wrap_oficina');
+  if(wrap) wrap.style.display = (rol==='Oficina') ? '' : 'none';
+}
+window.toggleOficinaUsuario = toggleOficinaUsuario;
+
+async function abrirFormUsuario(){
+  _editandoUsuarioId = null;
+  document.getElementById('modalUsuarioTitulo').textContent = 'Crear usuario';
+  document.getElementById('us_usuario').value='';
+  document.getElementById('us_password').value='';
+  document.getElementById('us_rol').value='';
+  document.getElementById('us_activo').value='Sí';
+  await poblarOficinasUsuario();
+  document.getElementById('us_oficina').value='';
+  toggleOficinaUsuario();
+  const bg=document.getElementById('us_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar usuario'; }
+  document.getElementById('modalUsuario').classList.add('show');
+}
+window.abrirFormUsuario = abrirFormUsuario;
+
+async function editarUsuario(id){
+  const r = _usuariosCache.find(x=>x.id===id); if(!r) return;
+  const v=r.values||{};
+  _editandoUsuarioId = id;
+  document.getElementById('modalUsuarioTitulo').textContent = 'Editar usuario';
+  document.getElementById('us_usuario').value = _limpioU(v['Usuario']);
+  document.getElementById('us_password').value = _limpioU(v['Contraseña']);
+  document.getElementById('us_rol').value = _limpioU(v['Rol'])||'';
+  document.getElementById('us_activo').value = _limpioU(v['Activo'])==='No'?'No':'Sí';
+  await poblarOficinasUsuario();
+  document.getElementById('us_oficina').value = _limpioU(v['Oficina asignada'])||'';
+  toggleOficinaUsuario();
+  const bg=document.getElementById('us_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar usuario'; }
+  document.getElementById('modalUsuario').classList.add('show');
+}
+window.editarUsuario = editarUsuario;
+
+async function guardarUsuario(){
+  const U = CONFIG.USUARIOS_FIELDS;
+  const g = id => document.getElementById(id).value.trim();
+  const usuario=g('us_usuario'), pass=g('us_password'), rol=g('us_rol'), activo=g('us_activo');
+  let oficina = g('us_oficina');
+  if(!usuario || !pass){ toast('Usuario y contraseña son obligatorios.', true); return; }
+  if(!rol){ toast('Selecciona un rol.', true); return; }
+  if(rol==='Oficina' && !oficina){ toast('El rol Oficina requiere una oficina asignada.', true); return; }
+  if(rol!=='Oficina') oficina='';
+  const btn=document.getElementById('us_guardar');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  const campos = {};
+  campos[U.usuario.id]=usuario; campos[U.password.id]=pass; campos[U.rol.id]=rol;
+  campos[U.oficina.id]=oficina; campos[U.activo.id]=activo;
+  try{
+    if(_editandoUsuarioId){ await API.saveForm(_editandoUsuarioId, campos, CONFIG.ENTITIES.USUARIOS); toast('Usuario actualizado.'); }
+    else { await API.saveForm(null, campos, CONFIG.ENTITIES.USUARIOS); toast('Usuario creado.'); }
+    btn.disabled=false; btn.textContent='Guardar usuario';
+    cerrarModal('modalUsuario'); cargarUsuarios();
+  }catch(e){ toast('Error al guardar: '+e.message, true); btn.disabled=false; btn.textContent='Guardar usuario'; }
+}
+window.guardarUsuario = guardarUsuario;
+
+async function toggleActivoUsuario(id){
+  const r = _usuariosCache.find(x=>x.id===id); if(!r) return;
+  const U = CONFIG.USUARIOS_FIELDS;
+  const actual = _limpioU((r.values||{})['Activo']);
+  const nuevo = actual==='Sí' ? 'No' : 'Sí';
+  try{
+    await API.saveForm(id, { [U.activo.id]: nuevo }, CONFIG.ENTITIES.USUARIOS);
+    toast('Usuario '+(nuevo==='Sí'?'activado':'desactivado')+'.');
+    cargarUsuarios();
+  }catch(e){ toast('Error: '+e.message, true); }
+}
+window.toggleActivoUsuario = toggleActivoUsuario;
+
+async function eliminarUsuario(id){
+  const r = _usuariosCache.find(x=>x.id===id);
+  const nombre = r ? _limpioU((r.values||{})['Usuario']) : 'este usuario';
+  if(!confirm('¿Eliminar al usuario "'+nombre+'"? Esta acción no se puede deshacer.')) return;
+  try{
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','DELETE',{});
+    toast('Usuario eliminado.');
+    cargarUsuarios();
+  }catch(e){ toast('Error al eliminar: '+e.message, true); }
+}
+window.eliminarUsuario = eliminarUsuario;
+
+async function abrirCambiarPass(){
+  if(!SESION){ toast('Debes iniciar sesión.', true); return; }
+  if(!SESION.recordId){
+    try{
+      const data = await API.records(CONFIG.ENTITIES.USUARIOS);
+      const yo = (data.records||[]).find(r=>_limpioU((r.values||{})['Usuario'])===SESION.usuario);
+      if(yo) SESION.recordId = yo.id;
+    }catch(e){}
+  }
+  if(!SESION.recordId){ toast('No se pudo identificar tu usuario. Cierra sesión y vuelve a entrar.', true); return; }
+  document.getElementById('cp_nueva').value='';
+  document.getElementById('cp_repetir').value='';
+  const bg=document.getElementById('cp_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar contraseña'; }
+  document.getElementById('modalCambiarPass').classList.add('show');
+}
+window.abrirCambiarPass = abrirCambiarPass;
+
+async function guardarMiPassword(){
+  const nueva = document.getElementById('cp_nueva').value.trim();
+  const rep = document.getElementById('cp_repetir').value.trim();
+  if(!nueva){ toast('Ingresa la nueva contraseña.', true); return; }
+  if(nueva.length<4){ toast('La contraseña debe tener al menos 4 caracteres.', true); return; }
+  if(nueva!==rep){ toast('Las contraseñas no coinciden.', true); return; }
+  const U = CONFIG.USUARIOS_FIELDS;
+  const btn=document.getElementById('cp_guardar');
+  btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
+  try{
+    await API.saveForm(SESION.recordId, { [U.password.id]: nueva }, CONFIG.ENTITIES.USUARIOS);
+    toast('Contraseña actualizada. Úsala la próxima vez que inicies sesión.');
+    cerrarModal('modalCambiarPass');
+  }catch(e){ toast('Error al cambiar la contraseña: '+e.message, true); btn.disabled=false; btn.textContent='Guardar contraseña'; }
+}
+window.guardarMiPassword = guardarMiPassword;
 function setConn(ok,msg){ const d=document.getElementById('connDot'),x=document.getElementById('connText'); if(ok){d.className='dot on';x.textContent='Conectado a QuintaDB · datos en vivo';}else{d.className='dot off';x.textContent='Sin conexión: '+(msg||'revisa PROXY_URL');} }
 function genId22(){ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'; let s=''; for(let i=0;i<22;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 const esBasura = x => (!x || /^[a-zA-Z0-9_\-]{22}$/.test(String(x)));
@@ -565,6 +1052,7 @@ document.querySelectorAll('nav button').forEach(b=>{
     document.getElementById('view-'+b.dataset.view).classList.add('active');
     if(b.dataset.view==='listado') renderListado();
     if(b.dataset.view==='matriz') renderMatriz();
+    if(b.dataset.view==='administracion') cargarUsuarios();
   };
 });
 
@@ -1015,9 +1503,11 @@ async function renderListado(){
     const todas=[];
     for(const n of niveles){ const fichas=await loadFichas(n); fichas.forEach(r=>todas.push({r,nivel:n})); }
     const filtro=(document.getElementById('listBuscar').value||'').toLowerCase();
-    const filas = todas.filter(({r,nivel})=>{
-      if(!filtro) return true;
-      return (rutaFicha(r,nivel)+' '+objFicha(r,nivel)).toLowerCase().includes(filtro);
+    const filas = todas.filter(o=>{
+      const {r,nivel}=o;
+      if(filtro && !(rutaFicha(r,nivel)+' '+objFicha(r,nivel)).toLowerCase().includes(filtro)) return false;
+      if(typeof pasaFiltrosList==='function' && !pasaFiltrosList(o)) return false;
+      return true;
     });
     if(!filas.length){ tb.innerHTML='<tr><td colspan="5"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
     // Agrupar por dueño del proceso (texto). Sin dueño → "(Sin dueño asignado)".
@@ -1041,8 +1531,9 @@ async function renderListado(){
           <td style="max-width:260px">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
           <td style="text-align:center"><strong>${nInd}</strong></td>
           <td style="text-align:right;white-space:nowrap">
-            <button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>
-            <button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>
+            ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
+            ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>`:''}
+            ${(!puedeEditar()&&!puedeEliminar())?'<span class="hint">Solo lectura</span>':''}
           </td>
         </tr>`;
       }).join('');
@@ -1460,8 +1951,9 @@ async function renderMatriz(){
     const filas = recs.filter(r=>{
       const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
       if(!ind) return false;
-      if(!filtro) return true;
-      return ind.toLowerCase().includes(filtro);
+      if(filtro && !ind.toLowerCase().includes(filtro)) return false;
+      if(typeof pasaFiltrosMat==='function' && !pasaFiltrosMat(r)) return false;
+      return true;
     });
     if(!filas.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
     // Agrupar por Oficina de medición
@@ -1503,8 +1995,8 @@ async function renderMatriz(){
           <td style="min-width:130px">${avance}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
-            <button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>
-            <button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>
+            ${puedeEditar()?`<button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>`:''}
+            ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>`:''}
           </td>
         </tr>`;
       }).join('');
@@ -1828,6 +2320,10 @@ async function abrirMetas(matId){
   const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
   const ep=document.getElementById('sm_periodo'); if(ep){ ep.value=''; delete ep.dataset.touched; }
   document.getElementById('mt_titulo').textContent=ind||'Indicador';
+  // Modo solo lectura (Usuario libre): ocultar formularios de agregar metas
+  const sl=soloLectura();
+  const pf=document.getElementById('mt_prog_form'); if(pf) pf.style.display = sl?'none':'';
+  const sf=document.getElementById('mt_seg_form'); if(sf) sf.style.display = sl?'none':'';
   setMetaTab('prog');
   document.getElementById('modalMetas').classList.add('show'); document.body.style.overflow='hidden';
   await cargarProgMetas();
@@ -1900,8 +2396,8 @@ async function cargarProgMetas(){
       const planLink=plan?` · <a href="${plan}" target="_blank" style="color:var(--brand);font-size:11px">plan ↗</a>`:'';
       return `<tr><td>${fmtFecha(f)||'—'}</td><td><strong style="color:var(--brand);font-size:12px">${per?per.replace(/</g,'&lt;'):'—'}</strong></td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td>
         <td style="text-align:right;white-space:nowrap">
-          <button class="icon-btn" title="Editar" onclick="editarProgMeta('${r.id}')">✏️</button>
-          <button class="icon-btn" title="Eliminar" onclick="eliminarProgMeta('${r.id}')">🗑️</button>
+          <button class="icon-btn" title="Editar" onclick="editarProgMeta('${r.id}')" style="${soloLectura()?'display:none':''}">✏️</button>
+          <button class="icon-btn" title="Eliminar" onclick="eliminarProgMeta('${r.id}')" style="${soloLectura()?'display:none':''}">🗑️</button>
         </td></tr>`;
     }).join('');
   }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
@@ -2063,8 +2559,8 @@ async function cargarSegMetas(){
         const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
         return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(refN)?'—':refN}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
           <td style="text-align:right;white-space:nowrap">
-            <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')">✏️</button>
-            <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')">🗑️</button>
+            <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')" style="${soloLectura()?'display:none':''}">✏️</button>
+            <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')" style="${soloLectura()?'display:none':''}">🗑️</button>
           </td></tr>`;
       }).join('');
     });
@@ -2157,6 +2653,100 @@ window.guardarSegMeta=guardarSegMeta;
 
 function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; }
 window.cerrarModal=cerrarModal;
+
+/* ============================================================
+   FILTROS AVANZADOS (Matriz y Fichas)
+   ============================================================ */
+const FILTRO_OPERADORES = { similar:'Similar a', contiene:'Contiene', nocontiene:'No contiene', es:'Es', noes:'No es', empieza:'Comienza con', termina:'Termina con', vacio:'Está vacío', novacio:'No está vacío' };
+const FILTRO_OPERADORES_OPCION = { es:'Es', noes:'No es', vacio:'Está vacío', novacio:'No está vacío' };
+
+// --- Campos de la MATRIZ ---
+const FILTRO_CAMPOS_MAT = {
+  indicador:    { label:'Indicador',        get:r=>{ const t=leerCampo(r,MAT.indicador_txt.id,'Indicador'); const p=t.split(' — '); return p.length>1?p.slice(1).join(' — '):t; } },
+  proceso:      { label:'Proceso (ruta)',   get:r=>leerCampo(r,MAT.proceso_ruta.id,'Proceso (ruta)') },
+  ofiMed:       { label:'Oficina medición', get:r=>leerCampo(r,MAT.oficina_medicion.id,'Oficina o área responsable de la medición') },
+  ofiDue:       { label:'Oficina dueña',    get:r=>leerCampo(r,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador') },
+  nivel:        { label:'Nivel',            get:r=>{ const ruta=leerCampo(r,MAT.proceso_ruta.id,'Proceso (ruta)'); return nivelDesdeRuta(ruta)||''; }, opciones:['N0','N1','N2'] },
+  frecMed:      { label:'Frecuencia medición', get:r=>leerCampo(r,MAT.frecuencia_medicion.id,'Frecuencia de medición'), opciones:['Mensual','Bimensual','Trimestral','Semestral','Anual','A demanda'] }
+};
+// --- Campos de FICHAS ---
+const FILTRO_CAMPOS_LIST = {
+  proceso:      { label:'Proceso (ruta)',   get:o=>rutaFicha(o.r,o.nivel) },
+  nivel:        { label:'Nivel',            get:o=>o.nivel, opciones:['N0','N1','N2'] },
+  dueno:        { label:'Dueño',            get:o=>{ const F=EDF(o.nivel); return F.dueno_txt?(leerCampo(o.r,F.dueno_txt.id,'Dueño del proceso')||leerCampo(o.r,F.dueno_txt.id,'Nombre Dueño del proceso')):''; } },
+  objetivo:     { label:'Objetivo',         get:o=>objFicha(o.r,o.nivel) }
+};
+
+let CONDICIONES_MAT = [];
+let CONDICIONES_LIST = [];
+
+function _renderFiltros(conds, campos, contId, renderFn, listaVar){
+  const cont=document.getElementById(contId);
+  if(!conds.length){ cont.innerHTML='<p class="hint" style="padding:4px 0">Sin condiciones. Agrega una para filtrar.</p>'; return; }
+  cont.innerHTML = conds.map((c,i)=>{
+    const def=campos[c.campo];
+    const campoSel = Object.entries(campos).map(([k,v])=>`<option value="${k}" ${k===c.campo?'selected':''}>${v.label}</option>`).join('');
+    const ops = def.opciones ? FILTRO_OPERADORES_OPCION : FILTRO_OPERADORES;
+    const opSel = Object.entries(ops).map(([k,v])=>`<option value="${k}" ${k===c.op?'selected':''}>${v}</option>`).join('');
+    let valInput;
+    if(c.op==='vacio'||c.op==='novacio'){ valInput=`<span class="hint" style="font-size:12px;align-self:center">(sin valor)</span>`; }
+    else if(def.opciones){ valInput=`<select onchange="${listaVar}[${i}].valor=this.value;${renderFn}()"><option value="">—</option>${def.opciones.map(o=>`<option ${o===c.valor?'selected':''}>${o}</option>`).join('')}</select>`; }
+    else { valInput=`<input value="${(c.valor||'').replace(/"/g,'&quot;')}" placeholder="valor…" oninput="${listaVar}[${i}].valor=this.value" onkeyup="${renderFn}()">`; }
+    return `<div class="filtro-cond">
+      <select onchange="_actCond('${listaVar}',${i},'campo',this.value)">${campoSel}</select>
+      <select onchange="_actCond('${listaVar}',${i},'op',this.value)">${opSel}</select>
+      ${valInput}
+      <button class="icon-btn" title="Quitar" onclick="_quitCond('${listaVar}',${i})">✕</button>
+    </div>`;
+  }).join('');
+}
+function _actCond(listaVar, i, prop, val){
+  const lista = listaVar==='CONDICIONES_MAT'?CONDICIONES_MAT:CONDICIONES_LIST;
+  const campos = listaVar==='CONDICIONES_MAT'?FILTRO_CAMPOS_MAT:FILTRO_CAMPOS_LIST;
+  lista[i][prop]=val;
+  if(prop==='campo'){ lista[i].valor=''; const d=campos[val]||{}; lista[i].op=d.opciones?'es':'similar'; }
+  if(listaVar==='CONDICIONES_MAT'){ renderFiltrosMat(); renderMatriz(); } else { renderFiltrosList(); renderListado(); }
+}
+window._actCond=_actCond;
+function _quitCond(listaVar, i){
+  if(listaVar==='CONDICIONES_MAT'){ CONDICIONES_MAT.splice(i,1); renderFiltrosMat(); renderMatriz(); }
+  else { CONDICIONES_LIST.splice(i,1); renderFiltrosList(); renderListado(); }
+}
+window._quitCond=_quitCond;
+
+function agregarCondicionMat(){ CONDICIONES_MAT.push({campo:'indicador',op:'similar',valor:''}); renderFiltrosMat(); }
+function agregarCondicionList(){ CONDICIONES_LIST.push({campo:'proceso',op:'similar',valor:''}); renderFiltrosList(); }
+window.agregarCondicionMat=agregarCondicionMat; window.agregarCondicionList=agregarCondicionList;
+function renderFiltrosMat(){ _renderFiltros(CONDICIONES_MAT, FILTRO_CAMPOS_MAT, 'filtrosListaMat', 'renderMatriz', 'CONDICIONES_MAT'); }
+function renderFiltrosList(){ _renderFiltros(CONDICIONES_LIST, FILTRO_CAMPOS_LIST, 'filtrosListaList', 'renderListado', 'CONDICIONES_LIST'); }
+window.renderFiltrosMat=renderFiltrosMat; window.renderFiltrosList=renderFiltrosList;
+
+// Evalúa si un item pasa las condiciones (genérico)
+function _pasaFiltros(item, conds, campos, logicaId){
+  if(!conds.length) return true;
+  const logica=document.getElementById(logicaId).value;
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+  const resultados = conds.map(c=>{
+    const def=campos[c.campo]; if(!def) return true;
+    const crudo = String(def.get(item)||'');
+    if(c.op==='vacio')   return crudo.trim()==='';
+    if(c.op==='novacio') return crudo.trim()!=='';
+    if(!c.valor) return logica==='AND';
+    const valor=crudo.toLowerCase(), buscado=String(c.valor).toLowerCase();
+    if(c.op==='contiene')   return valor.includes(buscado);
+    if(c.op==='nocontiene') return !valor.includes(buscado);
+    if(c.op==='es')         return valor===buscado;
+    if(c.op==='noes')       return valor!==buscado;
+    if(c.op==='empieza')    return valor.startsWith(buscado);
+    if(c.op==='termina')    return valor.endsWith(buscado);
+    if(c.op==='similar')    return norm(crudo).includes(norm(c.valor));
+    return true;
+  });
+  return logica==='AND' ? resultados.every(Boolean) : resultados.some(Boolean);
+}
+function pasaFiltrosMat(r){ return _pasaFiltros(r, CONDICIONES_MAT, FILTRO_CAMPOS_MAT, 'filtroLogicaMat'); }
+function pasaFiltrosList(o){ return _pasaFiltros(o, CONDICIONES_LIST, FILTRO_CAMPOS_LIST, 'filtroLogicaList'); }
+window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
 
 /* ============================================================
    ARRANQUE
