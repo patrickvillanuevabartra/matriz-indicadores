@@ -156,7 +156,8 @@ const CONFIG = {
     proceso_ruta:        { id: "cOowddJCnixyJcQCosCXbO", type: "text" }, // ruta completa hasta el análisis
     resp_med_txt:        { id: "ddNCk9dcncT4oxm3fXmCoM", type: "string" }, // responsable medición (texto)
     resp_celular:        { id: "aea8oPWP5dPikZW73dIMCj", type: "phone" }, // celular del responsable
-    resp_correo:         { id: "ddSSkqW4XdHBVdKvjtWPTy", type: "email" }  // correo del responsable
+    resp_correo:         { id: "ddSSkqW4XdHBVdKvjtWPTy", type: "email" }, // correo del responsable
+    proposito_ind:       { id: "dcSSk9W4DdQkNdJSoCWOTv", type: "text" }  // propósito del indicador
   },
 
   // ---- PROGRAMACIÓN DE METAS ---------------------------------------------
