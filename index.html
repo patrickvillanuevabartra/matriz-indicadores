@@ -284,6 +284,7 @@
       <thead><tr>
         <th style="width:70px">Nivel</th>
         <th>Indicador</th>
+        <th>Propósito</th>
         <th>Proceso</th>
         <th>Fórmula</th>
         <th>Oficina medición</th>
@@ -293,7 +294,7 @@
         <th style="width:120px">Avance</th>
         <th style="text-align:right">Acciones</th>
       </tr></thead>
-      <tbody id="tablaMatriz"><tr><td colspan="10" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <tbody id="tablaMatriz"><tr><td colspan="11" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 </main>
@@ -326,6 +327,7 @@
           <div class="field"><label>Correo del responsable</label><input id="ag_correo" readonly style="background:var(--paper)" placeholder="—"></div>
           <div class="field"><label>Frecuencia de medición</label><select id="ag_frec_med"></select></div>
           <div class="field"><label>Frecuencia de cálculo</label><select id="ag_frec_calc"></select></div>
+          <div class="field full"><label>Propósito del indicador <span style="color:var(--mist);font-weight:400">(opcional)</span></label><input id="ag_proposito" placeholder="¿Para qué se mide este indicador?"></div>
           <div class="field full"><label>Fórmula de cálculo</label><textarea id="ag_formula" placeholder="Ej: (N° atenciones resueltas / N° atenciones totales) × 100"></textarea></div>
           <div class="field full"><label>Fuente de información</label><textarea id="ag_fuente"></textarea></div>
         </div>
@@ -1127,6 +1129,13 @@ async function editarFicha(nivel, id){
       }
     });
   }
+  // Parsear el SIPOC guardado en los campos de la ficha (formato "[Componente] contenido")
+  ED_SIPOC_RAW = {
+    prov: parsearSipocCampo(cur(F.proveedores,'Proveedores/Cliente')),
+    entr: parsearSipocCampo(cur(F.entrada,'Entrada/Insumo')),
+    prod: parsearSipocCampo(cur(F.producto,'Producto')),
+    recep: parsearSipocCampo(cur(F.receptor,'Receptor final del producto'))
+  };
   // Detectar los componentes disponibles desde la cascada (igual que en creación).
   // Guardamos los indicadores pendientes para asociarlos tras detectar.
   ED_PENDIENTES = indicadoresGuardados.filter(g=>g.comp);
@@ -1205,6 +1214,17 @@ function trasCascadaModal(){
 }
 let SIPOC_ED = {}; // SIPOC por componente en el modal
 let ED_PENDIENTES = null; // indicadores guardados pendientes de asociar al editar
+let ED_SIPOC_RAW = null; // SIPOC parseado por componente desde los campos de la ficha {comp:{prov,entr,prod,recep}}
+// Parsea un texto con líneas "[Componente] contenido" → { componente: contenido }
+function parsearSipocCampo(texto){
+  const out={};
+  if(!texto) return out;
+  String(texto).split('\n').forEach(linea=>{
+    const m=linea.match(/^\s*\[([^\]]+)\]\s*(.*)$/);
+    if(m){ const comp=m[1].trim(); out[comp]=(out[comp]?out[comp]+'\n':'')+m[2]; }
+  });
+  return out;
+}
 function detectarSubprocesoModal(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const picker=document.getElementById('ed_sipoc_picker');
@@ -1229,6 +1249,17 @@ function detectarSubprocesoModal(){
     });
     Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores || !SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
     ED_PENDIENTES=null; // ya asociados
+  }
+  // Rellenar prov/entr/prod/recep de cada componente desde el SIPOC parseado de la ficha
+  if(ED_SIPOC_RAW){
+    const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const buscar=(raw,comp)=>{ if(raw[comp]!==undefined) return raw[comp]; const k=Object.keys(raw).find(x=>norm(x)===norm(comp)||norm(x).includes(norm(comp))||norm(comp).includes(norm(x))); return k?raw[k]:''; };
+    Object.keys(SIPOC_ED).forEach(comp=>{
+      SIPOC_ED[comp].prov = buscar(ED_SIPOC_RAW.prov, comp) || SIPOC_ED[comp].prov || '';
+      SIPOC_ED[comp].entr = buscar(ED_SIPOC_RAW.entr, comp) || SIPOC_ED[comp].entr || '';
+      SIPOC_ED[comp].prod = buscar(ED_SIPOC_RAW.prod, comp) || SIPOC_ED[comp].prod || '';
+      SIPOC_ED[comp].recep = buscar(ED_SIPOC_RAW.recep, comp) || SIPOC_ED[comp].recep || '';
+    });
   }
   // Marca como checked los componentes que ya estaban en SIPOC_ED
   checks.innerHTML = det.elementos.map(el=>{
@@ -1432,7 +1463,7 @@ async function renderMatriz(){
       if(!filtro) return true;
       return ind.toLowerCase().includes(filtro);
     });
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="10"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
     // Agrupar por Oficina de medición
     const ofiDe=r=>leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición') || '(Sin oficina de medición)';
     const grupos={};
@@ -1441,7 +1472,7 @@ async function renderMatriz(){
     let html='';
     nombresOrd.forEach(ofi=>{
       const items=grupos[ofi];
-      html+=`<tr style="background:var(--paper)"><td colspan="10" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
+      html+=`<tr style="background:var(--paper)"><td colspan="11" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
       html+=items.map(r=>{
         const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
         const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
@@ -1451,6 +1482,7 @@ async function renderMatriz(){
         const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
         const ofiDueno=leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador');
         const rutaFull=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)');
+        const proposito=MAT.proposito_ind?leerCampo(r, MAT.proposito_ind.id, 'Propósito indicador'):'';
         const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
         let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
         if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
@@ -1461,6 +1493,7 @@ async function renderMatriz(){
         return `<tr>
           <td>${nivelBadge}</td>
           <td style="max-width:240px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
+          <td style="max-width:180px;font-size:12px;color:var(--slate)">${proposito?proposito.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="max-width:180px;font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?(rutaFull.length>45?rutaFull.slice(0,45)+'…':rutaFull).replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="max-width:160px;font-size:12px">${(formula||'').slice(0,50).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
           <td style="font-size:11px">${ofiMed?ofiMed.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
@@ -1478,7 +1511,7 @@ async function renderMatriz(){
     });
     tb.innerHTML=html;
     setConn(true);
-  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="10"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="11"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 window.renderMatriz=renderMatriz;
 
@@ -1538,7 +1571,7 @@ async function abrirAgregarIndicador(){
   const oficinasOpts = await cargarOficinasOpts();
   fillSelect(document.getElementById('ag_oficina'), oficinasOpts);
   fillSelect(document.getElementById('ag_oficina_dueno'), oficinasOpts);
-  ['ag_responsable','ag_celular','ag_correo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['ag_responsable','ag_celular','ag_correo','ag_formula','ag_fuente','ag_proposito'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('modalAgregar').classList.add('show'); document.body.style.overflow='hidden';
   const opts=[];
   for(const n of ['N0','N1','N2']){
@@ -1645,6 +1678,7 @@ async function guardarIndicadoresMatriz(){
   if(!marcados.length){ toast('Marca al menos un indicador.', true); return; }
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const formula=g('ag_formula'), fuente=g('ag_fuente'), frecMed=g('ag_frec_med'), frecCalc=g('ag_frec_calc');
+  const proposito=g('ag_proposito');
   const oficina=g('ag_oficina'), responsable=g('ag_responsable'), celular=g('ag_celular'), correo=g('ag_correo'), oficinaDueno=g('ag_oficina_dueno');
   const btn=document.getElementById('ag_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Agregando…';
   try{
@@ -1658,6 +1692,7 @@ async function guardarIndicadoresMatriz(){
       campos[MAT.proceso_ruta.id]=rutaCompleta;
       if(formula) campos[MAT.formula.id]=formula;
       if(fuente) campos[MAT.fuente_info.id]=fuente;
+      if(proposito && MAT.proposito_ind) campos[MAT.proposito_ind.id]=proposito;
       if(frecMed) campos[MAT.frecuencia_medicion.id]=frecMed;
       if(frecCalc) campos[MAT.frecuencia_calculo.id]=frecCalc;
       if(oficina) campos[MAT.oficina_medicion.id]=oficina;
