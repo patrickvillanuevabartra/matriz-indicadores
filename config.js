@@ -31,7 +31,16 @@ const CONFIG = {
     NIVEL3:       "dcRNhdP8ngEixcV8kmWP5v",
     PROCEDIMIENTO:"dcUCouymnkz4ovWRVdOmk0",
     RESPONSABLES: "cXW7_dOCnctOlcRSo6W4LK",
-    RESP_PROCESO: "cPW44qr3vlW6XMn01eWPiv"
+    RESP_PROCESO: "cPW44qr3vlW6XMn01eWPiv",
+    USUARIOS:     "aNDhddT0PnW7PLW5tcJwLP" // Usuarios matriz de indicadores
+  },
+
+  USUARIOS_FIELDS: {
+    usuario:  { id: "baCMPTW5zhv5pcVIVcKSkQ", type: "string" },
+    password: { id: "dcS1xdTCjivyoEWQVdSCoy", type: "string" },
+    rol:      { id: "ddRmknWQbcTO0qW4Tyz8oV", type: "select" },
+    oficina:  { id: "aTcmohWOLgWO_dHCo6x1SJ", type: "string" },
+    activo:   { id: "bRxCofW6HhpBP5rCkdiwuZ", type: "select" }
   },
 
   // ---- FICHA NIVEL 0 -----------------------------------------------------
