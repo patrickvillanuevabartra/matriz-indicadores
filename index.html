@@ -422,8 +422,8 @@
           <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
         </div>
         <div class="tabla-wrap"><table>
-          <thead><tr><th>Fecha eval.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
-          <tbody id="mt_seg_tabla"><tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr></tbody>
+          <thead><tr><th>Fecha eval.</th><th>Ref.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
+          <tbody id="mt_seg_tabla"><tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr></tbody>
         </table></div>
       </div>
     </div>
@@ -1981,7 +1981,7 @@ async function cargarSegMetas(){
     const data=await API.records(CONFIG.ENTITIES.SEG_METAS);
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
     STATE.segMetas=mias;
-    if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
     let ultimoAvance=null, ultimaFecha='';
     const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
     // Preparar filas con su periodo
@@ -1995,7 +1995,7 @@ async function cargarSegMetas(){
       const periodo=SM.periodo?(leerCampo(r,SM.periodo.id,'Periodo')||'(Sin periodo)'):'(Sin periodo)';
       const fechaVal=(f && !/fecha/i.test(f))?f:'';
       if(!isNaN(pctN) && (!ultimaFecha || (fechaVal && fechaVal>=ultimaFecha))){ ultimoAvance=pctN; ultimaFecha=fechaVal||ultimaFecha; }
-      return {r, f:fechaVal, metaN, realN, pctN, periodo};
+      return {r, f:fechaVal, metaN, refN, realN, pctN, periodo};
     });
     // Agrupar por periodo
     const grupos={};
@@ -2004,13 +2004,13 @@ async function cargarSegMetas(){
     let html='';
     periodosOrd.forEach(per=>{
       const items=grupos[per];
-      html+=`<tr style="background:var(--paper)"><td colspan="6" style="padding:8px 12px;font-weight:700;color:var(--brand);font-size:12px">📅 ${per.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} evaluación(es)</span></td></tr>`;
-      html+=items.map(({r,f,metaN,realN,pctN})=>{
+      html+=`<tr style="background:var(--paper)"><td colspan="7" style="padding:8px 12px;font-weight:700;color:var(--brand);font-size:12px">📅 ${per.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} evaluación(es)</span></td></tr>`;
+      html+=items.map(({r,f,metaN,refN,realN,pctN})=>{
         const obs=limpiarEtiqueta(leerCampo(r,SM.observacion.id,'Observación'));
         const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
         const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
         const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
-        return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
+        return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(refN)?'—':refN}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')">✏️</button>
             <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')">🗑️</button>
@@ -2019,7 +2019,7 @@ async function cargarSegMetas(){
     });
     tb.innerHTML=html;
     actualizarAvanceMatriz(ultimoAvance);
-  }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
+  }catch(e){ tb.innerHTML=`<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
 
 function editarSegMeta(segId){
