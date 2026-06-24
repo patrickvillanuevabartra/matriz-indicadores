@@ -2295,7 +2295,7 @@ async function renderMatriz(){
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         return `<tr>
           <td>${nivelBadge}</td>
-          <td style="vertical-align:top">${nivelAna?`<span style="display:inline-block;font-size:9px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:10px;padding:1px 7px;margin-bottom:3px">${nivelAna.replace(/</g,'&lt;')}</span><br>`:''}${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
+          <td style="vertical-align:top">${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
           <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
           <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
