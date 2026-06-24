@@ -180,7 +180,10 @@
       </div>
       <div>
         <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Contraseña</label>
-        <input id="login_pass" type="password" autocomplete="current-password" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')hacerLogin()">
+        <div style="position:relative">
+          <input id="login_pass" type="password" autocomplete="current-password" style="width:100%;padding:11px 42px 11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')hacerLogin()">
+          <button type="button" id="login_pass_toggle" onclick="toggleLoginPass()" aria-label="Mostrar u ocultar contraseña" title="Mostrar/ocultar contraseña" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:17px;line-height:1;color:#5a6b62">👁️</button>
+        </div>
       </div>
       <div id="login_error" style="display:none;font-size:13px;color:#c0392b;background:#fdecea;border-radius:8px;padding:9px 11px"></div>
       <button onclick="hacerLogin()" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
@@ -747,6 +750,17 @@ function toast(msg, isErr){ const t=document.getElementById('toast'); t.textCont
 // SESION: { rol, usuario, oficina, recordId }
 let SESION = null;
 const _limpioU = x => (x && !/^[a-zA-Z0-9_\-]{22}$/.test(String(x))) ? String(x).trim() : '';
+
+// Muestra/oculta la contraseña del login al pulsar el ojito.
+function toggleLoginPass(){
+  const inp = document.getElementById('login_pass');
+  const btn = document.getElementById('login_pass_toggle');
+  if(!inp) return;
+  const ver = inp.type === 'password';
+  inp.type = ver ? 'text' : 'password';
+  if(btn){ btn.textContent = ver ? '🙈' : '👁️'; btn.title = ver ? 'Ocultar contraseña' : 'Mostrar contraseña'; }
+  inp.focus();
+}
 
 async function hacerLogin(){
   const u = (document.getElementById('login_user').value||'').trim();
@@ -1528,7 +1542,7 @@ async function renderListado(){
         return `<tr>
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
           <td class="mono" style="max-width:220px;font-size:12px" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>55?ruta.slice(0,55)+'…':ruta}</td>
-          <td style="max-width:260px">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
+          <td style="max-width:260px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
           <td style="text-align:center"><strong>${nInd}</strong></td>
           <td style="text-align:right;white-space:nowrap">
             ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
@@ -2012,7 +2026,7 @@ async function renderMatriz(){
           <td style="max-width:240px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
           <td style="max-width:180px;font-size:12px;color:var(--slate)">${proposito?proposito.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="max-width:180px;font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?(rutaFull.length>45?rutaFull.slice(0,45)+'…':rutaFull).replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
-          <td style="max-width:160px;font-size:12px">${(formula||'').slice(0,50).replace(/</g,'&lt;')||'<span class=hint>—</span>'}</td>
+          <td style="max-width:160px;font-size:12px" title="${(formula||'').replace(/"/g,'&quot;')}">${(formula||'').slice(0,50).replace(/</g,'&lt;')||'<span class=hint>—</span>'}${formula&&formula.length>50?'…':''}</td>
           <td style="font-size:11px">${ofiMed?ofiMed.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="font-size:11px">${ofiDueno?ofiDueno.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
           <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
