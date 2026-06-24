@@ -1241,11 +1241,12 @@ async function nivelAnalisisDeFicha(r, nivel){
 // Se construye recorriendo las fichas (igual fuente que "Fichas registradas"), leyendo sus
 // subindicadores en PARALELO. Así la matriz hereda la MISMA subdivisión por ficha,
 // emparejando cada indicador por su TEXTO (que sí se lee bien), sin depender de relaciones rotas.
-let _MAPA_IND = {};           // textoCompleto.trim() → {fichaId, fichaRuta, nivel, orden}
+let _MAPA_IND = {};           // textoCompleto.trim() → {fichaId, fichaRuta, nivel, orden, fichaOrden}
 let _MAPA_IND_LISTO = false;
 async function construirMapaIndicadores(){
   if(_MAPA_IND_LISTO) return _MAPA_IND;
   const tareas=[];
+  let _fOrden=0; // orden de aparición de las fichas (igual que "Fichas registradas")
   for(const nivel of ['N0','N1','N2']){
     let fichas=[];
     try{ fichas=await loadFichas(nivel); }catch(_){ fichas=[]; }
@@ -1254,6 +1255,7 @@ async function construirMapaIndicadores(){
       if(!subIds.length) continue;
       const fichaRuta=rutaFicha(f, nivel);
       const fichaId=f.id;
+      const fichaOrden=_fOrden++;
       tareas.push(
         Promise.all(subIds.map(sid=>
           API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
@@ -1263,7 +1265,7 @@ async function construirMapaIndicadores(){
           lecturas.forEach(({vals})=>{
             const t=leerTextoIndicador(vals);
             if(t && !esBasura(t) && t!=='Indicador'){
-              _MAPA_IND[String(t).trim()] = { fichaId, fichaRuta, nivel, orden:orden++ };
+              _MAPA_IND[String(t).trim()] = { fichaId, fichaRuta, nivel, orden:orden++, fichaOrden };
             }
           });
         })
@@ -2232,7 +2234,9 @@ async function renderMatriz(){
       // Subagrupar por FICHA real dentro de la oficina
       const porFicha={};
       items.forEach(r=>{ const k=fichaKeyDe(r); (porFicha[k]=porFicha[k]||[]).push(r); });
-      const fichasOrd=Object.keys(porFicha);
+      // Ordenar los grupos de ficha igual que en "Fichas registradas" (por fichaOrden del mapa).
+      const ordenDeGrupo=k=>{ const arr=porFicha[k]; const info=arr&&arr.length?infoFicha(arr[0]):null; return info && info.fichaOrden!=null ? info.fichaOrden : 99999; };
+      const fichasOrd=Object.keys(porFicha).sort((a,b)=>ordenDeGrupo(a)-ordenDeGrupo(b));
       fichasOrd.forEach(fichaKey=>{
         const inds=porFicha[fichaKey];
         // Ordenar los indicadores con el MISMO orden que "Fichas registradas" (campo 'orden' del mapa).
