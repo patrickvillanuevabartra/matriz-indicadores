@@ -1953,6 +1953,15 @@ async function loadMatriz(forzar){
   if(!forzar && STATE.matriz && STATE.matriz.length) return STATE.matriz;
   const data = await API.records(CONFIG.ENTITIES.MATRIZ_IND);
   STATE.matriz = data.records||[];
+  // Precargar TODAS las programaciones de meta para saber, por indicador, cuántas metas hay programadas.
+  try{
+    const progData = await API.records(CONFIG.ENTITIES.PROG_METAS);
+    const progs = progData.records||[];
+    STATE.matriz.forEach(m=>{
+      const mias = progs.filter(p=>relMencionaMatriz(p, m.id, PM.rel_matriz.id));
+      m._progMetas = mias.length;
+    });
+  }catch(e){ STATE.matriz.forEach(m=>{ if(m._progMetas===undefined) m._progMetas=0; }); }
   // Precargar TODOS los seguimientos para calcular, por indicador, el último avance y nº de periodos
   try{
     const segData = await API.records(CONFIG.ENTITIES.SEG_METAS);
@@ -2020,7 +2029,11 @@ async function renderMatriz(){
         const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
         const avance = (r._avancePeriodos && r._avancePeriodos.length)
           ? barraAvancePeriodos(r._avancePeriodos)
-          : (r._periodos>0?`<span class="hint" style="font-size:11px">${r._periodos} periodo(s) sin avance</span>`:'<span class="hint" style="font-size:12px">Ver metas</span>');
+          : (r._periodos>0
+              ? `<span class="hint" style="font-size:11px">${r._periodos} periodo(s) sin avance</span>`
+              : (r._progMetas>0
+                  ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
+                  : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         return `<tr>
           <td>${nivelBadge}</td>
           <td style="max-width:240px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
@@ -2489,6 +2502,7 @@ async function guardarProgMeta(){
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     const ep=document.getElementById('pm_periodo'); if(ep) delete ep.dataset.touched;
     await cargarProgMetas();
+    STATE.matriz=[]; // forzar recálculo del contador de metas en la matriz al volver
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
 }
 window.guardarProgMeta=guardarProgMeta;
@@ -2690,7 +2704,7 @@ async function guardarSegMeta(){
 }
 window.guardarSegMeta=guardarSegMeta;
 
-function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; }
+function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; if(id==='modalMetas'){ try{ renderMatriz(); }catch(_){} } }
 window.cerrarModal=cerrarModal;
 
 /* ============================================================
