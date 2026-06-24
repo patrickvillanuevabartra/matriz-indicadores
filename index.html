@@ -113,6 +113,14 @@
   th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mist);font-weight:600;padding:10px 12px;border-bottom:2px solid var(--line)}
   td{padding:11px 12px;border-bottom:1px solid var(--line);color:var(--slate);vertical-align:top}
   tr:hover td{background:var(--paper)}
+  /* Celda recortada a 2 líneas con elipsis (compacta la matriz sin perder info: el resto se ve en tooltip o en 👁) */
+  .clip2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
+  /* Tabla de matriz más compacta y de ancho controlado */
+  #tablaMatrizTbl{table-layout:fixed}
+  #tablaMatrizTbl td{padding:8px 9px;font-size:12px;word-break:break-word}
+  #tablaMatrizTbl th{padding:8px 9px}
+  #tablaMatrizTbl .icon-btn{width:28px;height:26px;font-size:13px;border-radius:7px}
+  #tablaMatrizTbl .btn-sm{padding:5px 9px;font-size:12px}
   .badge-n{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;color:#fff;padding:2px 8px;border-radius:5px}
   .badge-n.n0{background:var(--n0)} .badge-n.n1{background:var(--n1)} .badge-n.n2{background:var(--n2)}
   .icon-btn{background:#fff;border:1px solid var(--line);border-radius:8px;width:34px;height:30px;cursor:pointer;font-size:14px;line-height:1;transition:.15s}
@@ -374,19 +382,19 @@
       <div id="filtrosListaMat"></div>
     </div>
 
-    <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
+    <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table id="tablaMatrizTbl">
       <thead><tr>
-        <th style="width:70px">Nivel</th>
-        <th>Indicador</th>
-        <th>Propósito</th>
-        <th>Proceso</th>
-        <th>Fórmula</th>
-        <th>Oficina medición</th>
-        <th>Oficina dueña</th>
-        <th>Frec. medición</th>
-        <th>Frec. cálculo</th>
-        <th style="width:120px">Avance</th>
-        <th style="text-align:right">Acciones</th>
+        <th style="width:46px">Nivel</th>
+        <th style="width:150px">Indicador</th>
+        <th style="width:130px">Propósito</th>
+        <th style="width:130px">Proceso</th>
+        <th style="width:130px">Fórmula</th>
+        <th style="width:95px">Oficina medición</th>
+        <th style="width:95px">Oficina dueña</th>
+        <th style="width:95px">Frec. medición</th>
+        <th style="width:70px">Frec. cálculo</th>
+        <th style="width:110px">Avance</th>
+        <th style="text-align:right;width:140px">Acciones</th>
       </tr></thead>
       <tbody id="tablaMatriz"><tr><td colspan="11" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
@@ -2099,22 +2107,24 @@ async function renderMatriz(){
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         return `<tr>
           <td>${nivelBadge}</td>
-          <td style="max-width:240px"><strong style="font-size:13px">${(indSolo||'').replace(/</g,'&lt;')}</strong></td>
-          <td style="max-width:180px;font-size:12px;color:var(--slate)">${proposito?proposito.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
-          <td style="max-width:180px;font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?(rutaFull.length>45?rutaFull.slice(0,45)+'…':rutaFull).replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
-          <td style="max-width:160px;font-size:12px" title="${(formula||'').replace(/"/g,'&quot;')}">${(formula||'').slice(0,50).replace(/</g,'&lt;')||'<span class=hint>—</span>'}${formula&&formula.length>50?'…':''}</td>
-          <td style="font-size:11px">${ofiMed?ofiMed.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
-          <td style="font-size:11px">${ofiDueno?ofiDueno.replace(/</g,'&lt;'):'<span class=hint>—</span>'}</td>
-          <td style="font-size:12px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:11px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
-          <td style="font-size:12px">${frecCalc||'<span class=hint>—</span>'}</td>
-          <td style="min-width:130px">${avance}</td>
+          <td title="${(indSolo||'').replace(/"/g,'&quot;')}"><strong style="font-size:12px"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></strong></td>
+          <td style="font-size:11px;color:var(--slate)" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
+          <td style="font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?`<div class="clip2">${rutaFull.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
+          <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
+          <td style="font-size:11px" title="${(ofiMed||'').replace(/"/g,'&quot;')}">${ofiMed?`<div class="clip2">${ofiMed.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
+          <td style="font-size:11px" title="${(ofiDueno||'').replace(/"/g,'&quot;')}">${ofiDueno?`<div class="clip2">${ofiDueno.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
+          <td style="font-size:11px">${frec||'<span class=hint>—</span>'}${resp?'<br><span style="font-size:10px;color:var(--mist)">'+resp.replace(/</g,'&lt;')+'</span>':''}</td>
+          <td style="font-size:11px">${frecCalc||'<span class=hint>—</span>'}</td>
+          <td>${avance}</td>
           <td style="text-align:right;white-space:nowrap">
+            <div style="display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleMatriz('${r.id}')">👁</button>
             <button class="icon-btn" title="Notificar por WhatsApp" onclick="notificarWhatsApp('${r.id}')">📱</button>
             <button class="icon-btn" title="Notificar por correo" onclick="notificarCorreo('${r.id}')">✉️</button>
             ${puedeEditar()?`<button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>`:''}
+            </div>
           </td>
         </tr>`;
       }).join('');
