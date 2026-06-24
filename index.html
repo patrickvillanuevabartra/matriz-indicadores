@@ -344,8 +344,8 @@
     </div>
 
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
-      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th>Objetivo</th><th>Indicadores</th><th style="text-align:right">Acciones</th></tr></thead>
-      <tbody id="tablaListado"><tr><td colspan="5" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th>Objetivo</th><th style="width:60px;text-align:center">Indic.</th><th>Descripción del indicador</th><th style="text-align:right">Acciones</th></tr></thead>
+      <tbody id="tablaListado"><tr><td colspan="6" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 
@@ -1594,7 +1594,7 @@ async function renderListado(){
       if(typeof pasaFiltrosList==='function' && !pasaFiltrosList(o)) return false;
       return true;
     });
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="5"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="6"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
     // Agrupar por dueño del proceso (texto). Sin dueño → "(Sin dueño asignado)".
     const duenoDe=({r,nivel})=>{
       const F=EDF(nivel);
@@ -1605,16 +1605,20 @@ async function renderListado(){
     filas.forEach(f=>{ const d=duenoDe(f); (grupos[d]=grupos[d]||[]).push(f); });
     const nombresOrdenados=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
     let html='';
+    const _paraDescripcion=[]; // {celdaId, r, nivel, nInd}
     nombresOrdenados.forEach(dueno=>{
       const items=grupos[dueno];
-      html+=`<tr style="background:var(--paper)"><td colspan="5" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
+      html+=`<tr style="background:var(--paper)"><td colspan="6" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
       html+=items.map(({r,nivel})=>{
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
+        const celdaId='desc_'+nivel+'_'+r.id;
+        _paraDescripcion.push({celdaId, r, nivel, nInd});
         return `<tr>
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
-          <td class="mono" style="max-width:220px;font-size:12px" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>55?ruta.slice(0,55)+'…':ruta}</td>
-          <td style="max-width:260px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
+          <td class="mono" style="max-width:200px;font-size:12px" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>55?ruta.slice(0,55)+'…':ruta}</td>
+          <td style="max-width:230px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
           <td style="text-align:center"><strong>${nInd}</strong></td>
+          <td id="${celdaId}" style="max-width:260px;font-size:12px;color:var(--slate)">${nInd>0?'<span class="hint">Cargando…</span>':'<span class="hint">—</span>'}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleFicha('${nivel}','${r.id}')">👁</button>
             ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
@@ -1625,7 +1629,44 @@ async function renderListado(){
     });
     tb.innerHTML=html;
     setConn(true);
-  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="5"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+    cargarDescripcionesIndicadores(_paraDescripcion);
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="6"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+}
+
+// Carga (en segundo plano) los textos de los indicadores de cada ficha y rellena su celda.
+// Se hace después de pintar la tabla para no bloquear el render; usa el cache para no repetir.
+const _DESC_CACHE = {}; // fichaKey → html ya calculado
+async function cargarDescripcionesIndicadores(lista){
+  for(const {celdaId, r, nivel, nInd} of lista){
+    if(nInd<=0) continue;
+    const celda=document.getElementById(celdaId);
+    if(!celda) continue; // la tabla pudo re-renderizarse
+    const key=nivel+'_'+r.id;
+    if(_DESC_CACHE[key]!==undefined){ celda.innerHTML=_DESC_CACHE[key]; continue; }
+    try{
+      const F=EDF(nivel);
+      const subIds=getSubIds(r, F);
+      const lecturas=await Promise.all(subIds.map(sid=>
+        API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
+          .then(d=>({sid, vals:d.record && d.record.values})).catch(()=>({sid, vals:null}))
+      ));
+      const textos=[];
+      lecturas.forEach(({vals})=>{
+        const txt=leerTextoIndicador(vals);
+        if(txt && !esBasura(txt) && txt!=='Indicador'){
+          const partes=String(txt).split(' — ');
+          textos.push(partes.length>1?partes.slice(1).join(' — ').trim():txt.trim());
+        }
+      });
+      let out;
+      if(!textos.length){ out='<span class="hint">—</span>'; }
+      else if(textos.length===1){ const t=textos[0]; out=`<span title="${t.replace(/"/g,'&quot;')}">${(t.length>120?t.slice(0,120)+'…':t).replace(/</g,'&lt;')}</span>`; }
+      else { out='<ul style="margin:0;padding-left:16px">'+textos.map(t=>`<li title="${t.replace(/"/g,'&quot;')}" style="margin-bottom:2px">${(t.length>90?t.slice(0,90)+'…':t).replace(/</g,'&lt;')}</li>`).join('')+'</ul>'; }
+      _DESC_CACHE[key]=out;
+      const celda2=document.getElementById(celdaId); // re-buscar por si cambió el DOM
+      if(celda2) celda2.innerHTML=out;
+    }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
+  }
 }
 
 /* ============================================================
@@ -2596,6 +2637,18 @@ const CONFIG_NOTIF_IND = {
   correo: 'c3dLu9B8joWO1tW5Lqemky'
 };
 
+// Lee un campo probando su field-id y varios nombres posibles, descartando el caso
+// en que QuintaDB devuelve el literal del nombre del campo en vez del valor.
+function _leerCampoMulti(r, fieldId, nombres){
+  if(!r) return '';
+  const v=r.values||{};
+  const todos=Array.isArray(nombres)?nombres:[nombres];
+  const esNombreCampo=x=>todos.some(n=>String(x).trim()===n);
+  for(const n of todos){ const x=v[n]; if(x && !esBasura(x) && !esNombreCampo(x)) return String(x).trim(); }
+  if(fieldId){ const x=v[fieldId]; if(x && !esBasura(x) && !esNombreCampo(x)) return String(x).trim(); }
+  return '';
+}
+
 // Mapa de marcadores {campo} → valor real del indicador de la matriz.
 function _datosNotifInd(r){
   if(!r) return {};
@@ -2611,8 +2664,8 @@ function _datosNotifInd(r){
     frec_calculo:leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo')||'',
     oficina:     leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'',
     responsable: leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición')||'',
-    celular:     leerCampo(r, MAT.resp_celular.id, 'Celular del responsable')||'',
-    correo:      leerCampo(r, MAT.resp_correo.id, 'Correo del responsable')||''
+    celular:     _leerCampoMulti(r, MAT.resp_celular.id, ['Celular responsable','Celular del responsable','Celular responsable proceso'])||'',
+    correo:      _leerCampoMulti(r, MAT.resp_correo.id, ['Correo responsable','Correo del responsable','Correo electrónico responsable proceso','Correo electrónico del responsable'])||''
   };
 }
 // Marcadores disponibles para la paleta del editor
@@ -2655,11 +2708,33 @@ function _telWaInd(cel){
   if(n.length===9) n='51'+n;
   return n;
 }
+// Igual que _datosNotifInd pero, si falta celular/correo, los completa EN VIVO
+// desde la tabla "Responsable de proceso" usando la oficina dueña o la de medición.
+async function _datosNotifIndConFallback(r){
+  const d=_datosNotifInd(r);
+  if(d.celular && d.correo) return d;
+  try{
+    const mapa=await cargarMapaRespProceso();
+    const ofiDueno=_leerCampoMulti(r, MAT.oficina_resp_ind.id, ['Oficina o área responsable del indicador','Oficina dueña']);
+    const claves=[ofiDueno, d.oficina].filter(Boolean).map(o=>String(o).replace(/\s+/g,' ').trim().toLowerCase());
+    for(const k of claves){
+      const info=mapa[k];
+      if(info){
+        if(!d.responsable && info.responsable) d.responsable=info.responsable;
+        if(!d.celular && info.celular) d.celular=info.celular;
+        if(!d.correo && info.correo) d.correo=info.correo;
+        if(d.celular && d.correo) break;
+      }
+    }
+  }catch(_){}
+  return d;
+}
+
 async function notificarWhatsApp(matId){
   const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
-  const d=_datosNotifInd(r);
+  const d=await _datosNotifIndConFallback(r);
   const tel=_telWaInd(d.celular);
-  if(!tel){ toast('Este indicador no tiene celular del responsable de medición.', true); return; }
+  if(!tel){ toast('Este indicador no tiene celular del responsable registrado.', true); return; }
   const win=window.open('about:blank','_blank'); // abrir ya, con el clic, para evitar bloqueo
   const p=await cargarPlantillas();
   const url='https://wa.me/'+tel+'?text='+encodeURIComponent(aplicarPlantilla(p.wa,d));
@@ -2667,8 +2742,8 @@ async function notificarWhatsApp(matId){
 }
 async function notificarCorreo(matId){
   const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
-  const d=_datosNotifInd(r);
-  if(!d.correo){ toast('Este indicador no tiene correo del responsable de medición.', true); return; }
+  const d=await _datosNotifIndConFallback(r);
+  if(!d.correo){ toast('Este indicador no tiene correo del responsable registrado.', true); return; }
   const win=window.open('about:blank','_blank');
   const p=await cargarPlantillas();
   const asunto=aplicarPlantilla(p.asunto,d);
@@ -2734,9 +2809,9 @@ function _detRow(etq, val){
   return `<div class="det-row"><div class="det-k">${etq}</div><div class="det-v">${String(val).replace(/</g,'&lt;')}</div></div>`;
 }
 // Detalle de un indicador de la matriz
-function verDetalleMatriz(matId){
+async function verDetalleMatriz(matId){
   const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
-  const d=_datosNotifInd(r);
+  const d=await _datosNotifIndConFallback(r);
   let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
   if(!nivel && d.proceso) nivel = nivelDesdeRuta(d.proceso);
   const filas=[
