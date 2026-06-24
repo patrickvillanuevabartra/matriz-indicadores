@@ -344,7 +344,7 @@
     </div>
 
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
-      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th style="width:120px">Nivel de análisis</th><th>Objetivo</th><th style="width:60px;text-align:center">Indic.</th><th>Descripción del indicador</th><th style="text-align:right">Acciones</th></tr></thead>
+      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th style="width:150px">Nivel de análisis</th><th>Objetivo</th><th style="width:60px;text-align:center">Indic.</th><th>Descripción del indicador</th><th style="text-align:right">Acciones</th></tr></thead>
       <tbody id="tablaListado"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
@@ -1225,15 +1225,16 @@ async function loadInventario(){
 
 // Calcula el "Nivel de análisis" (Proceso nivel 1/2/3 o Procedimiento) de una ficha,
 // derivando tipo/N0/N1/N2 desde su ruta de texto. Requiere el inventario cargado.
+// Devuelve { label, elementos:[...] } (los elementos son los procesos concretos de ese nivel).
 async function nivelAnalisisDeFicha(r, nivel){
   await loadInventario();
   const ruta = rutaFicha(r, nivel);
-  if(!ruta || ruta==='—') return '';
+  if(!ruta || ruta==='—') return { label:'', elementos:[] };
   const segs = String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
   const generico = /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
   const seg = i => (segs[i] && !generico.test(segs[i])) ? segs[i] : '';
   const det = detectarNivelAnalisis(nivel, seg(0), seg(1), seg(2), seg(3));
-  return det ? det.nivelLabel : '';
+  return det ? { label:det.nivelLabel, elementos:det.elementos||[] } : { label:'', elementos:[] };
 }
 function opcionesInv(inv, filtros, colSig){
   const set=new Set();
@@ -1652,7 +1653,7 @@ async function renderListado(){
 }
 
 // Carga (en segundo plano) el nivel de análisis de cada ficha y rellena su celda.
-const _NIVEL_ANALISIS_CACHE = {}; // key → label
+const _NIVEL_ANALISIS_CACHE = {}; // key → {label, elementos}
 async function cargarNivelesAnalisis(lista){
   for(const {celdaId, r, nivel} of lista){
     const celda=document.getElementById(celdaId);
@@ -1660,16 +1661,21 @@ async function cargarNivelesAnalisis(lista){
     const key=nivel+'_'+r.id;
     if(_NIVEL_ANALISIS_CACHE[key]!==undefined){ celda.innerHTML=_pintaNivelAnalisis(_NIVEL_ANALISIS_CACHE[key]); continue; }
     try{
-      const lbl=await nivelAnalisisDeFicha(r, nivel);
-      _NIVEL_ANALISIS_CACHE[key]=lbl;
+      const det=await nivelAnalisisDeFicha(r, nivel);
+      _NIVEL_ANALISIS_CACHE[key]=det;
       const c2=document.getElementById(celdaId);
-      if(c2) c2.innerHTML=_pintaNivelAnalisis(lbl);
+      if(c2) c2.innerHTML=_pintaNivelAnalisis(det);
     }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
   }
 }
-function _pintaNivelAnalisis(lbl){
-  if(!lbl) return '<span class="hint">—</span>';
-  return `<span style="display:inline-block;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:14px;padding:2px 9px">${lbl.replace(/</g,'&lt;')}</span>`;
+function _pintaNivelAnalisis(det){
+  const label=det&&det.label?det.label:'';
+  const elementos=(det&&det.elementos)||[];
+  if(!label) return '<span class="hint">—</span>';
+  const pill=`<span style="display:inline-block;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:14px;padding:2px 9px">${label.replace(/</g,'&lt;')}</span>`;
+  if(!elementos.length) return pill;
+  const desc=elementos.map(e=>`<div title="${String(e).replace(/"/g,'&quot;')}" style="font-size:11px;color:var(--slate);line-height:1.35">${(String(e).length>40?String(e).slice(0,40)+'…':String(e)).replace(/</g,'&lt;')}</div>`).join('');
+  return pill+'<div style="margin-top:4px">'+desc+'</div>';
 }
 
 // Carga (en segundo plano) los textos de los indicadores de cada ficha y rellena su celda.
