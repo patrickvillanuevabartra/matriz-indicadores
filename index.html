@@ -344,8 +344,8 @@
     </div>
 
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
-      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th>Objetivo</th><th style="width:60px;text-align:center">Indic.</th><th>Descripción del indicador</th><th style="text-align:right">Acciones</th></tr></thead>
-      <tbody id="tablaListado"><tr><td colspan="6" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th style="width:120px">Nivel de análisis</th><th>Objetivo</th><th style="width:60px;text-align:center">Indic.</th><th>Descripción del indicador</th><th style="text-align:right">Acciones</th></tr></thead>
+      <tbody id="tablaListado"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 
@@ -1222,6 +1222,19 @@ async function loadInventario(){
   STATE.inventario = data.records||[];
   return STATE.inventario;
 }
+
+// Calcula el "Nivel de análisis" (Proceso nivel 1/2/3 o Procedimiento) de una ficha,
+// derivando tipo/N0/N1/N2 desde su ruta de texto. Requiere el inventario cargado.
+async function nivelAnalisisDeFicha(r, nivel){
+  await loadInventario();
+  const ruta = rutaFicha(r, nivel);
+  if(!ruta || ruta==='—') return '';
+  const segs = String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+  const generico = /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
+  const seg = i => (segs[i] && !generico.test(segs[i])) ? segs[i] : '';
+  const det = detectarNivelAnalisis(nivel, seg(0), seg(1), seg(2), seg(3));
+  return det ? det.nivelLabel : '';
+}
 function opcionesInv(inv, filtros, colSig){
   const set=new Set();
   inv.forEach(r=>{ const v=r.values||{}; const ok=Object.entries(filtros).every(([c,val])=>!val||v[c]===val); if(ok&&v[colSig]) set.add(v[colSig]); });
@@ -1594,7 +1607,7 @@ async function renderListado(){
       if(typeof pasaFiltrosList==='function' && !pasaFiltrosList(o)) return false;
       return true;
     });
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="6"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
     // Agrupar por dueño del proceso (texto). Sin dueño → "(Sin dueño asignado)".
     const duenoDe=({r,nivel})=>{
       const F=EDF(nivel);
@@ -1606,16 +1619,20 @@ async function renderListado(){
     const nombresOrdenados=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
     let html='';
     const _paraDescripcion=[]; // {celdaId, r, nivel, nInd}
+    const _paraNivelAnalisis=[]; // {celdaId, r, nivel}
     nombresOrdenados.forEach(dueno=>{
       const items=grupos[dueno];
-      html+=`<tr style="background:var(--paper)"><td colspan="6" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
+      html+=`<tr style="background:var(--paper)"><td colspan="7" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
       html+=items.map(({r,nivel})=>{
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
         const celdaId='desc_'+nivel+'_'+r.id;
+        const naId='na_'+nivel+'_'+r.id;
         _paraDescripcion.push({celdaId, r, nivel, nInd});
+        _paraNivelAnalisis.push({celdaId:naId, r, nivel});
         return `<tr>
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
           <td class="mono" style="max-width:200px;font-size:12px" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>55?ruta.slice(0,55)+'…':ruta}</td>
+          <td id="${naId}" style="font-size:12px"><span class="hint">…</span></td>
           <td style="max-width:230px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
           <td style="text-align:center"><strong>${nInd}</strong></td>
           <td id="${celdaId}" style="max-width:260px;font-size:12px;color:var(--slate)">${nInd>0?'<span class="hint">Cargando…</span>':'<span class="hint">—</span>'}</td>
@@ -1630,7 +1647,29 @@ async function renderListado(){
     tb.innerHTML=html;
     setConn(true);
     cargarDescripcionesIndicadores(_paraDescripcion);
-  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="6"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+    cargarNivelesAnalisis(_paraNivelAnalisis);
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="7"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+}
+
+// Carga (en segundo plano) el nivel de análisis de cada ficha y rellena su celda.
+const _NIVEL_ANALISIS_CACHE = {}; // key → label
+async function cargarNivelesAnalisis(lista){
+  for(const {celdaId, r, nivel} of lista){
+    const celda=document.getElementById(celdaId);
+    if(!celda) continue;
+    const key=nivel+'_'+r.id;
+    if(_NIVEL_ANALISIS_CACHE[key]!==undefined){ celda.innerHTML=_pintaNivelAnalisis(_NIVEL_ANALISIS_CACHE[key]); continue; }
+    try{
+      const lbl=await nivelAnalisisDeFicha(r, nivel);
+      _NIVEL_ANALISIS_CACHE[key]=lbl;
+      const c2=document.getElementById(celdaId);
+      if(c2) c2.innerHTML=_pintaNivelAnalisis(lbl);
+    }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
+  }
+}
+function _pintaNivelAnalisis(lbl){
+  if(!lbl) return '<span class="hint">—</span>';
+  return `<span style="display:inline-block;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:14px;padding:2px 9px">${lbl.replace(/</g,'&lt;')}</span>`;
 }
 
 // Carga (en segundo plano) los textos de los indicadores de cada ficha y rellena su celda.
