@@ -1237,36 +1237,57 @@ async function nivelAnalisisDeFicha(r, nivel){
   return det ? { label:det.nivelLabel, elementos:det.elementos||[] } : { label:'', elementos:[] };
 }
 
-// Construye, recorriendo TODAS las fichas (N0/N1/N2), tres estructuras:
-//  _ORDEN_IND_CACHE[rutaFicha]      = [textoCompleto, ...]  (orden del subformulario)
-//  _FICHA_DE_TEXTO[textoCompleto]   = rutaFicha real         (para agrupar la matriz como las fichas)
-//  _FICHAS_ORDEN                    = [rutaFicha, ...]       (orden de aparición de las fichas)
-const _ORDEN_IND_CACHE = {}; // rutaFichaNormalizada → [textoCompleto, ...]
-let _FICHA_DE_TEXTO = {};    // textoCompleto.trim() → rutaFicha (display)
-let _FICHAS_ORDEN = [];      // rutaFicha (display) en orden de aparición
-let _MAPA_FICHAS_LISTO = false;
-function _normRuta(s){ return String(s||'').replace(/\s*[›>]\s*/g,' › ').replace(/\s+/g,' ').trim().toLowerCase(); }
-async function ordenIndicadoresPorFicha(){
-  if(_MAPA_FICHAS_LISTO) return _ORDEN_IND_CACHE;
-  for(const nivel of ['N0','N1','N2']){
-    let fichas=[];
-    try{ fichas=await loadFichas(nivel); }catch(_){ fichas=[]; }
-    for(const r of fichas){
-      const F=EDF(nivel);
-      const subIds=getSubIds(r, F);
-      if(!subIds.length) continue;
-      const rutaDisplay=rutaFicha(r,nivel);
-      const lecturas=await Promise.all(subIds.map(sid=>
+// Extrae el id de la ficha (registro) al que apunta la relación indicador_n0/n1/n2 de un
+// indicador de la matriz. Devuelve el id o '' — sin llamadas a la API.
+function _idFichaDeIndicador(r){
+  const v=r.values||{};
+  for(const f of [MAT.indicador_n2, MAT.indicador_n1, MAT.indicador_n0]){
+    if(!f) continue;
+    const val=v[f.id];
+    if(!val) continue;
+    // El valor puede ser un id (22 chars), un objeto {id}, o un array de ids/objetos.
+    const cand=Array.isArray(val)?val[0]:val;
+    if(cand && typeof cand==='object' && cand.id) return cand.id;
+    const s=String(cand);
+    const m=s.match(/[a-zA-Z0-9_\-]{22}/);
+    if(m) return m[0];
+  }
+  return '';
+}
+
+// Construye el mapa de orden de indicadores SOLO para las fichas presentes en la matriz,
+// leyendo sus subformularios TODOS EN PARALELO (rápido). Cachea por id de ficha.
+const _ORDEN_POR_FICHA_ID = {}; // fichaId → [textoCompleto, ...]  (orden del subformulario)
+const _ORDEN_FICHAS_CARGADAS = new Set();
+async function cargarOrdenFichasDeMatriz(filas){
+  // Reunir los ids de ficha necesarios (que aún no estén cacheados)
+  const necesarios = new Set();
+  filas.forEach(r=>{ const id=_idFichaDeIndicador(r); if(id && !_ORDEN_FICHAS_CARGADAS.has(id)) necesarios.add(id); });
+  if(!necesarios.size) return _ORDEN_POR_FICHA_ID;
+  // Localizar cada ficha en STATE.fichas (ya cargadas) para obtener sus subIds
+  const tareas=[];
+  necesarios.forEach(fid=>{
+    let ficha=null, niv=null;
+    for(const n of ['N0','N1','N2']){ const f=(STATE.fichas[n]||[]).find(x=>x.id===fid); if(f){ ficha=f; niv=n; break; } }
+    if(!ficha){ _ORDEN_FICHAS_CARGADAS.add(fid); return; }
+    const subIds=getSubIds(ficha, EDF(niv));
+    if(!subIds.length){ _ORDEN_FICHAS_CARGADAS.add(fid); return; }
+    // Una tarea por ficha: lee TODOS sus subindicadores en paralelo
+    tareas.push(
+      Promise.all(subIds.map(sid=>
         API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
           .then(d=>({vals:d.record && d.record.values})).catch(()=>({vals:null}))
-      ));
-      const textos=[];
-      lecturas.forEach(({vals})=>{ const t=leerTextoIndicador(vals); if(t && !esBasura(t) && t!=='Indicador'){ const tt=String(t).trim(); textos.push(tt); _FICHA_DE_TEXTO[tt]=rutaDisplay; } });
-      if(textos.length){ _ORDEN_IND_CACHE[_normRuta(rutaDisplay)]=textos; _FICHAS_ORDEN.push(rutaDisplay); }
-    }
-  }
-  _MAPA_FICHAS_LISTO = true;
-  return _ORDEN_IND_CACHE;
+      )).then(lecturas=>{
+        const textos=[];
+        lecturas.forEach(({vals})=>{ const t=leerTextoIndicador(vals); if(t && !esBasura(t) && t!=='Indicador') textos.push(String(t).trim()); });
+        _ORDEN_POR_FICHA_ID[fid]=textos;
+        _ORDEN_FICHAS_CARGADAS.add(fid);
+      })
+    );
+  });
+  // TODAS las fichas en paralelo, no en serie
+  await Promise.all(tareas);
+  return _ORDEN_POR_FICHA_ID;
 }
 function opcionesInv(inv, filtros, colSig){
   const set=new Set();
@@ -2196,21 +2217,27 @@ async function renderMatriz(){
       return true;
     });
     if(!filas.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
-    // Orden de referencia: el mismo que "Fichas registradas" (orden del subformulario de cada ficha).
-    let _ordenFicha={};
-    try{ _ordenFicha = await ordenIndicadoresPorFicha(); }catch(_){ _ordenFicha={}; }
+    // Asegurar fichas cargadas (para resolver a qué ficha pertenece cada indicador) y
+    // cargar el orden de subformularios SOLO de las fichas presentes, en paralelo.
+    try{ await Promise.all(['N0','N1','N2'].map(n=>loadFichas(n))); }catch(_){}
+    try{ await cargarOrdenFichasDeMatriz(filas); }catch(_){}
     // Agrupar por OFICINA de medición (ancla principal, igual que antes y que "Fichas registradas").
     const ofiDe=r=>leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición') || '(Sin oficina de medición)';
     const grupos={};
     filas.forEach(r=>{ const o=ofiDe(r); (grupos[o]=grupos[o]||[]).push(r); });
     const nombresOrd=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
     let html='';
-    const fichaDe=r=>{
-      // Agrupar por la FICHA REAL: la que contiene el texto de este indicador en su subformulario.
-      const t=String(leerCampo(r, MAT.indicador_txt.id, 'Indicador')||'').trim();
-      if(_FICHA_DE_TEXTO[t]) return _FICHA_DE_TEXTO[t];
-      // Respaldo (si no se encontró la ficha): ruta sin el último segmento.
+    // Clave de grupo = id de la ficha real (rápido, vía relación). Respaldo: ruta recortada.
+    const fichaKeyDe=r=>{
+      const id=_idFichaDeIndicador(r);
+      if(id) return id;
       const ruta=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)')||'(Sin proceso asignado)';
+      const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+      return segs.length>1 ? segs.slice(0,-1).join(' › ') : ruta;
+    };
+    // Ruta legible de la ficha (para la subcabecera): la ruta del indicador sin el último segmento.
+    const fichaRutaDisplay=r=>{
+      const ruta=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)')||'';
       const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
       return segs.length>1 ? segs.slice(0,-1).join(' › ') : ruta;
     };
@@ -2218,17 +2245,14 @@ async function renderMatriz(){
       const items=grupos[ofi];
       // Cabecera nivel 1: OFICINA (ancla principal)
       html+=`<tr style="background:var(--brand);"><td colspan="11" style="padding:11px 14px;font-weight:700;color:#fff;font-size:13px">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:rgba(255,255,255,.8);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
-      // Subagrupar por FICHA/proceso dentro de la oficina
+      // Subagrupar por FICHA real (id) dentro de la oficina
       const porFicha={};
-      items.forEach(r=>{ const f=fichaDe(r); (porFicha[f]=porFicha[f]||[]).push(r); });
-      // Orden de las fichas: el mismo de "Fichas registradas" (_FICHAS_ORDEN); el resto al final.
-      const idxFicha=ruta=>{ const i=_FICHAS_ORDEN.indexOf(ruta); return i<0?9999:i; };
-      const fichasOrd=Object.keys(porFicha).sort((a,b)=>{ const da=idxFicha(a),db=idxFicha(b); if(da!==db) return da-db; if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
-      fichasOrd.forEach(fichaRuta=>{
-        const inds=porFicha[fichaRuta];
-        // Ordenar los indicadores con el MISMO orden que "Fichas registradas".
-        // El orden de referencia es la lista de textos del subformulario de la ficha.
-        const refTextos = _ordenFicha[_normRuta(fichaRuta)] || [];
+      items.forEach(r=>{ const k=fichaKeyDe(r); (porFicha[k]=porFicha[k]||[]).push(r); });
+      const fichasOrd=Object.keys(porFicha);
+      fichasOrd.forEach(fichaKey=>{
+        const inds=porFicha[fichaKey];
+        // Ordenar los indicadores con el MISMO orden que "Fichas registradas" (orden del subformulario).
+        const refTextos = _ORDEN_POR_FICHA_ID[fichaKey] || [];
         if(refTextos.length){
           const posDe=r=>{
             const t=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
@@ -2240,9 +2264,10 @@ async function renderMatriz(){
         // Nivel de análisis de la ficha (derivado de la ruta del primer indicador)
         const nivelAna = nivelDesdeRuta(leerCampo(inds[0], MAT.proceso_ruta.id, 'Proceso (ruta)'))||'';
         const nivelPill = nivelAna?`<span class="badge-n ${nivelAna.toLowerCase()}" style="margin-right:8px">${nivelAna}</span>`:'';
+        const fichaRutaTxt = fichaRutaDisplay(inds[0]) || '(Sin proceso asignado)';
         // Subcabecera nivel 2: FICHA/proceso (ruta + nivel de análisis) — una sola vez por ficha
         html+=`<tr style="background:var(--paper)"><td colspan="11" style="padding:7px 14px 7px 30px;border-top:1px solid var(--brand-2)">
-          ${nivelPill}<span class="mono" style="font-size:12px;color:var(--slate)">${fichaRuta.replace(/</g,'&lt;')}</span>
+          ${nivelPill}<span class="mono" style="font-size:12px;color:var(--slate)">${fichaRutaTxt.replace(/</g,'&lt;')}</span>
           <span style="color:var(--mist);font-size:11px;margin-left:6px">· ${inds.length} indicador(es)</span>
         </td></tr>`;
         html+=inds.map(r=>{
