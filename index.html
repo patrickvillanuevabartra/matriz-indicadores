@@ -344,8 +344,8 @@
     </div>
 
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
-      <thead><tr><th style="width:70px">Nivel</th><th>Proceso (ruta)</th><th style="width:150px">Nivel de análisis</th><th>Objetivo</th><th style="width:60px;text-align:center">Indic.</th><th>Descripción del indicador</th><th style="text-align:right">Acciones</th></tr></thead>
-      <tbody id="tablaListado"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <thead><tr><th style="width:60px">Nivel</th><th style="width:200px">Proceso (ruta)</th><th style="width:200px">Objetivo</th><th>Indicadores por nivel de análisis</th><th style="text-align:right;width:120px">Acciones</th></tr></thead>
+      <tbody id="tablaListado"><tr><td colspan="5" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 
@@ -1619,25 +1619,20 @@ async function renderListado(){
     filas.forEach(f=>{ const d=duenoDe(f); (grupos[d]=grupos[d]||[]).push(f); });
     const nombresOrdenados=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
     let html='';
-    const _paraDescripcion=[]; // {celdaId, r, nivel, nInd}
-    const _paraNivelAnalisis=[]; // {celdaId, r, nivel}
+    const _paraDesagregado=[]; // {celdaId, r, nivel, nInd}
     nombresOrdenados.forEach(dueno=>{
       const items=grupos[dueno];
-      html+=`<tr style="background:var(--paper)"><td colspan="7" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
+      html+=`<tr style="background:var(--paper)"><td colspan="5" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
       html+=items.map(({r,nivel})=>{
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
-        const celdaId='desc_'+nivel+'_'+r.id;
-        const naId='na_'+nivel+'_'+r.id;
-        _paraDescripcion.push({celdaId, r, nivel, nInd});
-        _paraNivelAnalisis.push({celdaId:naId, r, nivel});
+        const desagId='desag_'+nivel+'_'+r.id;
+        _paraDesagregado.push({celdaId:desagId, r, nivel, nInd});
         return `<tr>
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
-          <td class="mono" style="max-width:200px;font-size:12px" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>55?ruta.slice(0,55)+'…':ruta}</td>
-          <td id="${naId}" style="font-size:12px"><span class="hint">…</span></td>
-          <td style="max-width:230px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
-          <td style="text-align:center"><strong>${nInd}</strong></td>
-          <td id="${celdaId}" style="max-width:260px;font-size:12px;color:var(--slate)">${nInd>0?'<span class="hint">Cargando…</span>':'<span class="hint">—</span>'}</td>
-          <td style="text-align:right;white-space:nowrap">
+          <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>60?ruta.slice(0,60)+'…':ruta}</td>
+          <td style="max-width:200px;vertical-align:top;font-size:12px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>80?obj.slice(0,80)+'…':obj):'<span class="hint">—</span>'}</td>
+          <td id="${desagId}" style="vertical-align:top">${nInd>0?'<span class="hint">Cargando…</span>':'<span class="hint">Sin indicadores</span>'}</td>
+          <td style="text-align:right;white-space:nowrap;vertical-align:top">
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleFicha('${nivel}','${r.id}')">👁</button>
             ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>`:''}
@@ -1647,71 +1642,77 @@ async function renderListado(){
     });
     tb.innerHTML=html;
     setConn(true);
-    cargarDescripcionesIndicadores(_paraDescripcion);
-    cargarNivelesAnalisis(_paraNivelAnalisis);
-  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="7"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+    cargarDesagregadoIndicadores(_paraDesagregado);
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="5"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 
-// Carga (en segundo plano) el nivel de análisis de cada ficha y rellena su celda.
-const _NIVEL_ANALISIS_CACHE = {}; // key → {label, elementos}
-async function cargarNivelesAnalisis(lista){
-  for(const {celdaId, r, nivel} of lista){
-    const celda=document.getElementById(celdaId);
-    if(!celda) continue;
-    const key=nivel+'_'+r.id;
-    if(_NIVEL_ANALISIS_CACHE[key]!==undefined){ celda.innerHTML=_pintaNivelAnalisis(_NIVEL_ANALISIS_CACHE[key]); continue; }
-    try{
-      const det=await nivelAnalisisDeFicha(r, nivel);
-      _NIVEL_ANALISIS_CACHE[key]=det;
-      const c2=document.getElementById(celdaId);
-      if(c2) c2.innerHTML=_pintaNivelAnalisis(det);
-    }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
-  }
-}
-function _pintaNivelAnalisis(det){
-  const label=det&&det.label?det.label:'';
-  const elementos=(det&&det.elementos)||[];
-  if(!label) return '<span class="hint">—</span>';
-  const pill=`<span style="display:inline-block;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:14px;padding:2px 9px">${label.replace(/</g,'&lt;')}</span>`;
-  if(!elementos.length) return pill;
-  const desc=elementos.map(e=>`<div title="${String(e).replace(/"/g,'&quot;')}" style="font-size:11px;color:var(--slate);line-height:1.35">${(String(e).length>40?String(e).slice(0,40)+'…':String(e)).replace(/</g,'&lt;')}</div>`).join('');
-  return pill+'<div style="margin-top:4px">'+desc+'</div>';
-}
-
-// Carga (en segundo plano) los textos de los indicadores de cada ficha y rellena su celda.
-// Se hace después de pintar la tabla para no bloquear el render; usa el cache para no repetir.
-const _DESC_CACHE = {}; // fichaKey → html ya calculado
-async function cargarDescripcionesIndicadores(lista){
+// Carga (en segundo plano), por ficha, el desagregado de indicadores correlacionado
+// con el nivel de análisis. Cada subindicador se guarda como "Elemento — Indicador";
+// se agrupa por elemento y se arma una sub-tabla: Nivel de análisis › Elemento → Indicador.
+const _DESAG_CACHE = {}; // key → html ya calculado
+async function cargarDesagregadoIndicadores(lista){
   for(const {celdaId, r, nivel, nInd} of lista){
     if(nInd<=0) continue;
     const celda=document.getElementById(celdaId);
-    if(!celda) continue; // la tabla pudo re-renderizarse
+    if(!celda) continue;
     const key=nivel+'_'+r.id;
-    if(_DESC_CACHE[key]!==undefined){ celda.innerHTML=_DESC_CACHE[key]; continue; }
+    if(_DESAG_CACHE[key]!==undefined){ celda.innerHTML=_DESAG_CACHE[key]; continue; }
     try{
+      // 1) Nivel de análisis (label) de la ficha
+      const det = await nivelAnalisisDeFicha(r, nivel);
+      const naLabel = det && det.label ? det.label : '';
+      // 2) Leer los subindicadores → [{elemento, indicador}]
       const F=EDF(nivel);
       const subIds=getSubIds(r, F);
       const lecturas=await Promise.all(subIds.map(sid=>
         API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
-          .then(d=>({sid, vals:d.record && d.record.values})).catch(()=>({sid, vals:null}))
+          .then(d=>({vals:d.record && d.record.values})).catch(()=>({vals:null}))
       ));
-      const textos=[];
+      const items=[];
       lecturas.forEach(({vals})=>{
         const txt=leerTextoIndicador(vals);
         if(txt && !esBasura(txt) && txt!=='Indicador'){
           const partes=String(txt).split(' — ');
-          textos.push(partes.length>1?partes.slice(1).join(' — ').trim():txt.trim());
+          const elemento = partes.length>1 ? partes[0].trim() : '';
+          const indicador = partes.length>1 ? partes.slice(1).join(' — ').trim() : txt.trim();
+          items.push({elemento, indicador});
         }
       });
-      let out;
-      if(!textos.length){ out='<span class="hint">—</span>'; }
-      else if(textos.length===1){ const t=textos[0]; out=`<span title="${t.replace(/"/g,'&quot;')}">${(t.length>120?t.slice(0,120)+'…':t).replace(/</g,'&lt;')}</span>`; }
-      else { out='<ul style="margin:0;padding-left:16px">'+textos.map(t=>`<li title="${t.replace(/"/g,'&quot;')}" style="margin-bottom:2px">${(t.length>90?t.slice(0,90)+'…':t).replace(/</g,'&lt;')}</li>`).join('')+'</ul>'; }
-      _DESC_CACHE[key]=out;
-      const celda2=document.getElementById(celdaId); // re-buscar por si cambió el DOM
-      if(celda2) celda2.innerHTML=out;
+      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items);
+      const c2=document.getElementById(celdaId);
+      if(c2) c2.innerHTML=_DESAG_CACHE[key];
     }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
   }
+}
+
+// Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
+// sub-tabla con una fila por indicador (Elemento del nivel | Indicador).
+function _pintaDesagregado(naLabel, items){
+  if(!items.length) return '<span class="hint">Sin indicadores</span>';
+  const esc=s=>String(s||'').replace(/</g,'&lt;');
+  const attr=s=>String(s||'').replace(/"/g,'&quot;');
+  const naPill = naLabel
+    ? `<span style="display:inline-block;font-size:10px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:12px;padding:1px 8px">${esc(naLabel)}</span>`
+    : '';
+  const head = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
+      ${naPill}
+      <span style="font-size:11px;color:var(--mist);font-weight:600">${items.length} indicador(es)</span>
+    </div>`;
+  const filas = items.map((it,i)=>`
+    <tr>
+      <td style="padding:3px 8px 3px 0;font-size:11px;color:var(--mist);text-align:right;white-space:nowrap;vertical-align:top">${i+1}.</td>
+      <td style="padding:3px 8px;font-size:11px;font-weight:600;color:var(--brand);vertical-align:top;border-right:2px solid var(--line)" title="${attr(it.elemento)}">${it.elemento?esc(it.elemento.length>34?it.elemento.slice(0,34)+'…':it.elemento):'<span class=hint>(sin elemento)</span>'}</td>
+      <td style="padding:3px 8px;font-size:12px;color:var(--slate);vertical-align:top" title="${attr(it.indicador)}">${esc(it.indicador.length>70?it.indicador.slice(0,70)+'…':it.indicador)}</td>
+    </tr>`).join('');
+  const tabla = `<table style="border-collapse:collapse;width:100%">
+      <thead><tr>
+        <th style="width:18px"></th>
+        <th style="padding:0 8px 3px 0;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--mist);text-align:left;font-weight:600">Elemento (nivel de análisis)</th>
+        <th style="padding:0 8px 3px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--mist);text-align:left;font-weight:600">Indicador</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table>`;
+  return head + tabla;
 }
 
 /* ============================================================
