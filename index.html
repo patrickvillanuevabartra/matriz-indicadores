@@ -40,6 +40,12 @@
   .view{display:none;animation:fade .25s ease}
   .view.active{display:block}
   @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @keyframes destacarFila{0%{background:#fff3bf}40%{background:#fff3bf}100%{background:transparent}}
+  tr.fila-destacada td{animation:destacarFila 2.6s ease}
+  .grupo-head{cursor:pointer;user-select:none}
+  .grupo-head:hover{filter:brightness(.97)}
+  .grupo-caret{display:inline-block;width:14px;transition:transform .15s;font-size:11px}
+  tr.grupo-colapsado .grupo-caret{transform:rotate(-90deg)}
 
   .conn{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--mist);margin-bottom:20px;padding:9px 14px;background:var(--card);border:1px solid var(--line);border-radius:10px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--mist);flex:none}
@@ -385,9 +391,9 @@
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table id="tablaMatrizTbl">
       <thead><tr>
         <th style="width:46px">Nivel</th>
+        <th style="width:140px">Elemento (nivel análisis)</th>
         <th style="width:150px">Indicador</th>
-        <th style="width:130px">Propósito</th>
-        <th style="width:130px">Proceso</th>
+        <th style="width:120px">Propósito</th>
         <th style="width:130px">Fórmula</th>
         <th style="width:95px">Oficina medición</th>
         <th style="width:95px">Oficina dueña</th>
@@ -1643,6 +1649,16 @@ async function renderListado(){
     tb.innerHTML=html;
     setConn(true);
     cargarDesagregadoIndicadores(_paraDesagregado);
+    // Si venimos de un salto desde la matriz, resaltar brevemente las filas de esa ficha
+    if(_RESALTAR_FILTRO){
+      const f=_RESALTAR_FILTRO.toLowerCase(); _RESALTAR_FILTRO=null;
+      requestAnimationFrame(()=>{
+        const filasTr=[...tb.querySelectorAll('tr')].filter(tr=>!tr.querySelector('td[colspan]'));
+        let primera=null;
+        filasTr.forEach(tr=>{ if(tr.textContent.toLowerCase().includes(f)){ tr.classList.add('fila-destacada'); if(!primera) primera=tr; setTimeout(()=>tr.classList.remove('fila-destacada'),2700); } });
+        if(primera) primera.scrollIntoView({behavior:'smooth',block:'center'});
+      });
+    }
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="5"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 
@@ -2149,6 +2165,32 @@ async function loadMatriz(forzar){
   return STATE.matriz;
 }
 
+// Salta a la vista "Fichas registradas" pre-filtrada por el proceso de origen,
+// para que el hilo conductor matriz → ficha sea navegable de un clic.
+let _RESALTAR_FILTRO = null; // texto a resaltar en el listado tras saltar desde la matriz
+function irAFichaDesdeMatriz(rutaProceso){
+  // El primer segmento "fuerte" de la ruta (la ficha/proceso) sirve de filtro.
+  const segs=String(rutaProceso||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+  const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
+  const utiles=segs.filter(s=>!generico.test(s));
+  const filtro = utiles.length ? utiles[utiles.length-1] : (segs[segs.length-1]||'');
+  _RESALTAR_FILTRO = filtro;
+  const btn=document.querySelector('nav button[data-view="listado"]');
+  if(btn) btn.click();
+  const inp=document.getElementById('listBuscar');
+  if(inp){ inp.value=filtro; if(typeof renderListado==='function') renderListado(); }
+}
+window.irAFichaDesdeMatriz=irAFichaDesdeMatriz;
+
+// Colapsa/expande las filas de un grupo de la matriz.
+function toggleGrupoMatriz(gid){
+  const head=document.querySelector('tr.grupo-head[data-gid="'+gid+'"]');
+  if(head) head.classList.toggle('grupo-colapsado');
+  const colapsado = head && head.classList.contains('grupo-colapsado');
+  document.querySelectorAll('tr[data-grupo="'+gid+'"]').forEach(tr=>{ tr.style.display = colapsado?'none':''; });
+}
+window.toggleGrupoMatriz=toggleGrupoMatriz;
+
 async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
   try{
@@ -2162,15 +2204,34 @@ async function renderMatriz(){
       return true;
     });
     if(!filas.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
-    // Agrupar por Oficina de medición
-    const ofiDe=r=>leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición') || '(Sin oficina de medición)';
+    // Agrupar por PROCESO de origen (la ficha): mismo patrón visual que "Fichas registradas",
+    // para que se lea el hilo conductor ficha → nivel → elemento → indicador.
+    const rutaDe=r=>leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)') || '(Sin proceso asignado)';
+    // La clave de grupo es la ruta SIN el último elemento (que es el componente del indicador),
+    // así todos los indicadores de la misma ficha caen en el mismo grupo.
+    const grupoDe=r=>{
+      const ruta=rutaDe(r);
+      const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+      return segs.length>1 ? segs.slice(0,-1).join(' › ') : ruta;
+    };
     const grupos={};
-    filas.forEach(r=>{ const o=ofiDe(r); (grupos[o]=grupos[o]||[]).push(r); });
+    filas.forEach(r=>{ const g=grupoDe(r); (grupos[g]=grupos[g]||[]).push(r); });
     const nombresOrd=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
     let html='';
-    nombresOrd.forEach(ofi=>{
-      const items=grupos[ofi];
-      html+=`<tr style="background:var(--paper)"><td colspan="11" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
+    let _gi=0;
+    nombresOrd.forEach(grupoRuta=>{
+      const items=grupos[grupoRuta];
+      const gid='gmat'+(_gi++);
+      // Nivel de análisis del grupo: derivado de la ruta del primer indicador
+      let nivelGrupo=''; { const rr=leerCampo(items[0], MAT.proceso_ruta.id, 'Proceso (ruta)'); nivelGrupo=nivelDesdeRuta(rr)||''; }
+      const nivelPill = nivelGrupo?`<span class="badge-n ${nivelGrupo.toLowerCase()}" style="margin-right:8px">${nivelGrupo}</span>`:'';
+      const rutaAttr = grupoRuta.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      html+=`<tr class="grupo-head" data-gid="${gid}" style="background:var(--paper)" onclick="toggleGrupoMatriz('${gid}')"><td colspan="11" style="padding:10px 14px;border-top:2px solid var(--brand-2)">
+        <span class="grupo-caret">▾</span>
+        ${nivelPill}<span style="font-weight:700;color:var(--brand);font-size:13px">${grupoRuta.replace(/</g,'&lt;')}</span>
+        <span style="color:var(--mist);font-weight:500;font-size:12px">· ${items.length} indicador(es)</span>
+        <span style="cursor:pointer;color:var(--brand);text-decoration:underline;font-weight:600;font-size:11px;margin-left:8px" title="Ver esta ficha en «Fichas registradas»" onclick="event.stopPropagation();irAFichaDesdeMatriz('${rutaAttr}')">ver ficha ↗</span>
+      </td></tr>`;
       html+=items.map(r=>{
         const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
         const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
@@ -2182,6 +2243,10 @@ async function renderMatriz(){
         const rutaFull=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)');
         const proposito=MAT.proposito_ind?leerCampo(r, MAT.proposito_ind.id, 'Propósito indicador'):'';
         const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
+        // Elemento del nivel de análisis: el último segmento de la ruta (lo que enlaza con la ficha)
+        const segsR=String(rutaFull||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+        const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
+        const elemento = (segsR.length && !generico.test(segsR[segsR.length-1])) ? segsR[segsR.length-1] : (partes.length>1?partes[0].trim():'');
         let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
         if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
         const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
@@ -2192,11 +2257,11 @@ async function renderMatriz(){
               : (r._progMetas>0
                   ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
-        return `<tr>
+        return `<tr data-grupo="${gid}">
           <td>${nivelBadge}</td>
-          <td title="${(indSolo||'').replace(/"/g,'&quot;')}"><strong style="font-size:12px"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></strong></td>
-          <td style="font-size:11px;color:var(--slate)" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
-          <td style="font-size:11px" class="mono" title="${(rutaFull||'').replace(/"/g,'&quot;')}">${rutaFull?`<div class="clip2">${rutaFull.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
+          <td style="vertical-align:top">${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
+          <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
+          <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(ofiMed||'').replace(/"/g,'&quot;')}">${ofiMed?`<div class="clip2">${ofiMed.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(ofiDueno||'').replace(/"/g,'&quot;')}">${ofiDueno?`<div class="clip2">${ofiDueno.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
