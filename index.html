@@ -160,6 +160,13 @@
 
   .modal-foot{display:flex;gap:12px;justify-content:flex-end;padding:18px 26px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--paper);border-radius:0 0 16px 16px}
 
+  /* Filas del modal de detalle (ojito) */
+  .det-row{display:grid;grid-template-columns:200px 1fr;gap:14px;padding:8px 2px;border-bottom:1px solid var(--line)}
+  .det-row:last-child{border-bottom:0}
+  .det-k{font-size:12px;font-weight:600;color:var(--mist);text-transform:uppercase;letter-spacing:.3px}
+  .det-v{font-size:14px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+  @media(max-width:560px){.det-row{grid-template-columns:1fr;gap:2px}}
+
   @media(max-width:820px){body{zoom:1}.grid{grid-template-columns:1fr}.bar{flex-direction:column;align-items:stretch;gap:10px}nav{margin-left:0;overflow-x:auto}nav button{flex:1 0 auto;white-space:nowrap}}
 </style>
 </head>
@@ -344,6 +351,7 @@
 
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnAgregarInd" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
+      <button class="btn btn-ghost" title="Configurar las plantillas de notificación" onclick="abrirEditorPlantillas()">⚙️ Plantillas</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
         <input id="matBuscar" placeholder="Buscar por indicador o proceso…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
       </div>
@@ -627,6 +635,61 @@
     </div>
     <div class="modal-foot">
       <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalMetas')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL DETALLE (ojito) ===================== -->
+<div class="modal-bg" id="modalDetalle">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Detalle</div><h2 id="det_titulo" style="font-size:18px">Detalle</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalDetalle')">×</button>
+    </div>
+    <div class="modal-body"><div id="det_cuerpo"></div></div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalDetalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL PLANTILLAS DE NOTIFICACIÓN ===================== -->
+<div class="modal-bg" id="modalPlantillas">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Notificaciones</div><h2 style="font-size:18px">Plantillas de mensaje</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalPlantillas')">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="margin-bottom:10px">Escribe el mensaje e inserta campos con los botones. Al notificar, cada campo se reemplaza por el dato real del indicador.</p>
+      <div style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--mist);margin-bottom:5px">Campos disponibles (clic para insertar en el último cuadro enfocado):</div>
+        <div id="pl_paleta" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+      </div>
+      <div class="field full" style="margin-bottom:6px">
+        <label>📱 Plantilla WhatsApp</label>
+        <textarea id="pl_wa" rows="6" onfocus="window._plTarget='pl_wa'" oninput="actualizarPreviewPlantilla()" style="width:100%;font-family:inherit"></textarea>
+      </div>
+      <div style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;color:var(--mist);text-transform:uppercase;margin-bottom:4px">Vista previa WhatsApp</div>
+        <div id="pl_prev_wa" style="white-space:pre-wrap;font-size:13px;color:var(--ink)"></div>
+      </div>
+      <div class="field full" style="margin-bottom:6px">
+        <label>✉️ Asunto del correo</label>
+        <input id="pl_asunto" onfocus="window._plTarget='pl_asunto'" oninput="actualizarPreviewPlantilla()" style="width:100%;font-family:inherit">
+      </div>
+      <div class="field full" style="margin-bottom:6px">
+        <label>✉️ Plantilla correo</label>
+        <textarea id="pl_correo" rows="6" onfocus="window._plTarget='pl_correo'" oninput="actualizarPreviewPlantilla()" style="width:100%;font-family:inherit"></textarea>
+      </div>
+      <div style="background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:var(--mist);text-transform:uppercase;margin-bottom:4px">Vista previa correo</div>
+        <div id="pl_prev_correo" style="white-space:pre-wrap;font-size:13px;color:var(--ink)"></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="cerrarModal('modalPlantillas')">Cancelar</button>
+      <button class="btn btn-primary" id="pl_guardar" onclick="guardarPlantillas()">Guardar plantillas</button>
     </div>
   </div>
 </div>
@@ -1545,9 +1608,9 @@ async function renderListado(){
           <td style="max-width:260px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>90?obj.slice(0,90)+'…':obj):'<span class="hint">—</span>'}</td>
           <td style="text-align:center"><strong>${nInd}</strong></td>
           <td style="text-align:right;white-space:nowrap">
+            <button class="icon-btn" title="Ver detalle" onclick="verDetalleFicha('${nivel}','${r.id}')">👁</button>
             ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>`:''}
-            ${(!puedeEditar()&&!puedeEliminar())?'<span class="hint">Solo lectura</span>':''}
           </td>
         </tr>`;
       }).join('');
@@ -2047,6 +2110,9 @@ async function renderMatriz(){
           <td style="min-width:130px">${avance}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
+            <button class="icon-btn" title="Ver detalle" onclick="verDetalleMatriz('${r.id}')">👁</button>
+            <button class="icon-btn" title="Notificar por WhatsApp" onclick="notificarWhatsApp('${r.id}')">📱</button>
+            <button class="icon-btn" title="Notificar por correo" onclick="notificarCorreo('${r.id}')">✉️</button>
             ${puedeEditar()?`<button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>`:''}
           </td>
@@ -2506,6 +2572,216 @@ async function guardarProgMeta(){
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
 }
 window.guardarProgMeta=guardarProgMeta;
+
+/* ============================================================
+   DETALLE (ojito) + NOTIFICACIONES (WhatsApp / Correo) + PLANTILLAS
+   Replicado del aplicativo de Riesgos. Tabla propia de plantillas
+   para no interferir con la de riesgos.
+   ============================================================ */
+const CONFIG_NOTIF_IND = {
+  entity: 'cyxcJdLSjhrOoTzSk7huKk',
+  clave:  'ddGIxdTCjeW77dMKNcJSoP',
+  wa:     'dcNqj2W5rcMiiXW7r_W6fC',
+  asunto: 'cKWQ9fW4TcQykcWOqkWOXa',
+  correo: 'c3dLu9B8joWO1tW5Lqemky'
+};
+
+// Mapa de marcadores {campo} → valor real del indicador de la matriz.
+function _datosNotifInd(r){
+  if(!r) return {};
+  const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
+  const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
+  return {
+    indicador:   indSolo||ind||'—',
+    proceso:     leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)')||'—',
+    formula:     leerCampo(r, MAT.formula.id, 'Fórmula')||'',
+    proposito:   MAT.proposito_ind?leerCampo(r, MAT.proposito_ind.id, 'Propósito indicador'):'',
+    fuente:      leerCampo(r, MAT.fuente_info.id, 'Fuente de información')||'',
+    frecuencia:  leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición')||'',
+    frec_calculo:leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo')||'',
+    oficina:     leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'',
+    responsable: leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición')||'',
+    celular:     leerCampo(r, MAT.resp_celular.id, 'Celular del responsable')||'',
+    correo:      leerCampo(r, MAT.resp_correo.id, 'Correo del responsable')||''
+  };
+}
+// Marcadores disponibles para la paleta del editor
+const MARCADORES_NOTIF_IND = ['responsable','indicador','proceso','oficina','formula','proposito','fuente','frecuencia','frec_calculo','celular','correo'];
+
+// Reemplaza {marcador} por el valor real
+function aplicarPlantilla(txt, datos){
+  return String(txt||'').replace(/\{(\w+)\}/g, (m,k)=> (datos[k]!=null && datos[k]!=='') ? datos[k] : '');
+}
+
+// Plantillas por defecto (si no hay nada configurado en QuintaDB)
+const PLANTILLA_WA_DEFECTO = 'Estimado/a {responsable},\n\nLe notificamos sobre el siguiente indicador de gestión bajo su responsabilidad:\n\n• Indicador: {indicador}\n• Proceso: {proceso}\n• Fórmula: {formula}\n• Frecuencia de medición: {frecuencia}\n\nPor favor registrar la medición correspondiente y dar seguimiento.\n\n— Sistema de Gestión ISO 21001, Facultad de Ingeniería URP';
+const PLANTILLA_ASUNTO_DEFECTO = 'Notificación de indicador — Sistema de Gestión ISO 21001 URP';
+const PLANTILLA_CORREO_DEFECTO = 'Estimado/a {responsable},\n\nLe notificamos sobre el siguiente indicador de gestión bajo su responsabilidad:\n\n• Indicador: {indicador}\n• Proceso: {proceso}\n• Fórmula: {formula}\n• Frecuencia de medición: {frecuencia}\n• Oficina responsable: {oficina}\n\nPor favor registrar la medición correspondiente y dar seguimiento.\n\nSaludos cordiales,\nSistema de Gestión ISO 21001 — Facultad de Ingeniería URP';
+
+// Cache de plantillas cargadas desde QuintaDB
+let PLANTILLAS_IND = null;        // {wa, asunto, correo}
+let PLANTILLAS_IND_REC_ID = null; // id del registro en la tabla de config
+async function cargarPlantillas(){
+  if(PLANTILLAS_IND) return PLANTILLAS_IND;
+  PLANTILLAS_IND = { wa:PLANTILLA_WA_DEFECTO, asunto:PLANTILLA_ASUNTO_DEFECTO, correo:PLANTILLA_CORREO_DEFECTO };
+  try{
+    const data = await API.records(CONFIG_NOTIF_IND.entity);
+    const recs = data.records||[];
+    if(recs.length){
+      const r=recs[0]; const v=r.values||{};
+      PLANTILLAS_IND_REC_ID = r.id;
+      const wa=v['Plantilla WhatsApp'], asu=v['Asunto correo'], cor=v['Plantilla correo'];
+      if(wa && wa!=='Plantilla WhatsApp') PLANTILLAS_IND.wa = wa;
+      if(asu && asu!=='Asunto correo') PLANTILLAS_IND.asunto = asu;
+      if(cor && cor!=='Plantilla correo') PLANTILLAS_IND.correo = cor;
+    }
+  }catch(e){ /* usa defaults */ }
+  return PLANTILLAS_IND;
+}
+
+function _telWaInd(cel){
+  let n=String(cel||'').replace(/\D/g,'');
+  if(!n) return '';
+  if(n.length===9) n='51'+n;
+  return n;
+}
+async function notificarWhatsApp(matId){
+  const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
+  const d=_datosNotifInd(r);
+  const tel=_telWaInd(d.celular);
+  if(!tel){ toast('Este indicador no tiene celular del responsable de medición.', true); return; }
+  const win=window.open('about:blank','_blank'); // abrir ya, con el clic, para evitar bloqueo
+  const p=await cargarPlantillas();
+  const url='https://wa.me/'+tel+'?text='+encodeURIComponent(aplicarPlantilla(p.wa,d));
+  if(win){ win.location.href=url; } else { window.location.href=url; }
+}
+async function notificarCorreo(matId){
+  const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
+  const d=_datosNotifInd(r);
+  if(!d.correo){ toast('Este indicador no tiene correo del responsable de medición.', true); return; }
+  const win=window.open('about:blank','_blank');
+  const p=await cargarPlantillas();
+  const asunto=aplicarPlantilla(p.asunto,d);
+  const cuerpo=aplicarPlantilla(p.correo,d);
+  const gmail='https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(d.correo)+'&su='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
+  if(win){ win.location.href=gmail; }
+  else { window.location.href='mailto:'+encodeURIComponent(d.correo)+'?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo); }
+}
+window.notificarWhatsApp=notificarWhatsApp;
+window.notificarCorreo=notificarCorreo;
+
+// === Editor de plantillas (modal) ===
+async function abrirEditorPlantillas(){
+  const p=await cargarPlantillas();
+  document.getElementById('pl_wa').value = p.wa;
+  document.getElementById('pl_asunto').value = p.asunto;
+  document.getElementById('pl_correo').value = p.correo;
+  window._plTarget='pl_wa';
+  const pal=document.getElementById('pl_paleta');
+  if(pal) pal.innerHTML = MARCADORES_NOTIF_IND.map(m=>`<button onclick="insertarMarcador(window._plTarget||'pl_wa','${m}')" style="border:1px solid var(--line);background:var(--card);color:var(--brand);font-family:inherit;font-size:12px;padding:4px 9px;border-radius:14px;cursor:pointer">{${m}}</button>`).join('');
+  document.getElementById('modalPlantillas').classList.add('show'); document.body.style.overflow='hidden';
+  actualizarPreviewPlantilla();
+}
+function insertarMarcador(targetId, marcador){
+  const el=document.getElementById(targetId); if(!el) return;
+  const ini=el.selectionStart||el.value.length, fin=el.selectionEnd||el.value.length;
+  el.value = el.value.slice(0,ini)+'{'+marcador+'}'+el.value.slice(fin);
+  el.focus(); actualizarPreviewPlantilla();
+}
+function actualizarPreviewPlantilla(){
+  const ej=(STATE.matriz||[])[0];
+  const d= ej ? _datosNotifInd(ej) : {responsable:'María Pérez',indicador:'Número de docentes registrados en RENACYT',proceso:'2. Misional › M03 Gestión de la Investigación',formula:'Suma de docentes con registro vigente',frecuencia:'Semestral',oficina:'Unidad de Investigación'};
+  const prevWa=document.getElementById('pl_prev_wa');
+  const prevCor=document.getElementById('pl_prev_correo');
+  if(prevWa) prevWa.textContent = aplicarPlantilla(document.getElementById('pl_wa').value, d);
+  if(prevCor) prevCor.textContent = 'Asunto: '+aplicarPlantilla(document.getElementById('pl_asunto').value, d)+'\n\n'+aplicarPlantilla(document.getElementById('pl_correo').value, d);
+}
+async function guardarPlantillas(){
+  const wa=document.getElementById('pl_wa').value;
+  const asunto=document.getElementById('pl_asunto').value;
+  const correo=document.getElementById('pl_correo').value;
+  const F=CONFIG_NOTIF_IND;
+  const btn=document.getElementById('pl_guardar');
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  try{
+    const campos={}; campos[F.clave]='plantillas'; campos[F.wa]=wa; campos[F.asunto]=asunto; campos[F.correo]=correo;
+    if(PLANTILLAS_IND_REC_ID){ await API.saveForm(PLANTILLAS_IND_REC_ID, campos); }
+    else{ const resp=await API.saveForm(null, campos, F.entity); if(resp && resp.record) PLANTILLAS_IND_REC_ID=resp.record.id; }
+    PLANTILLAS_IND={ wa, asunto, correo };
+    toast('Plantillas guardadas.');
+    cerrarModal('modalPlantillas');
+  }catch(e){ toast('Error al guardar: '+e.message, true); }
+  finally{ if(btn){ btn.disabled=false; btn.textContent='Guardar plantillas'; } }
+}
+window.abrirEditorPlantillas=abrirEditorPlantillas;
+window.insertarMarcador=insertarMarcador;
+window.actualizarPreviewPlantilla=actualizarPreviewPlantilla;
+window.guardarPlantillas=guardarPlantillas;
+
+// === Ojito → modal con el detalle completo (matriz o ficha) ===
+function _detRow(etq, val){
+  if(val===undefined||val===null||val==='') return '';
+  return `<div class="det-row"><div class="det-k">${etq}</div><div class="det-v">${String(val).replace(/</g,'&lt;')}</div></div>`;
+}
+// Detalle de un indicador de la matriz
+function verDetalleMatriz(matId){
+  const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
+  const d=_datosNotifInd(r);
+  let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
+  if(!nivel && d.proceso) nivel = nivelDesdeRuta(d.proceso);
+  const filas=[
+    ['Nivel', nivel],
+    ['Indicador', d.indicador],
+    ['Propósito', d.proposito],
+    ['Ruta del proceso', d.proceso],
+    ['Fórmula', d.formula],
+    ['Fuente de información', d.fuente],
+    ['Oficina responsable de la medición', d.oficina],
+    ['Responsable de la medición', d.responsable],
+    ['Celular del responsable', d.celular],
+    ['Correo del responsable', d.correo],
+    ['Frecuencia de medición', d.frecuencia],
+    ['Frecuencia de cálculo', d.frec_calculo],
+    ['Metas programadas', (r._progMetas||0)+''],
+    ['Periodos con seguimiento', (r._periodos||0)+'']
+  ];
+  const html=filas.map(([e,v])=>_detRow(e,v)).filter(Boolean).join('');
+  const btns=[];
+  if(_telWaInd(d.celular)) btns.push(`<button class="btn btn-primary" style="padding:8px 14px;font-size:13px" onclick="notificarWhatsApp('${r.id}')">📱 Notificar por WhatsApp</button>`);
+  if(d.correo) btns.push(`<button class="btn btn-ghost" style="padding:8px 14px;font-size:13px" onclick="notificarCorreo('${r.id}')">✉️ Notificar por correo</button>`);
+  const notifHTML = btns.length ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);display:flex;gap:8px;flex-wrap:wrap">${btns.join('')}</div>` : '';
+  document.getElementById('det_titulo').textContent = (d.indicador||'Indicador').slice(0,80);
+  document.getElementById('det_cuerpo').innerHTML = (html||'<p class="hint">Sin datos.</p>') + notifHTML;
+  document.getElementById('modalDetalle').classList.add('show'); document.body.style.overflow='hidden';
+}
+window.verDetalleMatriz=verDetalleMatriz;
+
+// Detalle de una ficha registrada (listado)
+function verDetalleFicha(nivel, fichaId){
+  const r=(STATE.fichas[nivel]||[]).find(x=>x.id===fichaId); if(!r) return;
+  const F=EDF(nivel);
+  const cur=(f,nombre)=> f?leerCampo(r,f.id,nombre):'';
+  const filas=[
+    ['Nivel', nivel],
+    ['Ruta del proceso', rutaFicha(r,nivel)],
+    ['Dueño del proceso', leerDueno(r,F)],
+    ['Objetivo del proceso', objFicha(r,nivel)],
+    ['Alcance', cur(F.alcance,'Alcance')],
+    ['Base legal', cur(F.base_legal,'Base legal')],
+    ['Proveedores', cur(F.proveedores,'Proveedores')],
+    ['Entrada', cur(F.entrada,'Entrada')],
+    ['Producto / salida', cur(F.producto,'Producto')],
+    ['Receptor / cliente', cur(F.receptor,'Receptor')],
+    ['Controles', cur(F.controles,'Controles')],
+    ['Registros', cur(F.registros,'Registros')],
+    ['N.º de indicadores', nIndFicha(r,nivel)+'']
+  ];
+  const html=filas.map(([e,v])=>_detRow(e,v)).filter(Boolean).join('');
+  document.getElementById('det_titulo').textContent = (rutaFicha(r,nivel)||'Ficha').slice(0,80);
+  document.getElementById('det_cuerpo').innerHTML = html||'<p class="hint">Sin datos.</p>';
+  document.getElementById('modalDetalle').classList.add('show'); document.body.style.overflow='hidden';
+}
+window.verDetalleFicha=verDetalleFicha;
 
 // Al elegir meta o cambiar el valor real: muestra meta/referencia, calcula % y controla remediación
 function evaluarRemediacion(){
