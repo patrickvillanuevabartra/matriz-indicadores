@@ -1513,7 +1513,7 @@ async function renderListado(){
     // Agrupar por dueño del proceso (texto). Sin dueño → "(Sin dueño asignado)".
     const duenoDe=({r,nivel})=>{
       const F=EDF(nivel);
-      const t = F.dueno_txt ? (leerCampo(r,F.dueno_txt.id,'Dueño del proceso') || leerCampo(r,F.dueno_txt.id,'Nombre Dueño del proceso')) : '';
+      const t = leerDueno(r, F);
       return t || '(Sin dueño asignado)';
     };
     const grupos={};
@@ -1590,7 +1590,7 @@ async function editarFicha(nivel, id){
     const duenos=await loadMaestra('RESPONSABLES');
     const selD=document.getElementById('ed_dueno');
     fillSelect(selD, duenos);
-    const duenoTxt = F.dueno_txt ? leerCampo(r, F.dueno_txt.id, 'Dueño del proceso') || leerCampo(r, F.dueno_txt.id, 'Nombre Dueño del proceso') : '';
+    const duenoTxt = leerDueno(r, F);
     if(duenoTxt && selD){
       const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
       const opt=[...selD.options].find(o=>norm(o.text)===norm(duenoTxt));
@@ -1908,6 +1908,31 @@ function leerCampo(r, fieldId, nombre){
   const v=r.values||{};
   const cand=[v[fieldId], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x));
   return cand||'';
+}
+
+// Lee el nombre del dueño del proceso de forma robusta: prueba el field-id del
+// campo de texto y TODOS los nombres bajo los que QuintaDB puede devolverlo.
+// (N1 lo guarda como 'Dueño del proceso'; N2 lo devuelve como 'Nombre Dueño del proceso'.)
+function leerDueno(r, F){
+  if(!r) return '';
+  const v = r.values||{};
+  // OJO: en algunas tablas (p.ej. N2) leer por field-id NO devuelve el valor, sino
+  // el NOMBRE del campo ("Nombre Dueño del proceso"). El valor real vive bajo la
+  // clave de nombre. Por eso probamos PRIMERO los nombres, y descartamos cualquier
+  // lectura que coincida con un nombre de campo (sería un literal, no un valor).
+  const nombres = ['Nombre Dueño del proceso','Dueño del proceso','Nombre Dueño del Proceso','Dueño del Proceso'];
+  const esNombreDeCampo = x => nombres.some(n => String(x).trim() === n);
+  // 1) Probar por nombre (lo más fiable según el diagnóstico)
+  for(const n of nombres){
+    const x = v[n];
+    if(x && !esBasura(x) && !esNombreDeCampo(x)) return String(x).trim();
+  }
+  // 2) Respaldo: por field-id, solo si NO es el literal del nombre del campo
+  if(F && F.dueno_txt){
+    const x = v[F.dueno_txt.id];
+    if(x && !esBasura(x) && !esNombreDeCampo(x)) return String(x).trim();
+  }
+  return '';
 }
 
 async function loadMatriz(forzar){
@@ -2673,7 +2698,7 @@ const FILTRO_CAMPOS_MAT = {
 const FILTRO_CAMPOS_LIST = {
   proceso:      { label:'Proceso (ruta)',   get:o=>rutaFicha(o.r,o.nivel) },
   nivel:        { label:'Nivel',            get:o=>o.nivel, opciones:['N0','N1','N2'] },
-  dueno:        { label:'Dueño',            get:o=>{ const F=EDF(o.nivel); return F.dueno_txt?(leerCampo(o.r,F.dueno_txt.id,'Dueño del proceso')||leerCampo(o.r,F.dueno_txt.id,'Nombre Dueño del proceso')):''; } },
+  dueno:        { label:'Dueño',            get:o=>leerDueno(o.r, EDF(o.nivel)) },
   objetivo:     { label:'Objetivo',         get:o=>objFicha(o.r,o.nivel) }
 };
 
