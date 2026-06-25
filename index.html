@@ -384,8 +384,7 @@
 
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table id="tablaMatrizTbl">
       <thead><tr>
-        <th style="width:46px">Nivel</th>
-        <th style="width:140px">Elemento (nivel análisis)</th>
+        <th style="width:160px">Elemento (nivel análisis)</th>
         <th style="width:150px">Indicador</th>
         <th style="width:120px">Propósito</th>
         <th style="width:130px">Fórmula</th>
@@ -396,7 +395,7 @@
         <th style="width:110px">Avance</th>
         <th style="text-align:right;width:140px">Acciones</th>
       </tr></thead>
-      <tbody id="tablaMatriz"><tr><td colspan="11" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <tbody id="tablaMatriz"><tr><td colspan="10" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
   <section class="view" id="view-administracion">
@@ -2203,7 +2202,7 @@ async function renderMatriz(){
       if(typeof pasaFiltrosMat==='function' && !pasaFiltrosMat(r)) return false;
       return true;
     });
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="11"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="10"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
     // Asegurar fichas cargadas (para resolver a qué ficha pertenece cada indicador) y
     // cargar el orden de subformularios SOLO de las fichas presentes, en paralelo.
     try{ await Promise.all(['N0','N1','N2'].map(n=>loadFichas(n))); }catch(_){}
@@ -2231,7 +2230,7 @@ async function renderMatriz(){
     nombresOrd.forEach(ofi=>{
       const items=grupos[ofi];
       // Cabecera nivel 1: OFICINA (ancla principal)
-      html+=`<tr style="background:var(--brand);"><td colspan="11" style="padding:11px 14px;font-weight:700;color:#fff;font-size:13px">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:rgba(255,255,255,.8);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
+      html+=`<tr style="background:var(--brand);"><td colspan="10" style="padding:11px 14px;font-weight:700;color:#fff;font-size:13px">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:rgba(255,255,255,.8);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
       // Subagrupar por FICHA real dentro de la oficina
       const porFicha={};
       items.forEach(r=>{ const k=fichaKeyDe(r); (porFicha[k]=porFicha[k]||[]).push(r); });
@@ -2246,6 +2245,15 @@ async function renderMatriz(){
         // Nivel de la ficha (N0/N1/N2) para el badge de la subcabecera
         const rutaPrimero = leerCampo(inds[0], MAT.proceso_ruta.id, 'Proceso (ruta)');
         const nivelFicha = nivelDesdeRuta(rutaPrimero)||'';
+        // LABEL del nivel de análisis (Procedimiento/Proceso nivel X) para el badge de cada fila
+        let nivelAna=''; {
+          const info0b=infoFicha(inds[0]);
+          const segs=String((info0b&&info0b.fichaRuta)||rutaPrimero||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+          const generico2=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
+          const sg=i=>(segs[i]&&!generico2.test(segs[i]))?segs[i]:'';
+          const detNA = detectarNivelAnalisis(nivelFicha||'N2', sg(0), sg(1), sg(2), sg(3));
+          nivelAna = detNA ? detNA.nivelLabel : '';
+        }
         // Ruta de la ficha para la subcabecera: preferir la del mapa (real); si no, la del indicador.
         const info0=infoFicha(inds[0]);
         let fichaRutaTxt = (info0 && info0.fichaRuta) ? info0.fichaRuta : '';
@@ -2256,7 +2264,7 @@ async function renderMatriz(){
         }
         // Subcabecera nivel 2: badge de nivel de ficha (N1/N2) + ruta del proceso — una vez por ficha
         const badgeNivelFicha = nivelFicha?`<span class="badge-n ${nivelFicha.toLowerCase()}" style="margin-right:8px">${nivelFicha}</span>`:'';
-        html+=`<tr style="background:var(--card)"><td colspan="11" style="padding:8px 14px 8px 30px;border-top:1px dashed var(--line)">
+        html+=`<tr style="background:var(--card)"><td colspan="10" style="padding:8px 14px 8px 30px;border-top:1px dashed var(--line)">
           ${badgeNivelFicha}<span class="mono" style="font-size:13px;color:var(--slate)">${fichaRutaTxt.replace(/</g,'&lt;')}</span>
           <span style="color:var(--mist);font-size:12px;margin-left:6px">· ${inds.length} indicador(es)</span>
         </td></tr>`;
@@ -2275,9 +2283,6 @@ async function renderMatriz(){
         const segsR=String(rutaFull||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
         const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
         const elemento = (segsR.length && !generico.test(segsR[segsR.length-1])) ? segsR[segsR.length-1] : (partes.length>1?partes[0].trim():'');
-        let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
-        if(!nivel && rutaFull){ nivel = nivelDesdeRuta(rutaFull); }
-        const nivelBadge = nivel?`<span class="badge-n ${nivel.toLowerCase()}">${nivel}</span>`:'<span class="hint">—</span>';
         const avance = (r._avancePeriodos && r._avancePeriodos.length)
           ? barraAvancePeriodos(r._avancePeriodos)
           : (r._periodos>0
@@ -2286,8 +2291,7 @@ async function renderMatriz(){
                   ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         return `<tr>
-          <td>${nivelBadge}</td>
-          <td style="vertical-align:top">${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
+          <td style="vertical-align:top">${nivelAna?`<span style="display:inline-block;font-size:9px;font-weight:700;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:10px;padding:1px 7px;margin-bottom:3px">${nivelAna.replace(/</g,'&lt;')}</span><br>`:''}${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
           <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
           <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
@@ -2312,7 +2316,7 @@ async function renderMatriz(){
     });
     tb.innerHTML=html;
     setConn(true);
-  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="11"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="10"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 window.renderMatriz=renderMatriz;
 
