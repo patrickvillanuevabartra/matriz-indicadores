@@ -2402,9 +2402,16 @@ async function abrirAgregarIndicador(){
   const opts=[];
   for(const n of ['N0','N1','N2']){
     const fichas=await loadFichas(n);
-    fichas.forEach(r=>{ const ruta=rutaFicha(r,n); if(ruta&&ruta!=='—') opts.push({value:n+'|'+r.id, label:'['+n+'] '+ruta}); });
+    fichas.forEach(r=>{
+      const ruta=rutaFicha(r,n);
+      if(ruta&&ruta!=='—'){
+        const dueno=leerDueno(r, EDF(n));
+        const label='['+n+'] '+ruta+(dueno?'  —  👤 '+dueno:'');
+        opts.push({value:n+'|'+r.id, label});
+      }
+    });
   }
-  sel.innerHTML='<option value="">Seleccione una ficha…</option>'+opts.map(o=>`<option value="${o.value}">${o.label}</option>`).join('');
+  sel.innerHTML='<option value="">Seleccione una ficha…</option>'+opts.map(o=>`<option value="${o.value}">${o.label.replace(/"/g,'&quot;')}</option>`).join('');
 }
 window.abrirAgregarIndicador=abrirAgregarIndicador;
 
