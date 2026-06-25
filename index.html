@@ -1275,6 +1275,25 @@ function invalidarCacheIndicadores(){
   if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
 }
 window.invalidarCacheIndicadores=invalidarCacheIndicadores;
+// Ejecuta tareas async con CONCURRENCIA LIMITADA (máx N a la vez). Evita saturar la API
+// con cientos de llamadas simultáneas, que es lo que provoca los 404 transitorios.
+async function _mapLimitado(items, limite, fn){
+  const resultados=new Array(items.length);
+  let i=0;
+  async function worker(){
+    while(i<items.length){
+      const idx=i++;
+      try{ resultados[idx]=await fn(items[idx], idx); }
+      catch(e){ resultados[idx]=undefined; }
+    }
+  }
+  const workers=[];
+  const n=Math.min(limite, items.length);
+  for(let k=0;k<n;k++) workers.push(worker());
+  await Promise.all(workers);
+  return resultados;
+}
+
 // Lee un recurso de la API con reintentos ante fallos transitorios (404/red por saturación
 // al lanzar muchas llamadas en paralelo). Espera un poco más en cada intento.
 async function _fetchConReintento(path, intentos){
@@ -1293,53 +1312,65 @@ async function _fetchConReintento(path, intentos){
 
 async function construirMapaIndicadores(){
   if(_MAPA_IND_LISTO) return _MAPA_IND;
-  const tareas=[];
-  let _fOrden=0; // orden de aparición de las fichas (igual que "Fichas registradas")
+  const LIMITE = 6; // máximo de llamadas simultáneas a la API (evita saturación → 404)
+  // ---- FASE 1: reunir, por cada ficha, sus subIds (releyendo individual solo si faltan) ----
+  const fichasInfo=[]; // {nivel, fichaId, fichaRuta, fichaOrden, f}
+  let _fOrden=0;
   for(const nivel of ['N0','N1','N2']){
     let fichas=[];
     try{ fichas=await loadFichas(nivel); }catch(_){ fichas=[]; }
     for(const f of fichas){
-      const fichaRuta=rutaFicha(f, nivel);
-      const fichaId=f.id;
-      const fichaOrden=_fOrden++;
-      const cacheKey=nivel+'_'+fichaId;
-      // La lista masiva a veces NO trae subform_values completos → subIds vacío erróneo.
-      // Tarea: obtener subIds (de la lista o, si faltan, leyendo la ficha individual) y luego sus textos.
-      tareas.push((async()=>{
-        let subIds=getSubIds(f, EDF(nivel));
-        if(!subIds.length){
-          // Releer la ficha individual (sí trae subform_values) y reintentar
-          try{
-            const d=await _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json');
-            if(d && d.record) subIds=getSubIds(d.record, EDF(nivel));
-          }catch(_){}
-        }
-        if(!subIds.length){ _SUBIND_POR_FICHA[cacheKey]=[]; return; }
-        // Leer cada subindicador con reintentos. Si ALGUNO falla de red, NO cacheamos vacío
-        // (para que el próximo render reintente en vez de mostrar "Sin indicadores" en falso).
-        const lecturas=await Promise.all(subIds.map(sid=>
-          _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json')
-            .then(d=>({ok:true, vals:d && d.record && d.record.values}))
-            .catch(()=>({ok:false, vals:null}))
-        ));
-        const huboFallo = lecturas.some(l=>!l.ok);
-        let orden=0;
-        const items=[];
-        lecturas.forEach(({vals})=>{
-          const t=leerTextoIndicador(vals);
-          if(t && !esBasura(t) && t!=='Indicador'){
-            const tt=String(t).trim();
-            _MAPA_IND[tt] = { fichaId, fichaRuta, nivel, orden:orden++, fichaOrden };
-            const partes=tt.split(' — ');
-            items.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
-          }
-        });
-        // Solo cachear si no hubo fallos de red, o si sí obtuvimos items (datos válidos)
-        if(!huboFallo || items.length){ _SUBIND_POR_FICHA[cacheKey]=items; }
-      })());
+      fichasInfo.push({ nivel, fichaId:f.id, fichaRuta:rutaFicha(f, nivel), fichaOrden:_fOrden++, f });
     }
   }
-  await Promise.all(tareas); // todas las fichas en paralelo
+  // Resolver subIds de cada ficha (con relectura individual limitada si la lista no los trae)
+  await _mapLimitado(fichasInfo, LIMITE, async (fi)=>{
+    let subIds=getSubIds(fi.f, EDF(fi.nivel));
+    if(!subIds.length){
+      try{
+        const d=await _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+fi.fichaId+'.json');
+        if(d && d.record) subIds=getSubIds(d.record, EDF(fi.nivel));
+      }catch(_){}
+    }
+    fi.subIds=subIds;
+  });
+  // ---- FASE 2: aplanar TODAS las lecturas de subindicadores y leerlas con concurrencia limitada ----
+  const planas=[]; // {fi, sid}
+  fichasInfo.forEach(fi=>{ (fi.subIds||[]).forEach(sid=>planas.push({fi, sid})); });
+  const resultados = await _mapLimitado(planas, LIMITE, async (p)=>{
+    try{
+      const d=await _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+p.sid+'.json');
+      return { fi:p.fi, sid:p.sid, ok:true, vals:d && d.record && d.record.values };
+    }catch(e){ return { fi:p.fi, sid:p.sid, ok:false, vals:null }; }
+  });
+  // ---- Agrupar resultados por ficha, preservando el orden de subIds ----
+  const porFicha={}; // cacheKey → {items:[], huboFallo:bool, fi}
+  fichasInfo.forEach(fi=>{ porFicha[fi.nivel+'_'+fi.fichaId]={ items:[], huboFallo:false, fi, ordenSid:{} };
+    (fi.subIds||[]).forEach((sid,idx)=>{ porFicha[fi.nivel+'_'+fi.fichaId].ordenSid[sid]=idx; }); });
+  resultados.forEach(res=>{
+    if(!res) return;
+    const key=res.fi.nivel+'_'+res.fi.fichaId;
+    const bucket=porFicha[key]; if(!bucket) return;
+    if(!res.ok){ bucket.huboFallo=true; return; }
+    const t=leerTextoIndicador(res.vals);
+    if(t && !esBasura(t) && t!=='Indicador'){
+      bucket.items.push({ sid:res.sid, texto:String(t).trim() });
+    }
+  });
+  // ---- Volcar a las estructuras finales, respetando el orden del subformulario ----
+  Object.keys(porFicha).forEach(key=>{
+    const { items, huboFallo, fi, ordenSid } = porFicha[key];
+    items.sort((a,b)=>(ordenSid[a.sid]??999)-(ordenSid[b.sid]??999));
+    const lista=[];
+    items.forEach((it,idx)=>{
+      const tt=it.texto;
+      _MAPA_IND[tt] = { fichaId:fi.fichaId, fichaRuta:fi.fichaRuta, nivel:fi.nivel, orden:idx, fichaOrden:fi.fichaOrden };
+      const partes=tt.split(' — ');
+      lista.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
+    });
+    // Solo cachear si no hubo fallos de red, o si sí obtuvimos items (datos válidos)
+    if(!huboFallo || lista.length){ _SUBIND_POR_FICHA[key]=lista; }
+  });
   _MAPA_IND_LISTO = true;
   return _MAPA_IND;
 }
