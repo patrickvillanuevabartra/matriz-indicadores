@@ -617,18 +617,16 @@
             <div class="field"><label>Periodo <span style="color:var(--mist);font-weight:400">(se sugiere; ajustable)</span></label><input id="pm_periodo" placeholder="Ej. Enero 2026, 2026-I" oninput="this.dataset.touched='1'"></div>
             <div class="field">
               <label>Valor de referencia (línea base)</label>
-              <input type="number" step="any" id="pm_ref">
-              <button type="button" id="pm_ref_toggle" onclick="toggleCalcMeta('ref')" style="margin-top:5px;border:1px solid var(--brand-2);background:var(--card);color:var(--brand);font-family:inherit;font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer">📐 Calcular con la fórmula</button>
-              <div id="pm_ref_calc" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 12px;margin-top:6px">
+              <input type="number" step="any" id="pm_ref" readonly style="background:var(--paper)" placeholder="se calcula con la fórmula">
+              <div id="pm_ref_calc" style="background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 12px;margin-top:6px">
                 <div id="pm_ref_formula" style="font-size:11px;color:var(--mist);margin-bottom:8px"></div>
                 <div id="pm_ref_grid" class="grid"></div>
               </div>
             </div>
             <div class="field">
               <label>Valor meta</label>
-              <input type="number" step="any" id="pm_meta">
-              <button type="button" id="pm_meta_toggle" onclick="toggleCalcMeta('meta')" style="margin-top:5px;border:1px solid var(--brand-2);background:var(--card);color:var(--brand);font-family:inherit;font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer">📐 Calcular con la fórmula</button>
-              <div id="pm_meta_calc" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 12px;margin-top:6px">
+              <input type="number" step="any" id="pm_meta" readonly style="background:var(--paper)" placeholder="se calcula con la fórmula">
+              <div id="pm_meta_calc" style="background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 12px;margin-top:6px">
                 <div id="pm_meta_formula" style="font-size:11px;color:var(--mist);margin-bottom:8px"></div>
                 <div id="pm_meta_grid" class="grid"></div>
               </div>
@@ -2934,10 +2932,18 @@ function construirCamposFormulaMeta(which, formula){
   _FORMULA_VARS_META[which]=vars;
   const grid=document.getElementById('pm_'+which+'_grid');
   const fref=document.getElementById('pm_'+which+'_formula');
-  const tog=document.getElementById('pm_'+which+'_toggle');
-  if(tog) tog.style.display = vars.length ? '' : 'none'; // sin fórmula → no ofrecer calculadora
+  const calc=document.getElementById('pm_'+which+'_calc');
+  const campo=document.getElementById('pm_'+which);
   if(!grid) return;
-  if(!vars.length){ grid.innerHTML=''; return; }
+  if(!vars.length){
+    // Sin fórmula detectable: ocultar la calculadora y permitir entrada manual
+    if(calc) calc.style.display='none';
+    if(campo){ campo.readOnly=false; campo.style.background=''; campo.placeholder=''; }
+    grid.innerHTML=''; return;
+  }
+  // Con fórmula: calculadora siempre visible, campo de solo lectura
+  if(calc) calc.style.display='';
+  if(campo){ campo.readOnly=true; campo.style.background='var(--paper)'; campo.placeholder='se calcula con la fórmula'; }
   if(fref) fref.textContent='Fórmula: '+formula;
   grid.innerHTML=vars.map(v=>`
     <div class="field">
@@ -2965,8 +2971,7 @@ function calcularValorMeta(which){
     const esc=v.nombre.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
     expr=expr.replace(new RegExp(esc,'gi'), '('+(val===null?'0':val)+')');
   });
-  if(!algunoLleno) return;            // no pisar el valor escrito a mano si no se usa la calculadora
-  if(faltan){ return; }               // esperar a que estén todas
+  if(faltan){ destino.value=''; return; }  // faltan variables → vaciar (no hay entrada manual)
   expr=_normalizarFormula(expr);
   try{
     if(/^[-+*/().\d\s]+$/.test(expr)){
@@ -3007,8 +3012,6 @@ async function abrirMetas(matId){
   // Calculadora por fórmula para referencia y meta (pestaña Programación)
   construirCamposFormulaMeta('ref', formula);
   construirCamposFormulaMeta('meta', formula);
-  // Mostrar la fórmula también arriba de programación ya se hace con mt_formula_box
-  ['pm_ref_calc','pm_meta_calc'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display='none'; });
   // Modo solo lectura (Usuario libre): ocultar formularios de agregar metas
   const sl=soloLectura();
   const pf=document.getElementById('mt_prog_form'); if(pf) pf.style.display = sl?'none':'';
