@@ -609,6 +609,7 @@
 
       <!-- Programación -->
       <div id="mt_prog">
+        <div id="mt_formula_box" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--slate)"></div>
         <div id="mt_prog_form" style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nueva programación de meta</div>
           <div class="grid">
@@ -636,13 +637,19 @@
             <div class="field"><label>Fecha de evaluación</label><input type="date" id="sm_fecha"></div>
           </div>
           <div id="sm_meta_info" class="hidden" style="background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 14px;margin:10px 0;font-size:13px;color:var(--slate)"></div>
+          <div id="sm_vars_box" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:12px 14px;margin:10px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--brand);margin-bottom:4px">Calcular el valor real con la fórmula del indicador</div>
+            <div id="sm_formula_ref" style="font-size:12px;color:var(--mist);margin-bottom:10px"></div>
+            <div id="sm_vars_grid" class="grid"></div>
+          </div>
           <div class="grid">
             <div class="field"><label>Periodo evaluado <span style="color:var(--mist);font-weight:400">(heredado de la meta)</span></label><input id="sm_periodo" readonly style="background:var(--paper)" placeholder="— elige la meta de referencia —"></div>
+            <div class="field"><label>Tipo de medición</label><select id="sm_tipo_med" onchange="evaluarRemediacion()"><option value="Parcial">Parcial (corte / avance en curso)</option><option value="Cierre">De cierre (fin del periodo)</option></select></div>
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
             <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
             <div class="field full"><div style="font-size:11px;color:var(--mist);background:var(--paper);border-radius:8px;padding:8px 12px;line-height:1.5">📐 <strong>Fórmula del % de avance:</strong> (valor alcanzado − referencia) ÷ (meta − referencia) × 100. Funciona para indicadores donde subir es mejor y donde bajar es mejor. 100% = se alcanzó la meta; 0% = sin avance respecto a la línea base.</div></div>
             <div class="field full"><label>Evidencias (enlace a Drive/SharePoint)</label><input type="url" id="sm_evid" placeholder="https://…"></div>
-            <div class="field full hidden" id="sm_remed_box"><label>Plan de remediación (enlace) <span class="hint" style="font-weight:400">— requerido si el avance es menor a 100%</span></label><input type="url" id="sm_remed" placeholder="https://…"></div>
+            <div class="field full hidden" id="sm_remed_box"><label>Plan de acción / mejora (enlace) <span class="hint" style="font-weight:400">— opcional; sugerido cuando una medición de cierre queda por debajo de la meta</span></label><input type="url" id="sm_remed" placeholder="https://…"><div id="sm_remed_nota" style="font-size:11px;color:var(--mist);margin-top:5px;line-height:1.5"></div></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
           </div>
           <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
@@ -2230,6 +2237,18 @@ window.eliminarFicha=eliminarFicha;
    MATRIZ DE INDICADORES
    ============================================================ */
 const MAT = CONFIG.MATRIZ_IND_FIELDS, PM = CONFIG.PROG_METAS_FIELDS, SM = CONFIG.SEG_METAS_FIELDS;
+// Campo para guardar los valores de las variables de la fórmula (JSON en texto).
+// ⬇️ PEGA AQUÍ el id del campo "Variables de cálculo" que creaste en QuintaDB (tabla de seguimiento).
+const VARIABLES_CALCULO_FIELD_ID = "bhWOfdWQfhWR7cVIJdK8od"; // campo "Variables de cálculo" (SEG_METAS)
+if(VARIABLES_CALCULO_FIELD_ID && SM && !SM.variables_calculo){
+  SM.variables_calculo = { id: VARIABLES_CALCULO_FIELD_ID, type: "text" };
+}
+// Campo para guardar el tipo de medición (Parcial / Cierre).
+// ⬇️ PEGA AQUÍ el id del campo "Tipo de medición" que creaste en QuintaDB (tabla de seguimiento).
+const TIPO_MEDICION_FIELD_ID = "ddNI7dIe1dKyX0mSo1WRKD"; // campo "Tipo de medición" (SEG_METAS)
+if(TIPO_MEDICION_FIELD_ID && SM && !SM.tipo_medicion){
+  SM.tipo_medicion = { id: TIPO_MEDICION_FIELD_ID, type: "string" };
+}
 const FREC_OPTS = ["Mensual","Bimensual","Trimestral","Semestral","Anual","A demanda"];
 
 function leerCampo(r, fieldId, nombre){
@@ -2798,12 +2817,101 @@ window.eliminarMatriz=eliminarMatriz;
 /* ---- Modal de Metas (Programación + Seguimiento) ---- */
 let MT_CTX={ matId:null, indicador:'' };
 let PM_EDIT_ID=null, SM_EDIT_ID=null, SM_EDIT_META=null, SM_EDIT_REF=null;
+// ===== FÓRMULA: detectar variables y calcular el valor real =====
+// La fórmula es texto libre, p.ej. "(N° de materiales actualizados / Total de materiales) × 100".
+// Detectamos como VARIABLES los tramos de texto que no son números ni operadores.
+let _FORMULA_VARS=[]; // [{nombre, key}]
+function _normalizarFormula(f){
+  // Unifica símbolos a operadores JS estándar (se llama DESPUÉS de sustituir variables)
+  return String(f||'')
+    .replace(/×/g,'*')
+    .replace(/÷/g,'/')
+    .replace(/−/g,'-').replace(/–/g,'-')
+    .replace(/(\d|\))\s*[xX]\s*(\d|\()/g,'$1*$2')  // "5 x 3" → "5*3" (x solo entre números/paréntesis)
+    .replace(/,/g,'.');                              // coma decimal → punto
+}
+function detectarVariablesFormula(formula){
+  if(!formula||!formula.trim()) return [];
+  let f=String(formula);
+  // Quitar "× 100", "x100", "*100" final NO — esos son parte del cálculo; solo separamos variables.
+  // Tokenizamos: las variables son secuencias que contienen al menos una letra.
+  // Reemplazamos operadores y paréntesis por separadores y partimos.
+  const trozos = f.split(/[()+\-*/×÷=%]|\b\d+(?:[.,]\d+)?\b/).map(s=>s.trim()).filter(Boolean);
+  // Cada trozo con al menos una letra es una variable candidata
+  const vistos=new Set(); const vars=[];
+  trozos.forEach(t=>{
+    // limpiar símbolos sueltos
+    const nombre=t.replace(/^[^\wÁÉÍÓÚÑáéíóúñ°%]+|[^\wÁÉÍÓÚÑáéíóúñ°%]+$/g,'').trim();
+    if(nombre && /[a-zA-ZÁÉÍÓÚÑáéíóúñ]/.test(nombre) && !vistos.has(nombre.toLowerCase())){
+      vistos.add(nombre.toLowerCase());
+      vars.push({ nombre, key:'v'+vars.length });
+    }
+  });
+  return vars;
+}
+function construirCamposFormula(formula){
+  _FORMULA_VARS = detectarVariablesFormula(formula);
+  const box=document.getElementById('sm_vars_box');
+  const grid=document.getElementById('sm_vars_grid');
+  const ref=document.getElementById('sm_formula_ref');
+  const real=document.getElementById('sm_real');
+  if(!box||!grid){ return; }
+  if(!_FORMULA_VARS.length){
+    // Sin fórmula o sin variables detectables: entrada manual del valor real
+    box.style.display='none'; grid.innerHTML='';
+    if(real){ real.readOnly=false; real.style.background=''; }
+    return;
+  }
+  if(ref) ref.textContent='Fórmula: '+formula;
+  grid.innerHTML=_FORMULA_VARS.map(v=>`
+    <div class="field">
+      <label title="${v.nombre.replace(/"/g,'&quot;')}">${v.nombre.replace(/</g,'&lt;')}</label>
+      <input type="number" step="any" data-fkey="${v.key}" oninput="calcularValorReal()" placeholder="0">
+    </div>`).join('');
+  box.style.display='';
+  if(real){ real.readOnly=true; real.style.background='var(--paper)'; real.placeholder='se calcula con la fórmula'; }
+}
+function calcularValorReal(){
+  const grid=document.getElementById('sm_vars_grid');
+  const real=document.getElementById('sm_real');
+  if(!grid||!real||!_FORMULA_VARS.length) return;
+  // 1) Partir de la fórmula ORIGINAL y sustituir cada variable por su valor (antes de tocar operadores,
+  //    para no dañar nombres que contengan 'x', '÷', etc.)
+  let expr=String(MT_CTX.formula||'');
+  let faltan=false; let algunoLleno=false;
+  const ordenadas=[..._FORMULA_VARS].sort((a,b)=>b.nombre.length-a.nombre.length);
+  ordenadas.forEach(v=>{
+    const inp=grid.querySelector('input[data-fkey="'+v.key+'"]');
+    const val=inp&&inp.value!==''?parseFloat(inp.value):null;
+    if(val===null||isNaN(val)) faltan=true; else algunoLleno=true;
+    const esc=v.nombre.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    expr=expr.replace(new RegExp(esc,'gi'), '('+(val===null?'0':val)+')');
+  });
+  // Si NINGUNA variable tiene valor, no tocar sm_real (respeta el valor cargado al editar)
+  if(!algunoLleno){ return; }
+  if(faltan){ real.value=''; if(typeof evaluarRemediacion==='function') evaluarRemediacion(); return; }
+  // 2) Ahora SÍ normalizar los operadores (ya no quedan nombres de variables)
+  expr=_normalizarFormula(expr);
+  // 3) Evaluar de forma segura: solo números, operadores y paréntesis
+  let resultado='';
+  try{
+    if(/^[-+*/().\d\s]+$/.test(expr)){
+      const val=Function('"use strict";return ('+expr+')')();
+      if(isFinite(val)) resultado=Math.round(val*100)/100;
+    }
+  }catch(_){ resultado=''; }
+  real.value = resultado;
+  if(typeof evaluarRemediacion==='function') evaluarRemediacion();
+}
+window.calcularValorReal=calcularValorReal;
+
 async function abrirMetas(matId){
   const recs=await loadMatriz();
   const r=recs.find(x=>x.id===matId);
   if(!r){ toast('No se encontró el indicador.', true); return; }
   const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
-  MT_CTX={ matId, indicador:ind };
+  const formula=leerCampo(r, MAT.formula.id, 'Fórmula')||'';
+  MT_CTX={ matId, indicador:ind, formula };
   // Resetear cualquier estado de edición previo
   PM_EDIT_ID=null; SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
   const bp=document.getElementById('pm_guardar'); if(bp) bp.textContent='+ Guardar programación';
@@ -2812,7 +2920,17 @@ async function abrirMetas(matId){
   const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
   const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
   const ep=document.getElementById('sm_periodo'); if(ep){ ep.value=''; delete ep.dataset.touched; }
+  { const stm=document.getElementById('sm_tipo_med'); if(stm) stm.value='Parcial'; }
+  { const nt=document.getElementById('sm_remed_nota'); if(nt) nt.textContent=''; }
   document.getElementById('mt_titulo').textContent=ind||'Indicador';
+  // Mostrar la fórmula del indicador en Programación (referencia visual)
+  const fbox=document.getElementById('mt_formula_box');
+  if(fbox){
+    if(formula && formula.trim()){ fbox.innerHTML='📐 <strong>Fórmula del indicador:</strong> '+formula.replace(/</g,'&lt;'); fbox.style.display=''; }
+    else { fbox.style.display='none'; }
+  }
+  // Construir los campos de variables de la fórmula en Seguimiento
+  construirCamposFormula(formula);
   // Modo solo lectura (Usuario libre): ocultar formularios de agregar metas
   const sl=soloLectura();
   const pf=document.getElementById('mt_prog_form'); if(pf) pf.style.display = sl?'none':'';
@@ -3235,8 +3353,17 @@ function evaluarRemediacion(){
   let pct=null;
   if(!isNaN(real) && meta!==null){ pct=calcAvance(real, meta, ref); }
   if(elAvance) elAvance.value = pct!==null ? pct+'%' : '';
-  // Remediación si <100%
-  if(box){ box.classList.toggle('hidden', !(pct!==null && pct<100)); }
+  // Plan de acción/mejora: SOLO se sugiere (nunca se exige) cuando la medición es DE CIERRE
+  // y el avance quedó por debajo de la meta. En medición parcial no aplica (es avance en curso).
+  const tipoMed = (document.getElementById('sm_tipo_med')||{}).value || 'Parcial';
+  const incumpleCierre = (tipoMed==='Cierre') && (pct!==null && pct<100);
+  if(box){ box.classList.toggle('hidden', !incumpleCierre); }
+  const nota=document.getElementById('sm_remed_nota');
+  if(nota){
+    nota.textContent = incumpleCierre
+      ? 'La medición de cierre quedó bajo la meta. Si responde a una deficiencia, registra un plan de acción; si fue por causas externas o ajustes previstos, basta con explicarlo en la observación.'
+      : '';
+  }
 }
 window.evaluarRemediacion=evaluarRemediacion;
 
@@ -3336,6 +3463,8 @@ function editarSegMeta(segId){
   set('sm_real', leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
   set('sm_evid', leerCampo(s,SM.evidencias.id,'Evidencias'));
   set('sm_remed', leerCampo(s,SM.plan_remediacion.id,'Plan de remediación'));
+  // Tipo de medición guardado (por defecto Parcial si no hay)
+  if(SM.tipo_medicion){ const tm=leerCampo(s, SM.tipo_medicion.id, 'Tipo de medición'); const selTm=document.getElementById('sm_tipo_med'); if(selTm) selTm.value=(tm==='Cierre'?'Cierre':'Parcial'); }
   set('sm_obs', limpiarEtiqueta(leerCampo(s,SM.observacion.id,'Observación')));
   const elPer=document.getElementById('sm_periodo'); if(elPer){ elPer.value=SM.periodo?leerCampo(s,SM.periodo.id,'Periodo'):''; elPer.dataset.touched='1'; }
   // Mostrar el panel con la meta propia y calcular % con el real actual
@@ -3345,6 +3474,17 @@ function editarSegMeta(segId){
   const elAv=document.getElementById('sm_avance');
   if(elAv && !isNaN(SM_EDIT_META) && !isNaN(real)){ const pct=calcAvance(real, SM_EDIT_META, SM_EDIT_REF); if(pct!==null){ elAv.value=pct+'%'; const box=document.getElementById('sm_remed_box'); if(box) box.classList.toggle('hidden', !(pct<100)); } }
   const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='✓ Actualizar seguimiento';
+  // Rellenar las variables de la fórmula desde el JSON guardado (si existe)
+  if(SM.variables_calculo && _FORMULA_VARS.length){
+    try{
+      const raw=leerCampo(s, SM.variables_calculo.id, 'Variables de cálculo');
+      if(raw){
+        const vals=JSON.parse(raw);
+        const grid=document.getElementById('sm_vars_grid');
+        _FORMULA_VARS.forEach(v=>{ const inp=grid&&grid.querySelector('input[data-fkey="'+v.key+'"]'); if(inp && vals[v.nombre]!=null) inp.value=vals[v.nombre]; });
+      }
+    }catch(_){}
+  }
   document.getElementById('sm_real').scrollIntoView({behavior:'smooth',block:'center'});
 }
 window.editarSegMeta=editarSegMeta;
@@ -3381,6 +3521,15 @@ async function guardarSegMeta(){
   if(!SM_EDIT_ID){ campos[SM.rel_matriz.id]=[MT_CTX.matId]; if(progId) campos[SM.rel_prog_meta.id]=[progId]; }
   if(fecha) campos[SM.fecha_eval.id]=fecha;
   campos[SM.valor_real.id]=real;
+  // Tipo de medición (Parcial / Cierre), si hay campo configurado
+  if(SM.tipo_medicion){ const tm=(document.getElementById('sm_tipo_med')||{}).value; if(tm) campos[SM.tipo_medicion.id]=tm; }
+  // Guardar los valores de las variables de la fórmula (JSON), si hay campo configurado y variables
+  if(SM.variables_calculo && _FORMULA_VARS.length){
+    const grid=document.getElementById('sm_vars_grid');
+    const vals={};
+    _FORMULA_VARS.forEach(v=>{ const inp=grid&&grid.querySelector('input[data-fkey="'+v.key+'"]'); if(inp && inp.value!=='') vals[v.nombre]=parseFloat(inp.value); });
+    if(Object.keys(vals).length) campos[SM.variables_calculo.id]=JSON.stringify(vals);
+  }
   campos[SM.evidencias.id]=evid||'';
   campos[SM.plan_remediacion.id]=remed||'';
   // Campos propios (robustos) — siempre se reescriben para mantener consistencia
