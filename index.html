@@ -867,6 +867,14 @@ function entrarApp(){
   aplicarPermisos();
   mostrarBarraSesion();
   STATE.matriz=[];
+  // Precarga proactiva en segundo plano (no bloquea): así la primera edición ya tiene los
+  // catálogos en caché y abre rápido. Se ignoran errores; si falla, se cargará bajo demanda.
+  setTimeout(()=>{
+    try{ loadInventario().catch(()=>{}); }catch(_){}
+    try{ loadMaestra('RESPONSABLES').catch(()=>{}); }catch(_){}
+    try{ if(typeof cargarOficinasOpts==='function') cargarOficinasOpts().catch(()=>{}); }catch(_){}
+    try{ if(typeof cargarMapaRespProceso==='function') cargarMapaRespProceso().catch(()=>{}); }catch(_){}
+  }, 400);
   if(typeof renderListado==='function'){ /* la vista activa se renderiza al navegar */ }
 }
 
@@ -1769,13 +1777,24 @@ async function editarFicha(nivel, id){
   const modalEl=document.getElementById('modalEdit');
   modalEl.classList.add('show'); document.body.style.overflow='hidden';
   mostrarCargaEdit(true);
+  // Lanzar EN PARALELO las cargas independientes (ficha individual, dueños, inventario).
+  // Antes iban en serie; solaparlas reduce mucho el tiempo de apertura.
+  const pFicha = API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','GET',{name_value:1}).then(d=>d.record).catch(()=>null);
+  const pDuenos = loadMaestra('RESPONSABLES').catch(()=>[]);
+  const pInv = loadInventario().catch(()=>[]);
   // 1) Leer la ficha FRESCA e individual desde QuintaDB (trae subform_values completos,
   //    que la lista masiva no siempre incluye).
-  let r;
-  try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','GET',{name_value:1}); r=d.record; }catch(_){}
+  let r = await pFicha;
   if(!r){ let fichas = await loadFichas(nivel, true); r = fichas.find(x=>x.id===id); }
   if(!r){ mostrarCargaEdit(false); toast('No se encontró la ficha.', true); cerrarModalEdit(); return; }
-  const F=EDF(nivel); const v=r.values||{};
+  // Con la ficha lista, lanzar YA la lectura de subindicadores en paralelo (no esperar a la cascada)
+  const F0=EDF(nivel);
+  const subIds0=getSubIds(r, F0);
+  const pSubs = subIds0.length ? Promise.all(subIds0.map(sid=>
+      API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
+        .then(d=>({sid, vals:d.record && d.record.values})).catch(()=>({sid, vals:null}))
+    )) : Promise.resolve([]);
+  const F=F0; const v=r.values||{};
   // Visibilidad de niveles en el modal
   document.getElementById('ed_w_n1').classList.toggle('hidden', !(nivel==='N1'||nivel==='N2'));
   document.getElementById('ed_w_n2').classList.toggle('hidden', nivel!=='N2');
@@ -1796,9 +1815,9 @@ async function editarFicha(nivel, id){
   setIII('ed_registros', cur(F.registros,'Registros'));
   setIII('ed_instalaciones', cur(F.instalaciones,'Instalaciones'));
   setIII('ed_equipos', cur(F.equipos,'Equipos'));
-  // Dueño: cargar opciones y seleccionar según el texto guardado (dueno_txt, que se lee bien)
+  // Dueño: usar opciones ya cargadas en paralelo y seleccionar según el texto guardado
   try{
-    const duenos=await loadMaestra('RESPONSABLES');
+    const duenos=await pDuenos;
     const selD=document.getElementById('ed_dueno');
     fillSelect(selD, duenos);
     const duenoTxt = leerDueno(r, F);
@@ -1812,15 +1831,11 @@ async function editarFicha(nivel, id){
   await initCascadaModal();
   const ruta=rutaFicha(r,nivel);
   await reconstruirCascadaModal(ruta, nivel);
-  // Leer los indicadores guardados (texto "Componente — Indicador") EN PARALELO (rápido)
+  // Leer los indicadores guardados (ya lanzados en paralelo arriba como pSubs)
   SIPOC_ED={};
-  const subIds=getSubIds(r, F);
   const indicadoresGuardados=[]; // {comp, ind, sid}
-  if(subIds.length){
-    const lecturas = await Promise.all(subIds.map(sid=>
-      API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
-        .then(d=>({sid, vals:d.record && d.record.values})).catch(()=>({sid, vals:null}))
-    ));
+  {
+    const lecturas = await pSubs;
     lecturas.forEach(({sid, vals})=>{
       const txt=leerTextoIndicador(vals);
       if(txt && !esBasura(txt) && txt!=='Indicador'){
@@ -2531,16 +2546,18 @@ async function abrirEditarMatriz(matId){
   modal.classList.add('show'); document.body.style.overflow='hidden';
   const g=id=>{ const el=document.getElementById(id); if(el) el.value=''; };
   ['em_indicador','em_proposito','em_formula','em_fuente','em_responsable','em_celular','em_correo'].forEach(g);
-  // Llenar selects
-  const oficinasOpts=await cargarOficinasOpts();
+  // Lanzar EN PARALELO: lista de oficinas y el registro fresco (antes iban en serie)
+  const pOfi = cargarOficinasOpts().catch(()=>[]);
+  const pReg = API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+matId+'.json','GET',{name_value:1}).then(d=>d.record).catch(()=>null);
+  // Llenar selects en cuanto lleguen las oficinas
+  const oficinasOpts=await pOfi;
   fillSelect(document.getElementById('em_oficina'), oficinasOpts);
   fillSelect(document.getElementById('em_oficina_dueno'), oficinasOpts);
   fillSelect(document.getElementById('em_frec_med'), FREC_OPTS.map(o=>({value:o,label:o})));
   fillSelect(document.getElementById('em_frec_calc'), FREC_OPTS.map(o=>({value:o,label:o})));
-  // Leer el registro fresco
+  // Leer el registro fresco (ya en vuelo)
   try{
-    const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+matId+'.json','GET',{name_value:1});
-    const r=d.record; if(!r) return;
+    const r=await pReg; if(!r) return;
     const set=(id,val)=>{ const el=document.getElementById(id); if(el) el.value=val||''; };
     const indTxt=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
     // El indicador puede venir como "Componente — Indicador"; mostramos completo para editar
