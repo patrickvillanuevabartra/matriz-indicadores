@@ -615,8 +615,24 @@
           <div class="grid">
             <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha" onchange="sugerirPeriodoProg()"></div>
             <div class="field"><label>Periodo <span style="color:var(--mist);font-weight:400">(se sugiere; ajustable)</span></label><input id="pm_periodo" placeholder="Ej. Enero 2026, 2026-I" oninput="this.dataset.touched='1'"></div>
-            <div class="field"><label>Valor de referencia (línea base)</label><input type="number" step="any" id="pm_ref"></div>
-            <div class="field"><label>Valor meta</label><input type="number" step="any" id="pm_meta"></div>
+            <div class="field">
+              <label>Valor de referencia (línea base)</label>
+              <input type="number" step="any" id="pm_ref">
+              <button type="button" id="pm_ref_toggle" onclick="toggleCalcMeta('ref')" style="margin-top:5px;border:1px solid var(--brand-2);background:var(--card);color:var(--brand);font-family:inherit;font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer">📐 Calcular con la fórmula</button>
+              <div id="pm_ref_calc" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 12px;margin-top:6px">
+                <div id="pm_ref_formula" style="font-size:11px;color:var(--mist);margin-bottom:8px"></div>
+                <div id="pm_ref_grid" class="grid"></div>
+              </div>
+            </div>
+            <div class="field">
+              <label>Valor meta</label>
+              <input type="number" step="any" id="pm_meta">
+              <button type="button" id="pm_meta_toggle" onclick="toggleCalcMeta('meta')" style="margin-top:5px;border:1px solid var(--brand-2);background:var(--card);color:var(--brand);font-family:inherit;font-size:11px;padding:3px 9px;border-radius:12px;cursor:pointer">📐 Calcular con la fórmula</button>
+              <div id="pm_meta_calc" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 12px;margin-top:6px">
+                <div id="pm_meta_formula" style="font-size:11px;color:var(--mist);margin-bottom:8px"></div>
+                <div id="pm_meta_grid" class="grid"></div>
+              </div>
+            </div>
             <div class="field full"><label>Plan de acción (enlace a Drive/SharePoint)</label><input type="url" id="pm_plan" placeholder="https://…"></div>
             <div class="field full"><label>Observación</label><textarea id="pm_obs"></textarea></div>
           </div>
@@ -2249,6 +2265,12 @@ const TIPO_MEDICION_FIELD_ID = "ddNI7dIe1dKyX0mSo1WRKD"; // campo "Tipo de medic
 if(TIPO_MEDICION_FIELD_ID && SM && !SM.tipo_medicion){
   SM.tipo_medicion = { id: TIPO_MEDICION_FIELD_ID, type: "string" };
 }
+// Campos para guardar las variables con que se calculan referencia y meta (JSON en texto).
+// ⬇️ PEGA AQUÍ los ids de los campos creados en QuintaDB (tabla PROGRAMACIÓN de metas).
+const VARIABLES_REF_FIELD_ID  = "dcSCoyFg5cTj_cQx88umkp"; // campo "Variables referencia" (PROG_METAS)
+const VARIABLES_META_FIELD_ID = "ddMCoxbb9cIOo3CWddHXy4"; // campo "Variables meta" (PROG_METAS)
+if(VARIABLES_REF_FIELD_ID && PM && !PM.variables_ref){  PM.variables_ref  = { id: VARIABLES_REF_FIELD_ID,  type: "text" }; }
+if(VARIABLES_META_FIELD_ID && PM && !PM.variables_meta){ PM.variables_meta = { id: VARIABLES_META_FIELD_ID, type: "text" }; }
 const FREC_OPTS = ["Mensual","Bimensual","Trimestral","Semestral","Anual","A demanda"];
 
 function leerCampo(r, fieldId, nombre){
@@ -2905,6 +2927,57 @@ function calcularValorReal(){
 }
 window.calcularValorReal=calcularValorReal;
 
+// ===== Cálculo por fórmula para REFERENCIA y META (pestaña Programación) =====
+let _FORMULA_VARS_META={ ref:[], meta:[] };
+function construirCamposFormulaMeta(which, formula){
+  const vars=detectarVariablesFormula(formula);
+  _FORMULA_VARS_META[which]=vars;
+  const grid=document.getElementById('pm_'+which+'_grid');
+  const fref=document.getElementById('pm_'+which+'_formula');
+  const tog=document.getElementById('pm_'+which+'_toggle');
+  if(tog) tog.style.display = vars.length ? '' : 'none'; // sin fórmula → no ofrecer calculadora
+  if(!grid) return;
+  if(!vars.length){ grid.innerHTML=''; return; }
+  if(fref) fref.textContent='Fórmula: '+formula;
+  grid.innerHTML=vars.map(v=>`
+    <div class="field">
+      <label title="${v.nombre.replace(/"/g,'&quot;')}" style="font-size:11px">${v.nombre.replace(/</g,'&lt;')}</label>
+      <input type="number" step="any" data-mkey="${v.key}" oninput="calcularValorMeta('${which}')" placeholder="0">
+    </div>`).join('');
+}
+function toggleCalcMeta(which){
+  const box=document.getElementById('pm_'+which+'_calc');
+  if(!box) return;
+  box.style.display = box.style.display==='none' ? '' : 'none';
+}
+function calcularValorMeta(which){
+  const vars=_FORMULA_VARS_META[which]||[];
+  const grid=document.getElementById('pm_'+which+'_grid');
+  const destino=document.getElementById('pm_'+which); // pm_ref / pm_meta
+  if(!grid||!destino||!vars.length) return;
+  let expr=String(MT_CTX.formula||'');
+  let faltan=false, algunoLleno=false;
+  const ord=[...vars].sort((a,b)=>b.nombre.length-a.nombre.length);
+  ord.forEach(v=>{
+    const inp=grid.querySelector('input[data-mkey="'+v.key+'"]');
+    const val=inp&&inp.value!==''?parseFloat(inp.value):null;
+    if(val===null||isNaN(val)) faltan=true; else algunoLleno=true;
+    const esc=v.nombre.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    expr=expr.replace(new RegExp(esc,'gi'), '('+(val===null?'0':val)+')');
+  });
+  if(!algunoLleno) return;            // no pisar el valor escrito a mano si no se usa la calculadora
+  if(faltan){ return; }               // esperar a que estén todas
+  expr=_normalizarFormula(expr);
+  try{
+    if(/^[-+*/().\d\s]+$/.test(expr)){
+      const val=Function('"use strict";return ('+expr+')')();
+      if(isFinite(val)) destino.value=Math.round(val*100)/100;
+    }
+  }catch(_){}
+}
+window.toggleCalcMeta=toggleCalcMeta;
+window.calcularValorMeta=calcularValorMeta;
+
 async function abrirMetas(matId){
   const recs=await loadMatriz();
   const r=recs.find(x=>x.id===matId);
@@ -2931,6 +3004,11 @@ async function abrirMetas(matId){
   }
   // Construir los campos de variables de la fórmula en Seguimiento
   construirCamposFormula(formula);
+  // Calculadora por fórmula para referencia y meta (pestaña Programación)
+  construirCamposFormulaMeta('ref', formula);
+  construirCamposFormulaMeta('meta', formula);
+  // Mostrar la fórmula también arriba de programación ya se hace con mt_formula_box
+  ['pm_ref_calc','pm_meta_calc'].forEach(id=>{ const b=document.getElementById(id); if(b) b.style.display='none'; });
   // Modo solo lectura (Usuario libre): ocultar formularios de agregar metas
   const sl=soloLectura();
   const pf=document.getElementById('mt_prog_form'); if(pf) pf.style.display = sl?'none':'';
@@ -3026,6 +3104,21 @@ function editarProgMeta(progId){
   set('pm_obs', limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación')));
   const ep=document.getElementById('pm_periodo'); if(ep){ ep.value=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; ep.dataset.touched='1'; }
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='✓ Actualizar programación';
+  // Rellenar variables de ref/meta desde el JSON guardado (si existe) y abrir su calculadora
+  [['ref',PM.variables_ref],['meta',PM.variables_meta]].forEach(([which,campo])=>{
+    if(!campo) return;
+    try{
+      const raw=leerCampo(p, campo.id, which==='ref'?'Variables referencia':'Variables meta');
+      if(raw){
+        const vals=JSON.parse(raw);
+        const grid=document.getElementById('pm_'+which+'_grid');
+        const vars=_FORMULA_VARS_META[which]||[];
+        let alguno=false;
+        vars.forEach(v=>{ const inp=grid&&grid.querySelector('input[data-mkey="'+v.key+'"]'); if(inp && vals[v.nombre]!=null){ inp.value=vals[v.nombre]; alguno=true; } });
+        if(alguno){ const box=document.getElementById('pm_'+which+'_calc'); if(box) box.style.display=''; }
+      }
+    }catch(_){}
+  });
   document.getElementById('pm_fecha').scrollIntoView({behavior:'smooth',block:'center'});
 }
 window.editarProgMeta=editarProgMeta;
@@ -3049,6 +3142,15 @@ async function guardarProgMeta(){
   if(fecha) campos[PM.fecha_prog.id]=fecha;
   campos[PM.valor_ref.id]=ref||'';
   campos[PM.valor_meta.id]=meta;
+  // Guardar el desglose de variables (JSON) si hay campos configurados y se usó la calculadora
+  const _serializar=(which)=>{
+    const vars=_FORMULA_VARS_META[which]||[]; if(!vars.length) return null;
+    const grid=document.getElementById('pm_'+which+'_grid'); if(!grid) return null;
+    const vals={}; vars.forEach(v=>{ const inp=grid.querySelector('input[data-mkey="'+v.key+'"]'); if(inp && inp.value!=='') vals[v.nombre]=parseFloat(inp.value); });
+    return Object.keys(vals).length?JSON.stringify(vals):null;
+  };
+  if(PM.variables_ref){ const j=_serializar('ref'); if(j!=null) campos[PM.variables_ref.id]=j; }
+  if(PM.variables_meta){ const j=_serializar('meta'); if(j!=null) campos[PM.variables_meta.id]=j; }
   campos[PM.plan_accion.id]=plan||'';
   if(PM.periodo && periodo) campos[PM.periodo.id]=periodo;
   // Etiqueta robusta: el matId va al inicio de la observación (los textos SÍ se leen bien)
