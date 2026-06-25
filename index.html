@@ -874,6 +874,8 @@ function entrarApp(){
     try{ loadMaestra('RESPONSABLES').catch(()=>{}); }catch(_){}
     try{ if(typeof cargarOficinasOpts==='function') cargarOficinasOpts().catch(()=>{}); }catch(_){}
     try{ if(typeof cargarMapaRespProceso==='function') cargarMapaRespProceso().catch(()=>{}); }catch(_){}
+    // Mapa de subindicadores (compartido por Fichas registradas y Matriz): precargar en segundo plano
+    try{ if(typeof construirMapaIndicadores==='function') construirMapaIndicadores().catch(()=>{}); }catch(_){}
   }, 400);
   if(typeof renderListado==='function'){ /* la vista activa se renderiza al navegar */ }
 }
@@ -1250,6 +1252,17 @@ async function nivelAnalisisDeFicha(r, nivel){
 // emparejando cada indicador por su TEXTO (que sí se lee bien), sin depender de relaciones rotas.
 let _MAPA_IND = {};           // textoCompleto.trim() → {fichaId, fichaRuta, nivel, orden, fichaOrden}
 let _MAPA_IND_LISTO = false;
+// Caché compartido por ambas vistas: subindicadores de cada ficha (id+nivel).
+//   _SUBIND_POR_FICHA["N2_<id>"] = [{elemento, indicador}, ...]  (en orden del subformulario)
+const _SUBIND_POR_FICHA = {};
+// Invalida los cachés compartidos de indicadores (tras crear/editar/eliminar fichas o indicadores).
+function invalidarCacheIndicadores(){
+  _MAPA_IND = {}; _MAPA_IND_LISTO = false;
+  for(const k in _SUBIND_POR_FICHA) delete _SUBIND_POR_FICHA[k];
+  if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
+  if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
+}
+window.invalidarCacheIndicadores=invalidarCacheIndicadores;
 async function construirMapaIndicadores(){
   if(_MAPA_IND_LISTO) return _MAPA_IND;
   const tareas=[];
@@ -1263,18 +1276,24 @@ async function construirMapaIndicadores(){
       const fichaRuta=rutaFicha(f, nivel);
       const fichaId=f.id;
       const fichaOrden=_fOrden++;
+      const cacheKey=nivel+'_'+fichaId;
       tareas.push(
         Promise.all(subIds.map(sid=>
           API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
             .then(d=>({vals:d.record && d.record.values})).catch(()=>({vals:null}))
         )).then(lecturas=>{
           let orden=0;
+          const items=[]; // para Fichas registradas
           lecturas.forEach(({vals})=>{
             const t=leerTextoIndicador(vals);
             if(t && !esBasura(t) && t!=='Indicador'){
-              _MAPA_IND[String(t).trim()] = { fichaId, fichaRuta, nivel, orden:orden++, fichaOrden };
+              const tt=String(t).trim();
+              _MAPA_IND[tt] = { fichaId, fichaRuta, nivel, orden:orden++, fichaOrden };
+              const partes=tt.split(' — ');
+              items.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
             }
           });
+          _SUBIND_POR_FICHA[cacheKey]=items;
         })
       );
     }
@@ -1698,6 +1717,8 @@ async function renderListado(){
 // se agrupa por elemento y se arma una sub-tabla: Nivel de análisis › Elemento → Indicador.
 const _DESAG_CACHE = {}; // key → html ya calculado
 async function cargarDesagregadoIndicadores(lista){
+  // Construir (o reutilizar) el caché compartido de subindicadores — UNA sola vez, en paralelo.
+  try{ await Promise.all([loadInventario(), construirMapaIndicadores()]); }catch(_){}
   for(const {celdaId, r, nivel, nInd} of lista){
     if(nInd<=0) continue;
     const celda=document.getElementById(celdaId);
@@ -1705,26 +1726,10 @@ async function cargarDesagregadoIndicadores(lista){
     const key=nivel+'_'+r.id;
     if(_DESAG_CACHE[key]!==undefined){ celda.innerHTML=_DESAG_CACHE[key]; continue; }
     try{
-      // 1) Nivel de análisis (label) de la ficha
-      const det = await nivelAnalisisDeFicha(r, nivel);
-      const naLabel = det && det.label ? det.label : '';
-      // 2) Leer los subindicadores → [{elemento, indicador}]
-      const F=EDF(nivel);
-      const subIds=getSubIds(r, F);
-      const lecturas=await Promise.all(subIds.map(sid=>
-        API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
-          .then(d=>({vals:d.record && d.record.values})).catch(()=>({vals:null}))
-      ));
-      const items=[];
-      lecturas.forEach(({vals})=>{
-        const txt=leerTextoIndicador(vals);
-        if(txt && !esBasura(txt) && txt!=='Indicador'){
-          const partes=String(txt).split(' — ');
-          const elemento = partes.length>1 ? partes[0].trim() : '';
-          const indicador = partes.length>1 ? partes.slice(1).join(' — ').trim() : txt.trim();
-          items.push({elemento, indicador});
-        }
-      });
+      // Nivel de análisis (label) — síncrono ahora que el inventario está cargado
+      let naLabel=''; { const det=await nivelAnalisisDeFicha(r, nivel); naLabel = det && det.label ? det.label : ''; }
+      // Subindicadores: del caché compartido (ya leídos por construirMapaIndicadores)
+      const items = _SUBIND_POR_FICHA[nivel+'_'+r.id] || [];
       _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items);
       const c2=document.getElementById(celdaId);
       if(c2) c2.innerHTML=_DESAG_CACHE[key];
@@ -2075,6 +2080,7 @@ async function guardarEdicion(){
     if(hayNuevos){ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) }); }
     toast('Ficha actualizada.');
     STATE.fichas[nivel]=[];
+    invalidarCacheIndicadores();
     cerrarModalEdit();
     renderListado();
   }catch(err){ console.error('[guardarEdicion] ERROR:', err); toast('Error al actualizar: '+err.message, true); }
@@ -2119,7 +2125,7 @@ async function eliminarFicha(nivel, id){
   try{
     await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','DELETE',{});
     toast('Ficha eliminada.');
-    STATE.fichas[nivel]=[]; renderListado();
+    STATE.fichas[nivel]=[]; invalidarCacheIndicadores(); renderListado();
   }catch(e){ toast('Error al eliminar: '+e.message, true); }
 }
 window.eliminarFicha=eliminarFicha;
@@ -2532,7 +2538,7 @@ async function guardarIndicadoresMatriz(){
       }
     }
     toast(marcados.length+' indicador(es) agregado(s) a la matriz.');
-    STATE.matriz=[]; cerrarModal('modalAgregar'); renderMatriz();
+    STATE.matriz=[]; invalidarCacheIndicadores(); cerrarModal('modalAgregar'); renderMatriz();
   }catch(err){ toast('Error al agregar: '+err.message, true); }
   finally{ btn.disabled=false; btn.textContent='Agregar a la matriz'; }
 }
@@ -2619,7 +2625,7 @@ async function guardarEdicionMatriz(){
   try{
     await API.saveForm(EM_ID, campos);
     toast('Indicador actualizado.');
-    STATE.matriz=[]; cerrarModal('modalEditMat'); renderMatriz();
+    STATE.matriz=[]; invalidarCacheIndicadores(); cerrarModal('modalEditMat'); renderMatriz();
   }catch(err){ toast('Error al actualizar: '+err.message, true); }
   finally{ btn.disabled=false; btn.textContent='Actualizar indicador'; }
 }
@@ -2627,7 +2633,7 @@ window.guardarEdicionMatriz=guardarEdicionMatriz;
 
 async function eliminarMatriz(matId){
   if(!confirm('¿Eliminar este indicador de la matriz?')) return;
-  try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+matId+'.json','DELETE',{}); toast('Indicador eliminado.'); STATE.matriz=[]; renderMatriz(); }
+  try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+matId+'.json','DELETE',{}); toast('Indicador eliminado.'); STATE.matriz=[]; invalidarCacheIndicadores(); renderMatriz(); }
   catch(e){ toast('Error: '+e.message, true); }
 }
 window.eliminarMatriz=eliminarMatriz;
