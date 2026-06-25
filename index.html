@@ -313,6 +313,7 @@
       <div class="eyebrow">Inventario documental</div>
       <h1>Fichas registradas</h1>
       <p>Fichas de proceso guardadas en los tres niveles. Edita o elimina según necesites.</p>
+      <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="list_total_ficha">0</span> ficha(s) · <span id="list_total_ind">0</span> indicador(es)</p>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
@@ -543,15 +544,15 @@
       <div id="ag_def_box" class="hidden" style="border-top:1px solid var(--line);margin-top:16px;padding-top:16px">
         <label style="font-size:13px;font-weight:500;color:var(--slate);display:block;margin-bottom:10px">3. Definición común (se aplica a los indicadores marcados)</label>
         <div class="grid">
-          <div class="field"><label>Oficina/área de la medición</label><select id="ag_oficina" onchange="autocompletarRespMatriz()"></select></div>
-          <div class="field"><label>Oficina dueña del indicador</label><select id="ag_oficina_dueno"></select></div>
+          <div class="field"><label>Oficina/área de la medición <span style="color:#c0392b">*</span></label><select id="ag_oficina" onchange="autocompletarRespMatriz()"></select></div>
+          <div class="field"><label>Oficina dueña del indicador <span style="color:#c0392b">*</span></label><select id="ag_oficina_dueno"></select></div>
           <div class="field"><label>Responsable de la medición</label><input id="ag_responsable" readonly style="background:var(--paper)" placeholder="— se autocompleta según oficina —"></div>
           <div class="field"><label>Celular del responsable</label><input id="ag_celular" readonly style="background:var(--paper)" placeholder="—"></div>
           <div class="field"><label>Correo del responsable</label><input id="ag_correo" readonly style="background:var(--paper)" placeholder="—"></div>
           <div class="field"><label>Frecuencia de medición</label><select id="ag_frec_med"></select></div>
           <div class="field"><label>Frecuencia de cálculo</label><select id="ag_frec_calc"></select></div>
           <div class="field full"><label>Propósito del indicador <span style="color:var(--mist);font-weight:400">(opcional)</span></label><input id="ag_proposito" placeholder="¿Para qué se mide este indicador?"></div>
-          <div class="field full"><label>Fórmula de cálculo</label><textarea id="ag_formula" placeholder="Ej: (N° atenciones resueltas / N° atenciones totales) × 100"></textarea></div>
+          <div class="field full"><label>Fórmula de cálculo <span style="color:#c0392b">*</span></label><textarea id="ag_formula" placeholder="Ej: (N° atenciones resueltas / N° atenciones totales) × 100"></textarea></div>
           <div class="field full"><label>Fuente de información</label><textarea id="ag_fuente"></textarea></div>
         </div>
         <p class="hint" style="margin-top:8px">La fórmula y fuente puedes ajustarlas luego por cada indicador desde la matriz.</p>
@@ -575,10 +576,10 @@
       <div class="grid">
         <div class="field full"><label>Indicador</label><input id="em_indicador" placeholder="Nombre del indicador"></div>
         <div class="field full"><label>Propósito del indicador <span style="color:var(--mist);font-weight:400">(opcional)</span></label><input id="em_proposito" placeholder="¿Para qué se mide este indicador?"></div>
-        <div class="field full"><label>Fórmula de cálculo</label><textarea id="em_formula" rows="2"></textarea></div>
+        <div class="field full"><label>Fórmula de cálculo <span style="color:#c0392b">*</span></label><textarea id="em_formula" rows="2"></textarea></div>
         <div class="field full"><label>Fuente de información</label><textarea id="em_fuente" rows="2"></textarea></div>
-        <div class="field"><label>Oficina/área de la medición</label><select id="em_oficina" onchange="autocompletarRespMatrizEdit()"></select></div>
-        <div class="field"><label>Oficina dueña del indicador</label><select id="em_oficina_dueno"></select></div>
+        <div class="field"><label>Oficina/área de la medición <span style="color:#c0392b">*</span></label><select id="em_oficina" onchange="autocompletarRespMatrizEdit()"></select></div>
+        <div class="field"><label>Oficina dueña del indicador <span style="color:#c0392b">*</span></label><select id="em_oficina_dueno"></select></div>
         <div class="field"><label>Responsable de la medición</label><input id="em_responsable" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Celular del responsable</label><input id="em_celular" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Correo del responsable</label><input id="em_correo" readonly style="background:var(--paper)"></div>
@@ -1648,6 +1649,7 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
     }
     toast(EDIT_FICHA?'Ficha actualizada.':'Ficha guardada correctamente.');
     STATE.fichas[NIVEL]=[]; EDIT_FICHA=null;
+    if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
     resetFicha();
   }catch(err){ toast('Error al guardar: '+err.message, true); }
   finally{ btn.disabled=false; btn.textContent='Guardar ficha'; }
@@ -1734,7 +1736,9 @@ function leerTextoIndicador(vals){
   return '';
 }
 
+let _GRP_DE_FICHA = {}; // nivel_id → id de la cabecera de grupo (para contar indicadores)
 async function renderListado(){
+  _GRP_DE_FICHA = {};
   const tb=document.getElementById('tablaListado');
   try{
     const niveles = LIST_FILTRO==='todos' ? ['N0','N1','N2'] : [LIST_FILTRO];
@@ -1747,7 +1751,8 @@ async function renderListado(){
       if(typeof pasaFiltrosList==='function' && !pasaFiltrosList(o)) return false;
       return true;
     });
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; setConn(true); return; }
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin fichas</h3><p>Registra la primera en la pestaña «Fichas de proceso».</p></div></td></tr>'; const tf=document.getElementById('list_total_ficha'); if(tf) tf.textContent='0'; const ti=document.getElementById('list_total_ind'); if(ti) ti.textContent='0'; setConn(true); return; }
+    { const tf=document.getElementById('list_total_ficha'); if(tf) tf.textContent=filas.length; }
     // Agrupar por dueño del proceso (texto). Sin dueño → "(Sin dueño asignado)".
     const duenoDe=({r,nivel})=>{
       const F=EDF(nivel);
@@ -1759,9 +1764,11 @@ async function renderListado(){
     const nombresOrdenados=Object.keys(grupos).sort((a,b)=>{ if(a.startsWith('(')) return 1; if(b.startsWith('(')) return -1; return a.localeCompare(b); });
     let html='';
     const _paraDesagregado=[]; // {celdaId, r, nivel, nInd}
-    nombresOrdenados.forEach(dueno=>{
+    nombresOrdenados.forEach((dueno, gi)=>{
       const items=grupos[dueno];
-      html+=`<tr style="background:var(--paper)"><td colspan="5" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)</span></td></tr>`;
+      const cabId='grp_'+gi;
+      html+=`<tr style="background:var(--paper)"><td colspan="5" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)<span id="${cabId}"></span></span></td></tr>`;
+      items.forEach(({r,nivel})=>{ _GRP_DE_FICHA[nivel+'_'+r.id]=cabId; });
       html+=items.map(({r,nivel})=>{
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
         const desagId='desag_'+nivel+'_'+r.id;
@@ -1807,6 +1814,22 @@ async function cargarDesagregadoIndicadores(lista){
       if(c2) c2.innerHTML=_DESAG_CACHE[key];
     }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
   }
+  // Sumar indicadores por grupo (dueño) y total general, y actualizar las cabeceras
+  try{
+    const porGrupo={}; let totalInd=0;
+    for(const {r, nivel} of lista){
+      const n=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]).length;
+      totalInd+=n;
+      const cabId=_GRP_DE_FICHA[nivel+'_'+r.id];
+      if(cabId) porGrupo[cabId]=(porGrupo[cabId]||0)+n;
+    }
+    Object.keys(porGrupo).forEach(cabId=>{
+      const el=document.getElementById(cabId);
+      if(el) el.textContent=' · '+porGrupo[cabId]+' indicador(es)';
+    });
+    const totEl=document.getElementById('list_total_ind');
+    if(totEl) totEl.textContent=totalInd;
+  }catch(_){}
 }
 
 // Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
@@ -2630,6 +2653,9 @@ async function guardarIndicadoresMatriz(){
   const formula=g('ag_formula'), fuente=g('ag_fuente'), frecMed=g('ag_frec_med'), frecCalc=g('ag_frec_calc');
   const proposito=g('ag_proposito');
   const oficina=g('ag_oficina'), responsable=g('ag_responsable'), celular=g('ag_celular'), correo=g('ag_correo'), oficinaDueno=g('ag_oficina_dueno');
+  if(!oficina){ toast('La Oficina/área de la medición es obligatoria.', true); document.getElementById('ag_oficina').focus(); return; }
+  if(!oficinaDueno){ toast('La Oficina dueña del indicador es obligatoria.', true); document.getElementById('ag_oficina_dueno').focus(); return; }
+  if(!formula || !formula.trim()){ toast('La Fórmula de cálculo es obligatoria.', true); document.getElementById('ag_formula').focus(); return; }
   const btn=document.getElementById('ag_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Agregando…';
   try{
     for(const i of marcados){
@@ -2736,6 +2762,9 @@ window.autocompletarRespMatrizEdit=autocompletarRespMatrizEdit;
 async function guardarEdicionMatriz(){
   if(!EM_ID) return;
   const g=id=>{ const el=document.getElementById(id); return el?el.value.trim():''; };
+  if(!g('em_oficina')){ toast('La Oficina/área de la medición es obligatoria.', true); document.getElementById('em_oficina').focus(); return; }
+  if(!g('em_oficina_dueno')){ toast('La Oficina dueña del indicador es obligatoria.', true); document.getElementById('em_oficina_dueno').focus(); return; }
+  if(!g('em_formula')){ toast('La Fórmula de cálculo es obligatoria.', true); document.getElementById('em_formula').focus(); return; }
   const campos={};
   if(g('em_indicador')) campos[MAT.indicador_txt.id]=g('em_indicador');
   if(MAT.proposito_ind) campos[MAT.proposito_ind.id]=g('em_proposito');
@@ -2949,22 +2978,39 @@ function _datosNotifInd(r){
   if(!r) return {};
   const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
   const partes=ind.split(' — '); const indSolo=partes.length>1?partes.slice(1).join(' — '):ind;
+  const codigoElem = partes.length>1 ? partes[0].trim() : '';
+  // De la ruta del proceso: el último segmento suele ser el elemento del nivel de análisis
+  const rutaTxt = leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)')||'';
+  const segsRuta = String(rutaTxt).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+  const elementoAna = segsRuta.length ? segsRuta[segsRuta.length-1] : '';
   return {
-    indicador:   indSolo||ind||'—',
-    proceso:     leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)')||'—',
-    formula:     leerCampo(r, MAT.formula.id, 'Fórmula')||'',
-    proposito:   MAT.proposito_ind?leerCampo(r, MAT.proposito_ind.id, 'Propósito indicador'):'',
-    fuente:      leerCampo(r, MAT.fuente_info.id, 'Fuente de información')||'',
-    frecuencia:  leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición')||'',
-    frec_calculo:leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo')||'',
-    oficina:     leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'',
-    responsable: leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición')||'',
-    celular:     _leerCampoMulti(r, MAT.resp_celular.id, ['Celular responsable','Celular del responsable','Celular responsable proceso'])||'',
-    correo:      _leerCampoMulti(r, MAT.resp_correo.id, ['Correo responsable','Correo del responsable','Correo electrónico responsable proceso','Correo electrónico del responsable'])||''
+    indicador:      indSolo||ind||'—',
+    indicador_full: ind||'—',
+    codigo:         codigoElem||'',
+    elemento:       elementoAna||'',
+    proceso:        rutaTxt||'—',
+    formula:        leerCampo(r, MAT.formula.id, 'Fórmula')||'',
+    proposito:      MAT.proposito_ind?leerCampo(r, MAT.proposito_ind.id, 'Propósito indicador'):'',
+    fuente:         leerCampo(r, MAT.fuente_info.id, 'Fuente de información')||'',
+    frecuencia:     leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición')||'',
+    frec_calculo:   leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo')||'',
+    oficina:        leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'',
+    oficina_dueno:  MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'',
+    responsable:    leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición')||'',
+    celular:        _leerCampoMulti(r, MAT.resp_celular.id, ['Celular responsable','Celular del responsable','Celular responsable proceso'])||'',
+    correo:         _leerCampoMulti(r, MAT.resp_correo.id, ['Correo responsable','Correo del responsable','Correo electrónico responsable proceso','Correo electrónico del responsable'])||'',
+    fecha:          new Date().toLocaleDateString('es-PE',{day:'2-digit',month:'long',year:'numeric'})
   };
 }
-// Marcadores disponibles para la paleta del editor
-const MARCADORES_NOTIF_IND = ['responsable','indicador','proceso','oficina','formula','proposito','fuente','frecuencia','frec_calculo','celular','correo'];
+// Marcadores disponibles para la paleta del editor (con etiqueta legible)
+const MARCADORES_NOTIF_IND = ['responsable','indicador','indicador_full','codigo','elemento','proceso','oficina','oficina_dueno','formula','proposito','fuente','frecuencia','frec_calculo','celular','correo','fecha'];
+const _ETIQUETAS_MARCADOR = {
+  responsable:'Responsable de la medición', indicador:'Indicador (sin código)', indicador_full:'Indicador completo (con código)',
+  codigo:'Código del elemento', elemento:'Elemento / nivel de análisis', proceso:'Ruta del proceso',
+  oficina:'Oficina/área de la medición', oficina_dueno:'Oficina dueña del indicador', formula:'Fórmula de cálculo',
+  proposito:'Propósito del indicador', fuente:'Fuente de información', frecuencia:'Frecuencia de medición',
+  frec_calculo:'Frecuencia de cálculo', celular:'Celular del responsable', correo:'Correo del responsable', fecha:'Fecha actual'
+};
 
 // Reemplaza {marcador} por el valor real
 function aplicarPlantilla(txt, datos){
@@ -3058,7 +3104,7 @@ async function abrirEditorPlantillas(){
   document.getElementById('pl_correo').value = p.correo;
   window._plTarget='pl_wa';
   const pal=document.getElementById('pl_paleta');
-  if(pal) pal.innerHTML = MARCADORES_NOTIF_IND.map(m=>`<button onclick="insertarMarcador(window._plTarget||'pl_wa','${m}')" style="border:1px solid var(--line);background:var(--card);color:var(--brand);font-family:inherit;font-size:12px;padding:4px 9px;border-radius:14px;cursor:pointer">{${m}}</button>`).join('');
+  if(pal) pal.innerHTML = MARCADORES_NOTIF_IND.map(m=>`<button title="${(_ETIQUETAS_MARCADOR[m]||m).replace(/"/g,'&quot;')}" onclick="insertarMarcador(window._plTarget||'pl_wa','${m}')" style="border:1px solid var(--line);background:var(--card);color:var(--brand);font-family:inherit;font-size:12px;padding:4px 9px;border-radius:14px;cursor:pointer" onmouseenter="this.style.background='var(--paper)'" onmouseleave="this.style.background='var(--card)'">{${m}}</button>`).join('');
   document.getElementById('modalPlantillas').classList.add('show'); document.body.style.overflow='hidden';
   actualizarPreviewPlantilla();
 }
