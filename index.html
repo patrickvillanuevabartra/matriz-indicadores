@@ -2640,9 +2640,13 @@ async function abrirEditarMatriz(matId){
     selectByText('em_oficina_dueno', ofiDueno);
     set('em_frec_med', leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición'));
     set('em_frec_calc', leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo'));
-    set('em_responsable', leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición'));
-    set('em_celular', leerCampo(r, MAT.resp_celular.id, 'Celular responsable'));
-    set('em_correo', leerCampo(r, MAT.resp_correo.id, 'Correo responsable'));
+    // Responsable/celular/correo: si no están guardados en la matriz, buscarlos EN VIVO
+    // en la tabla de responsables (mismo fallback que el detalle 👁).
+    let dCont;
+    try{ dCont = await _datosNotifIndConFallback(r); }catch(_){ dCont = null; }
+    set('em_responsable', (dCont&&dCont.responsable) || leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición'));
+    set('em_celular', (dCont&&dCont.celular) || leerCampo(r, MAT.resp_celular.id, 'Celular responsable'));
+    set('em_correo', (dCont&&dCont.correo) || leerCampo(r, MAT.resp_correo.id, 'Correo responsable'));
   }catch(e){ toast('Error al abrir: '+e.message, true); }
 }
 window.abrirEditarMatriz=abrirEditarMatriz;
