@@ -269,7 +269,7 @@
           <select id="fi_proc" disabled class="hidden"></select>
           <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="fi_ruta">Selecciona la jerarquía arriba…</div></div>
           <div class="field full"><label>Objetivo del proceso</label><textarea id="fi_objetivo"></textarea></div>
-          <div class="field"><label>Dueño del proceso (unidad orgánica)</label><select id="fi_dueno"></select></div>
+          <div class="field"><label>Dueño del proceso (unidad orgánica) <span style="color:#c0392b">*</span></label><select id="fi_dueno"></select></div>
           <div class="field"><label>Alcance</label><textarea id="fi_alcance"></textarea></div>
           <div class="field full"><label>Base legal</label><textarea id="fi_base_legal"></textarea></div>
         </div>
@@ -737,7 +737,7 @@
           <div class="field" id="ed_w_n2"><label>Proceso nivel 2</label><select id="ed_n2" disabled></select></div>
           <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="ed_ruta">—</div></div>
           <div class="field full"><label>Objetivo del proceso</label><textarea id="ed_objetivo"></textarea></div>
-          <div class="field"><label>Dueño del proceso (unidad orgánica)</label><select id="ed_dueno"></select></div>
+          <div class="field"><label>Dueño del proceso (unidad orgánica) <span style="color:#c0392b">*</span></label><select id="ed_dueno"></select></div>
           <div class="field"><label>Alcance</label><textarea id="ed_alcance"></textarea></div>
           <div class="field full"><label>Base legal</label><textarea id="ed_base_legal"></textarea></div>
         </div>
@@ -1283,31 +1283,39 @@ async function construirMapaIndicadores(){
     let fichas=[];
     try{ fichas=await loadFichas(nivel); }catch(_){ fichas=[]; }
     for(const f of fichas){
-      const subIds=getSubIds(f, EDF(nivel));
-      if(!subIds.length) continue;
       const fichaRuta=rutaFicha(f, nivel);
       const fichaId=f.id;
       const fichaOrden=_fOrden++;
       const cacheKey=nivel+'_'+fichaId;
-      tareas.push(
-        Promise.all(subIds.map(sid=>
+      // La lista masiva a veces NO trae subform_values completos → subIds vacío erróneo.
+      // Tarea: obtener subIds (de la lista o, si faltan, leyendo la ficha individual) y luego sus textos.
+      tareas.push((async()=>{
+        let subIds=getSubIds(f, EDF(nivel));
+        if(!subIds.length){
+          // Releer la ficha individual (sí trae subform_values) y reintentar
+          try{
+            const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json','GET',{name_value:1});
+            if(d && d.record) subIds=getSubIds(d.record, EDF(nivel));
+          }catch(_){}
+        }
+        if(!subIds.length){ _SUBIND_POR_FICHA[cacheKey]=[]; return; }
+        const lecturas=await Promise.all(subIds.map(sid=>
           API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
             .then(d=>({vals:d.record && d.record.values})).catch(()=>({vals:null}))
-        )).then(lecturas=>{
-          let orden=0;
-          const items=[]; // para Fichas registradas
-          lecturas.forEach(({vals})=>{
-            const t=leerTextoIndicador(vals);
-            if(t && !esBasura(t) && t!=='Indicador'){
-              const tt=String(t).trim();
-              _MAPA_IND[tt] = { fichaId, fichaRuta, nivel, orden:orden++, fichaOrden };
-              const partes=tt.split(' — ');
-              items.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
-            }
-          });
-          _SUBIND_POR_FICHA[cacheKey]=items;
-        })
-      );
+        ));
+        let orden=0;
+        const items=[];
+        lecturas.forEach(({vals})=>{
+          const t=leerTextoIndicador(vals);
+          if(t && !esBasura(t) && t!=='Indicador'){
+            const tt=String(t).trim();
+            _MAPA_IND[tt] = { fichaId, fichaRuta, nivel, orden:orden++, fichaOrden };
+            const partes=tt.split(' — ');
+            items.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
+          }
+        });
+        _SUBIND_POR_FICHA[cacheKey]=items;
+      })());
     }
   }
   await Promise.all(tareas); // todas las fichas en paralelo
@@ -1528,6 +1536,7 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const ruta = valoresCascada().filter(Boolean).join(' › ');
   if(!g('fi_tipo')||!g('fi_n0')){ toast('Indica al menos Tipo de proceso y Proceso nivel 0.', true); return; }
+  if(!g('fi_dueno')){ toast('El Dueño del proceso (unidad orgánica) es obligatorio.', true); const sd=document.getElementById('fi_dueno'); if(sd) sd.focus(); return; }
 
   // Campos de la ficha. Guardamos relaciones de jerarquía Y la ruta de texto.
   const campos={};
@@ -1709,7 +1718,7 @@ async function renderListado(){
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
           <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>60?ruta.slice(0,60)+'…':ruta}</td>
           <td style="max-width:200px;vertical-align:top;font-size:12px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>80?obj.slice(0,80)+'…':obj):'<span class="hint">—</span>'}</td>
-          <td id="${desagId}" style="vertical-align:top">${nInd>0?'<span class="hint">Cargando…</span>':'<span class="hint">Sin indicadores</span>'}</td>
+          <td id="${desagId}" style="vertical-align:top"><span class="hint">Cargando…</span></td>
           <td style="text-align:right;white-space:nowrap;vertical-align:top">
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleFicha('${nivel}','${r.id}')">👁</button>
             ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
@@ -1731,8 +1740,7 @@ const _DESAG_CACHE = {}; // key → html ya calculado
 async function cargarDesagregadoIndicadores(lista){
   // Construir (o reutilizar) el caché compartido de subindicadores — UNA sola vez, en paralelo.
   try{ await Promise.all([loadInventario(), construirMapaIndicadores()]); }catch(_){}
-  for(const {celdaId, r, nivel, nInd} of lista){
-    if(nInd<=0) continue;
+  for(const {celdaId, r, nivel} of lista){
     const celda=document.getElementById(celdaId);
     if(!celda) continue;
     const key=nivel+'_'+r.id;
@@ -1740,7 +1748,7 @@ async function cargarDesagregadoIndicadores(lista){
     try{
       // Nivel de análisis (label) — síncrono ahora que el inventario está cargado
       let naLabel=''; { const det=await nivelAnalisisDeFicha(r, nivel); naLabel = det && det.label ? det.label : ''; }
-      // Subindicadores: del caché compartido (ya leídos por construirMapaIndicadores)
+      // Subindicadores: del caché compartido (datos COMPLETOS, leídos por construirMapaIndicadores)
       const items = _SUBIND_POR_FICHA[nivel+'_'+r.id] || [];
       _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items);
       const c2=document.getElementById(celdaId);
@@ -2045,6 +2053,7 @@ async function guardarEdicion(){
   if(!id){ toast('No hay ficha en edición.', true); return; }
   const F=EDF(nivel);
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
+  if(!g('ed_dueno')){ toast('El Dueño del proceso (unidad orgánica) es obligatorio.', true); const sd=document.getElementById('ed_dueno'); if(sd) sd.focus(); return; }
   const ruta = valoresCascadaModal().filter(Boolean).join(' › ');
   const campos={};
   const put=(def,val)=>{ if(def && val) campos[def.id]=val; };
