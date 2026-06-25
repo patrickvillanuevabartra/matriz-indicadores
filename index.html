@@ -522,7 +522,19 @@
     <div class="modal-body">
       <div class="field" style="margin-bottom:16px">
         <label>1. Elige la ficha de proceso</label>
-        <select id="ag_ficha" onchange="cargarIndicadoresFicha()"><option value="">Seleccione una ficha…</option></select>
+        <input type="hidden" id="ag_ficha">
+        <div id="ag_ficha_combo" style="position:relative">
+          <div id="ag_ficha_display" tabindex="0" onclick="toggleFichaCombo()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleFichaCombo();}" style="border:1px solid var(--line);border-radius:9px;padding:11px 38px 11px 13px;cursor:pointer;background:var(--card);min-height:20px;position:relative">
+            <span id="ag_ficha_text" style="color:var(--mist)">Seleccione una ficha…</span>
+            <span style="position:absolute;right:13px;top:50%;transform:translateY(-50%);color:var(--mist);pointer-events:none">▾</span>
+          </div>
+          <div id="ag_ficha_panel" style="display:none;position:absolute;z-index:50;left:0;right:0;top:calc(100% + 4px);background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 28px rgba(0,0,0,.14);max-height:340px;overflow:hidden;flex-direction:column">
+            <div style="padding:8px;border-bottom:1px solid var(--line)">
+              <input id="ag_ficha_buscar" placeholder="Buscar por proceso, dueño o código…" oninput="filtrarFichaCombo()" style="width:100%;border:1px solid var(--line);border-radius:7px;padding:8px 10px;font-size:13px;box-sizing:border-box">
+            </div>
+            <div id="ag_ficha_lista" style="overflow-y:auto;max-height:280px"></div>
+          </div>
+        </div>
       </div>
       <div id="ag_inds_box" class="hidden">
         <label style="font-size:13px;font-weight:500;color:var(--slate);display:block;margin-bottom:8px">2. Marca los indicadores a agregar a la matriz</label>
@@ -2387,9 +2399,12 @@ const OFICINAS_MEDICION = ["Biblioteca Especializada","Biblioteca Virtual","Cent
 
 /* ---- Modal: Agregar indicador desde ficha ---- */
 let AG_INDS=[], AG_CTX={};
+let _AG_FICHA_OPTS=[]; // {value, dueno, ruta, nivel, buscar}
 async function abrirAgregarIndicador(){
-  const sel=document.getElementById('ag_ficha');
-  sel.innerHTML='<option value="">Cargando fichas…</option>';
+  // Reset del combo
+  document.getElementById('ag_ficha').value='';
+  const txt=document.getElementById('ag_ficha_text'); if(txt){ txt.textContent='Cargando fichas…'; txt.style.color='var(--mist)'; }
+  cerrarFichaCombo();
   document.getElementById('ag_inds_box').classList.add('hidden');
   document.getElementById('ag_def_box').classList.add('hidden');
   fillSelect(document.getElementById('ag_frec_med'), FREC_OPTS.map(o=>({value:o,label:o})));
@@ -2399,21 +2414,62 @@ async function abrirAgregarIndicador(){
   fillSelect(document.getElementById('ag_oficina_dueno'), oficinasOpts);
   ['ag_responsable','ag_celular','ag_correo','ag_formula','ag_fuente','ag_proposito'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('modalAgregar').classList.add('show'); document.body.style.overflow='hidden';
-  const opts=[];
+  _AG_FICHA_OPTS=[];
   for(const n of ['N0','N1','N2']){
     const fichas=await loadFichas(n);
     fichas.forEach(r=>{
       const ruta=rutaFicha(r,n);
       if(ruta&&ruta!=='—'){
-        const dueno=leerDueno(r, EDF(n));
-        const label='['+n+'] '+ruta+(dueno?'  —  👤 '+dueno:'');
-        opts.push({value:n+'|'+r.id, label});
+        const dueno=leerDueno(r, EDF(n))||'';
+        _AG_FICHA_OPTS.push({ value:n+'|'+r.id, dueno, ruta, nivel:n, buscar:(n+' '+ruta+' '+dueno).toLowerCase() });
       }
     });
   }
-  sel.innerHTML='<option value="">Seleccione una ficha…</option>'+opts.map(o=>`<option value="${o.value}">${o.label.replace(/"/g,'&quot;')}</option>`).join('');
+  const t=document.getElementById('ag_ficha_text'); if(t) t.textContent='Seleccione una ficha…';
+  renderFichaComboLista(_AG_FICHA_OPTS);
 }
 window.abrirAgregarIndicador=abrirAgregarIndicador;
+
+// ---- Buscador desplegable de fichas (varias líneas, sin cortes) ----
+function renderFichaComboLista(opts){
+  const cont=document.getElementById('ag_ficha_lista'); if(!cont) return;
+  if(!opts.length){ cont.innerHTML='<div style="padding:14px;color:var(--mist);font-size:13px">Sin resultados.</div>'; return; }
+  const badge=n=>`<span class="badge-n ${n.toLowerCase()}" style="margin-right:6px">${n}</span>`;
+  cont.innerHTML=opts.map(o=>`
+    <div class="ag-ficha-item" onclick="seleccionarFicha('${o.value}')" style="padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer">
+      ${o.dueno?`<div style="font-size:13px;font-weight:600;color:var(--brand)">👤 ${o.dueno.replace(/</g,'&lt;')}</div>`:''}
+      <div style="font-size:12px;color:var(--slate);margin-top:2px">${badge(o.nivel)}<span class="mono">${o.ruta.replace(/</g,'&lt;')}</span></div>
+    </div>`).join('');
+  [...cont.querySelectorAll('.ag-ficha-item')].forEach(el=>{
+    el.onmouseenter=()=>el.style.background='var(--paper)';
+    el.onmouseleave=()=>el.style.background='';
+  });
+}
+function toggleFichaCombo(){
+  const p=document.getElementById('ag_ficha_panel');
+  if(!p) return;
+  if(p.style.display==='flex'){ cerrarFichaCombo(); }
+  else { p.style.display='flex'; const b=document.getElementById('ag_ficha_buscar'); if(b){ b.value=''; setTimeout(()=>b.focus(),30);} renderFichaComboLista(_AG_FICHA_OPTS); }
+}
+function cerrarFichaCombo(){ const p=document.getElementById('ag_ficha_panel'); if(p) p.style.display='none'; }
+function filtrarFichaCombo(){
+  const q=(document.getElementById('ag_ficha_buscar').value||'').toLowerCase().trim();
+  const filtradas = q ? _AG_FICHA_OPTS.filter(o=>o.buscar.includes(q)) : _AG_FICHA_OPTS;
+  renderFichaComboLista(filtradas);
+}
+function seleccionarFicha(value){
+  const o=_AG_FICHA_OPTS.find(x=>x.value===value); if(!o) return;
+  document.getElementById('ag_ficha').value=value;
+  const t=document.getElementById('ag_ficha_text');
+  if(t){ t.innerHTML=(o.dueno?'👤 '+o.dueno.replace(/</g,'&lt;')+' — ':'')+'<span class="mono" style="font-size:12px">['+o.nivel+'] '+o.ruta.replace(/</g,'&lt;')+'</span>'; t.style.color='var(--ink)'; }
+  cerrarFichaCombo();
+  cargarIndicadoresFicha();
+}
+window.toggleFichaCombo=toggleFichaCombo;
+window.filtrarFichaCombo=filtrarFichaCombo;
+window.seleccionarFicha=seleccionarFicha;
+// Cerrar el panel al hacer clic fuera
+document.addEventListener('click',e=>{ const c=document.getElementById('ag_ficha_combo'); if(c && !c.contains(e.target)) cerrarFichaCombo(); });
 
 async function cargarIndicadoresFicha(){
   const val=document.getElementById('ag_ficha').value;
