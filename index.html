@@ -1275,6 +1275,22 @@ function invalidarCacheIndicadores(){
   if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
 }
 window.invalidarCacheIndicadores=invalidarCacheIndicadores;
+// Lee un recurso de la API con reintentos ante fallos transitorios (404/red por saturación
+// al lanzar muchas llamadas en paralelo). Espera un poco más en cada intento.
+async function _fetchConReintento(path, intentos){
+  intentos = intentos || 3;
+  let ultimoError;
+  for(let i=0; i<intentos; i++){
+    try{
+      const d = await API.call(path, 'GET', {name_value:1});
+      if(d && d.record) return d;            // éxito real
+      ultimoError = new Error('sin record');
+    }catch(e){ ultimoError = e; }
+    await new Promise(res=>setTimeout(res, 250*(i+1))); // backoff: 250ms, 500ms…
+  }
+  throw ultimoError || new Error('fallo de lectura');
+}
+
 async function construirMapaIndicadores(){
   if(_MAPA_IND_LISTO) return _MAPA_IND;
   const tareas=[];
@@ -1294,15 +1310,19 @@ async function construirMapaIndicadores(){
         if(!subIds.length){
           // Releer la ficha individual (sí trae subform_values) y reintentar
           try{
-            const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json','GET',{name_value:1});
+            const d=await _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json');
             if(d && d.record) subIds=getSubIds(d.record, EDF(nivel));
           }catch(_){}
         }
         if(!subIds.length){ _SUBIND_POR_FICHA[cacheKey]=[]; return; }
+        // Leer cada subindicador con reintentos. Si ALGUNO falla de red, NO cacheamos vacío
+        // (para que el próximo render reintente en vez de mostrar "Sin indicadores" en falso).
         const lecturas=await Promise.all(subIds.map(sid=>
-          API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
-            .then(d=>({vals:d.record && d.record.values})).catch(()=>({vals:null}))
+          _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json')
+            .then(d=>({ok:true, vals:d && d.record && d.record.values}))
+            .catch(()=>({ok:false, vals:null}))
         ));
+        const huboFallo = lecturas.some(l=>!l.ok);
         let orden=0;
         const items=[];
         lecturas.forEach(({vals})=>{
@@ -1314,7 +1334,8 @@ async function construirMapaIndicadores(){
             items.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
           }
         });
-        _SUBIND_POR_FICHA[cacheKey]=items;
+        // Solo cachear si no hubo fallos de red, o si sí obtuvimos items (datos válidos)
+        if(!huboFallo || items.length){ _SUBIND_POR_FICHA[cacheKey]=items; }
       })());
     }
   }
