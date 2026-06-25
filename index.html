@@ -1732,23 +1732,23 @@ function _pintaDesagregado(naLabel, items){
   const esc=s=>String(s||'').replace(/</g,'&lt;');
   const attr=s=>String(s||'').replace(/"/g,'&quot;');
   const naPill = naLabel
-    ? `<span style="display:inline-block;font-size:10px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:12px;padding:1px 8px">${esc(naLabel)}</span>`
+    ? `<span style="display:inline-block;font-size:12px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:12px;padding:2px 10px">${esc(naLabel)}</span>`
     : '';
   const head = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
       ${naPill}
-      <span style="font-size:11px;color:var(--mist);font-weight:600">${items.length} indicador(es)</span>
+      <span style="font-size:13px;color:var(--mist);font-weight:600">${items.length} indicador(es)</span>
     </div>`;
   const filas = items.map((it,i)=>`
     <tr>
-      <td style="padding:3px 8px 3px 0;font-size:11px;color:var(--mist);text-align:right;white-space:nowrap;vertical-align:top">${i+1}.</td>
-      <td style="padding:3px 8px;font-size:11px;font-weight:600;color:var(--brand);vertical-align:top;border-right:2px solid var(--line)" title="${attr(it.elemento)}">${it.elemento?esc(it.elemento.length>34?it.elemento.slice(0,34)+'…':it.elemento):'<span class=hint>(sin elemento)</span>'}</td>
-      <td style="padding:3px 8px;font-size:12px;color:var(--slate);vertical-align:top" title="${attr(it.indicador)}">${esc(it.indicador.length>70?it.indicador.slice(0,70)+'…':it.indicador)}</td>
+      <td style="padding:4px 8px 4px 0;font-size:13px;color:var(--mist);text-align:right;white-space:nowrap;vertical-align:top">${i+1}.</td>
+      <td style="padding:4px 8px;font-size:13px;font-weight:600;color:var(--brand);vertical-align:top;border-right:2px solid var(--line)" title="${attr(it.elemento)}">${it.elemento?esc(it.elemento.length>34?it.elemento.slice(0,34)+'…':it.elemento):'<span class=hint>(sin elemento)</span>'}</td>
+      <td style="padding:4px 8px;font-size:14px;color:var(--slate);vertical-align:top" title="${attr(it.indicador)}">${esc(it.indicador.length>70?it.indicador.slice(0,70)+'…':it.indicador)}</td>
     </tr>`).join('');
   const tabla = `<table style="border-collapse:collapse;width:100%">
       <thead><tr>
         <th style="width:18px"></th>
-        <th style="padding:0 8px 3px 0;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--mist);text-align:left;font-weight:600">Elemento (nivel de análisis)</th>
-        <th style="padding:0 8px 3px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--mist);text-align:left;font-weight:600">Indicador</th>
+        <th style="padding:0 8px 3px 0;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mist);text-align:left;font-weight:600">Elemento (nivel de análisis)</th>
+        <th style="padding:0 8px 3px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--mist);text-align:left;font-weight:600">Indicador</th>
       </tr></thead>
       <tbody>${filas}</tbody>
     </table>`;
@@ -2243,17 +2243,9 @@ async function renderMatriz(){
         // Ordenar los indicadores con el MISMO orden que "Fichas registradas" (campo 'orden' del mapa).
         const posDe=r=>{ const info=infoFicha(r); return info ? info.orden : 9999; };
         inds.sort((a,b)=>posDe(a)-posDe(b));
-        // Nivel de la ficha (N0/N1/N2) y LABEL del nivel de análisis (Procedimiento/Proceso nivel X)
+        // Nivel de la ficha (N0/N1/N2) para el badge de la subcabecera
         const rutaPrimero = leerCampo(inds[0], MAT.proceso_ruta.id, 'Proceso (ruta)');
         const nivelFicha = nivelDesdeRuta(rutaPrimero)||'';
-        let nivelAna=''; { // label real del nivel de análisis
-          const info0b=infoFicha(inds[0]);
-          const segs=String((info0b&&info0b.fichaRuta)||rutaPrimero||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
-          const generico2=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
-          const sg=i=>(segs[i]&&!generico2.test(segs[i]))?segs[i]:'';
-          const detNA = detectarNivelAnalisis(nivelFicha||'N2', sg(0), sg(1), sg(2), sg(3));
-          nivelAna = detNA ? detNA.nivelLabel : '';
-        }
         // Ruta de la ficha para la subcabecera: preferir la del mapa (real); si no, la del indicador.
         const info0=infoFicha(inds[0]);
         let fichaRutaTxt = (info0 && info0.fichaRuta) ? info0.fichaRuta : '';
@@ -2262,10 +2254,11 @@ async function renderMatriz(){
           const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
           fichaRutaTxt = segs.length>1 ? segs.slice(0,-1).join(' › ') : (ruta||'(Sin proceso asignado)');
         }
-        // Subcabecera nivel 2: FICHA/proceso (solo la ruta) — discreta, una vez por ficha
-        html+=`<tr style="background:var(--card)"><td colspan="11" style="padding:5px 14px 5px 36px;border-top:1px dashed var(--line)">
-          <span class="mono" style="font-size:11px;color:var(--mist)">${fichaRutaTxt.replace(/</g,'&lt;')}</span>
-          <span style="color:var(--mist);font-size:10px;margin-left:6px">· ${inds.length} indicador(es)</span>
+        // Subcabecera nivel 2: badge de nivel de ficha (N1/N2) + ruta del proceso — una vez por ficha
+        const badgeNivelFicha = nivelFicha?`<span class="badge-n ${nivelFicha.toLowerCase()}" style="margin-right:8px">${nivelFicha}</span>`:'';
+        html+=`<tr style="background:var(--card)"><td colspan="11" style="padding:8px 14px 8px 30px;border-top:1px dashed var(--line)">
+          ${badgeNivelFicha}<span class="mono" style="font-size:13px;color:var(--slate)">${fichaRutaTxt.replace(/</g,'&lt;')}</span>
+          <span style="color:var(--mist);font-size:12px;margin-left:6px">· ${inds.length} indicador(es)</span>
         </td></tr>`;
         html+=inds.map(r=>{
         const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
@@ -2294,7 +2287,7 @@ async function renderMatriz(){
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         return `<tr>
           <td>${nivelBadge}</td>
-          <td style="vertical-align:top">${nivelAna?`<span style="display:inline-block;font-size:9px;font-weight:700;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:10px;padding:1px 7px;margin-bottom:3px">${nivelAna.replace(/</g,'&lt;')}</span><br>`:''}${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
+          <td style="vertical-align:top">${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
           <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
           <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
