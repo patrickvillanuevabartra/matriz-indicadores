@@ -726,6 +726,24 @@
   </div>
 </div>
 
+<!-- ===================== MODAL EDITAR INVENTARIO (6 niveles) ===================== -->
+<div class="modal-bg" id="modalEditInv">
+  <div class="modal" id="modalEditInvBox" style="max-width:640px">
+    <div class="modal-head" id="eiDragHandle" style="cursor:move" title="Arrastra para mover">
+      <div><div class="eyebrow">Inventario · <span style="font-weight:400">arrastra para mover</span></div><h2 style="font-size:18px">Editar proceso / procedimiento</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalEditInv')">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="font-size:12px;margin-bottom:10px">Edita el nombre de cualquier nivel. El código se mantiene como prefijo. Cambiar un nivel superior afecta a todas las filas que lo comparten (se te avisará).</p>
+      <div id="ei_campos"></div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalEditInv')">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="ei_guardar" onclick="guardarEdicionInventario()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== MODAL NUEVO PROCESO (cascada 6 niveles) ===================== -->
 <div class="modal-bg" id="modalNuevoProceso">
   <div class="modal" id="modalNuevoProcesoBox" style="max-width:680px">
@@ -2343,30 +2361,102 @@ async function archivarInventario(rid, archivar){
 }
 window.archivarInventario=archivarInventario;
 
+let _EI_FILA=null; // datos de la fila en edición
 async function editarInventario(rid){
   const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
-  const {nivel,nombre}=_invNivelElemento(r);
-  // Determinar qué columna es la editable (la del elemento más profundo)
   const v=r.values||{}; const C=INV_COLS;
-  const colDe={'Procedimiento':C.proc,'Proceso nivel 3':C.n3,'Proceso nivel 2':C.n2,'Proceso nivel 1':C.n1,'Proceso nivel 0':C.n0,'Tipo de proceso':C.tipo}[nivel];
-  if(!colDe){ toast('No se pudo determinar el campo a editar.', true); return; }
-  // Necesitamos el field-id real de esa columna (no el nombre). Buscarlo en el registro.
-  let fieldId=null;
-  for(const k in v){ if(v[k]===colDe){ /* k es el field-id cuyo valor es el NOMBRE de la columna */ fieldId=k; break; } }
-  // Si no lo hallamos por ese patrón, intentamos por el nombre de columna directo
-  const nuevo=prompt('Editar '+nivel+':', nombre);
-  if(nuevo===null) return;
-  const limpio=String(nuevo).trim();
-  if(!limpio){ toast('El nombre no puede quedar vacío.', true); return; }
-  try{
-    const campos={};
-    if(fieldId) campos[fieldId]=limpio; else campos[colDe]=limpio;
-    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','PUT',{ values: JSON.stringify(campos) });
-    toast('Elemento actualizado.');
-    STATE.inventario=[]; renderInventario();
-  }catch(e){ toast('Error al editar: '+e.message, true); }
+  const limpio = s => { const t=String(s||'').trim(); return (!t || /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(t))?'':t; };
+  // id del registro de cada nivel (viene en los campos rel del registro de PROCEDIMIENTO)
+  const relId = relField => { const val=v[relField]; if(Array.isArray(val)) return val[0]; return val||''; };
+  // Definición de cada nivel editable de esta fila
+  const niveles=[
+    { key:'tipo', label:'Tipo de proceso',  nombre:limpio(v[C.tipo]), recId:relId('bTW5RdU8jfvRChwwFdPSkI') },
+    { key:'n0',   label:'Proceso nivel 0',  nombre:limpio(v[C.n0]),   recId:relId('dcUWH1c1zhW5bGiCkMjrK8') },
+    { key:'n1',   label:'Proceso nivel 1',  nombre:limpio(v[C.n1]),   recId:relId('cSWR_cI8jbqPpcGSkJd8oL') },
+    { key:'n2',   label:'Proceso nivel 2',  nombre:limpio(v[C.n2]),   recId:relId('ccWP_cOmnkj4oNbcOzaZq4') },
+    { key:'n3',   label:'Proceso nivel 3',  nombre:limpio(v[C.n3]),   recId:relId('cDW5SHlCnmW7bkgaaMW6fP') },
+    { key:'proc', label:'Procedimiento',    nombre:limpio(v[C.proc]), recId:rid }, // el procedimiento es este mismo registro
+  ];
+  _EI_FILA={ rid, niveles };
+  // Pintar el formulario
+  const cont=document.getElementById('ei_campos');
+  cont.innerHTML=niveles.map((n,i)=>{
+    if(!n.nombre && n.key!=='proc') return ''; // no mostrar niveles vacíos (salvo procedimiento)
+    return `<div class="field">
+      <label>${n.label}${n.key!=='proc'&&n.key!=='tipo'?' <span class="hint" style="font-weight:400">· compartido</span>':''}</label>
+      <input id="ei_nivel_${n.key}" data-key="${n.key}" value="${(n.nombre||'').replace(/"/g,'&quot;')}" ${n.recId?'':'disabled'}>
+    </div>`;
+  }).join('');
+  document.getElementById('modalEditInv').classList.add('show'); document.body.style.overflow='hidden';
+  _eiActivarArrastre();
 }
 window.editarInventario=editarInventario;
+
+async function guardarEdicionInventario(){
+  if(!_EI_FILA) return;
+  const btn=document.getElementById('ei_guardar');
+  // Mapa key → {def, entity, nombreField}
+  const defPorKey={ tipo:_nivelDef('tipo'), n0:_nivelDef('n0'), n1:_nivelDef('n1'), n2:_nivelDef('n2'), n3:_nivelDef('n3'), proc:_nivelDef('proc') };
+  // Detectar qué niveles cambiaron
+  const cambios=[];
+  for(const n of _EI_FILA.niveles){
+    const inp=document.getElementById('ei_nivel_'+n.key);
+    if(!inp || inp.disabled) continue;
+    const nuevo=String(inp.value||'').trim();
+    if(!nuevo){ toast('El nombre de '+n.label+' no puede quedar vacío.', true); inp.focus(); return; }
+    if(nuevo!==n.nombre){ cambios.push({ ...n, nuevo, def:defPorKey[n.key] }); }
+  }
+  if(!cambios.length){ toast('No hay cambios que guardar.'); return; }
+  // Aviso si algún nivel superior está compartido por varias filas
+  const compartidos=[];
+  for(const c of cambios){
+    if(c.key==='proc') continue; // el procedimiento es único de esta fila
+    const cuantas=(STATE.inventario||[]).filter(r=>{
+      const val=(r.values||{})[INV_COLS[c.key]]; return val && String(val).trim()===c.nombre;
+    }).length;
+    if(cuantas>1) compartidos.push(`«${c.nombre}» (${c.label}) → en ${cuantas} filas`);
+  }
+  if(compartidos.length){
+    if(!confirm('Estos niveles están compartidos y el cambio afectará a TODAS sus filas:\n\n'+compartidos.join('\n')+'\n\n¿Continuar?')) return;
+  }
+  btn.disabled=true; btn.textContent='Guardando…';
+  try{
+    for(const c of cambios){
+      const def=c.def;
+      // El código se conserva como prefijo: si el nombre original tenía código, mantenerlo.
+      const m=String(c.nombre).match(/^([A-Za-z]\d+(?:\.\d+)*)\s+/);
+      const codPrefijo=m?m[1]:'';
+      // Si el usuario ya escribió el código en el nuevo nombre, no duplicar
+      let nuevoNombre=c.nuevo;
+      if(codPrefijo && !new RegExp('^'+codPrefijo.replace(/\./g,'\\.')).test(nuevoNombre)){
+        nuevoNombre=codPrefijo+' '+nuevoNombre;
+      }
+      const campos={}; campos[def.nombreField]=nuevoNombre;
+      await API.saveForm(c.recId, campos, def.entity());
+    }
+    toast('Cambios guardados.');
+    cerrarModal('modalEditInv');
+    STATE.inventario=[]; _NP_CACHE_REG={};
+    renderInventario();
+  }catch(e){ toast('Error al guardar: '+e.message, true); }
+  finally{ btn.disabled=false; btn.textContent='Guardar cambios'; }
+}
+window.guardarEdicionInventario=guardarEdicionInventario;
+
+// Arrastre del modal de edición (reusa la misma técnica)
+function _eiActivarArrastre(){
+  const box=document.getElementById('modalEditInvBox');
+  const handle=document.getElementById('eiDragHandle');
+  if(!box||!handle||box.dataset.dragReady) return;
+  box.dataset.dragReady='1'; box.style.position='relative';
+  let ox=0,oy=0,dx=0,dy=0,mov=false;
+  const down=e=>{ if(e.target.closest('.modal-close'))return; mov=true; const p=e.touches?e.touches[0]:e; ox=p.clientX;oy=p.clientY; dx=parseFloat(box.style.left||'0')||0; dy=parseFloat(box.style.top||'0')||0; document.body.style.userSelect='none'; e.preventDefault(); };
+  const move=e=>{ if(!mov)return; const p=e.touches?e.touches[0]:e; box.style.left=(dx+(p.clientX-ox))+'px'; box.style.top=(dy+(p.clientY-oy))+'px'; };
+  const up=()=>{ mov=false; document.body.style.userSelect=''; };
+  handle.addEventListener('mousedown',down); handle.addEventListener('touchstart',down,{passive:false});
+  document.addEventListener('mousemove',move); document.addEventListener('touchmove',move,{passive:false});
+  document.addEventListener('mouseup',up); document.addEventListener('touchend',up);
+}
 
 async function renderListado(){
   _GRP_DE_FICHA = {};
@@ -4273,7 +4363,7 @@ async function guardarSegMeta(){
 }
 window.guardarSegMeta=guardarSegMeta;
 
-function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; if(id==='modalNuevoProceso'){ const b=document.getElementById('modalNuevoProcesoBox'); if(b){ b.style.left=''; b.style.top=''; } } if(id==='modalMetas'){ try{ renderMatriz(); }catch(_){} } }
+function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; if(id==='modalNuevoProceso'){ const b=document.getElementById('modalNuevoProcesoBox'); if(b){ b.style.left=''; b.style.top=''; } } if(id==='modalEditInv'){ const b=document.getElementById('modalEditInvBox'); if(b){ b.style.left=''; b.style.top=''; } } if(id==='modalMetas'){ try{ renderMatriz(); }catch(_){} } }
 window.cerrarModal=cerrarModal;
 
 /* ============================================================
