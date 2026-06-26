@@ -1974,26 +1974,22 @@ async function _npRegistros(key){
   if(_NP_CACHE_REG[key]) return _NP_CACHE_REG[key];
   const def=_nivelDef(key);
   const data=await API.records(def.entity());
-  // Nombres de columna "literales" a descartar (cuando QuintaDB devuelve el nombre del campo en vez del valor)
   const literales = new Set([def.colNombre, 'Tipo de procesos', 'Tipo de proceso', def.label].filter(Boolean).map(s=>String(s).toLowerCase()));
   const esId = x => /^[a-zA-Z0-9_-]{22}$/.test(String(x));
+  // Columna de código por nivel (para filtrar hijos por prefijo del padre)
+  const COLCOD={ n0:'Código "Nivel 0"', n1:'Código "Nivel 1"', n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
   const regs=(data.records||[]).map(r=>{
     const v=r.values||{};
     let nombre='';
-    // 1) Intentar por el NOMBRE de columna (donde QuintaDB suele poner el valor real)
-    if(def.colNombre && v[def.colNombre] && !esId(v[def.colNombre]) && !literales.has(String(v[def.colNombre]).toLowerCase())){
-      nombre=v[def.colNombre];
-    }
-    // 2) Intentar por field-id
+    if(def.colNombre && v[def.colNombre] && !esId(v[def.colNombre]) && !literales.has(String(v[def.colNombre]).toLowerCase())){ nombre=v[def.colNombre]; }
     if(!nombre){ const cand=v[def.nombreField]; if(cand && !esId(cand) && !literales.has(String(cand).toLowerCase())) nombre=cand; }
-    // 3) Último recurso: cualquier valor de texto que no sea id ni literal de columna
-    if(!nombre){
-      const cand=Object.values(v).find(x=>x && typeof x==='string' && !esId(x) && !literales.has(String(x).toLowerCase()));
-      nombre=cand||'(sin nombre)';
-    }
-    return { id:r.id, nombre:String(nombre).trim() };
+    if(!nombre){ const cand=Object.values(v).find(x=>x && typeof x==='string' && !esId(x) && !literales.has(String(x).toLowerCase())); nombre=cand||'(sin nombre)'; }
+    // Tipo de proceso del registro (viene como columna en cada nivel) y su código propio
+    const tipo = String(v['Tipo de proceso']||'').trim();
+    const codigo = String((COLCOD[key]?v[COLCOD[key]]:'')||'').trim() || _codigoDe(nombre);
+    return { id:r.id, nombre:String(nombre).trim(), tipo, codigo };
   });
-  regs.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  regs.sort((a,b)=>(a.codigo||a.nombre).localeCompare(b.codigo||b.nombre));
   _NP_CACHE_REG[key]=regs;
   return regs;
 }
@@ -2172,14 +2168,27 @@ async function _npLlenarPadre(def, pkey){
   const valorPrevio=sel.value;
   let regs=[];
   try{ regs=await _npRegistros(pkey); }catch(_){ sel.innerHTML='<option value="">(error al cargar)</option>'; return; }
-  const prefijo=_prefijoParaPadre(def, pkey);
-  // Filtrar por prefijo del padre (el Tipo no se filtra: es la raíz)
-  let lista = (pkey==='tipo' || !prefijo) ? regs : regs.filter(r=>{ const c=_codigoDe(r.nombre); return c.startsWith(prefijo); });
-  // Si el filtro deja vacío pero hay prefijo, mostrar vacío (no hay hijos aún) — permite "crear nuevo"
+  let lista=regs;
+  const idx=def.padres.findIndex(p=>p.key===pkey);
+  if(pkey!=='tipo'){
+    if(idx===0 || pkey==='n0'){
+      // Primer padre con jerarquía (N0): filtrar por el TIPO elegido (comparando el campo "tipo" del registro)
+      const selTipo=document.getElementById('np_padre_tipo');
+      const tipoNom=selTipo&&selTipo.selectedOptions[0]?(selTipo.selectedOptions[0].dataset.nombre||selTipo.selectedOptions[0].textContent):'';
+      const tnorm=String(tipoNom).trim().toLowerCase();
+      if(tnorm){ lista=regs.filter(r=>String(r.tipo||'').trim().toLowerCase()===tnorm); }
+    } else {
+      // N1, N2, N3: filtrar por el CÓDIGO del padre inmediato superior ya elegido
+      const prev=def.padres[idx-1];
+      const selPrev=document.getElementById('np_padre_'+prev.key);
+      const optPrev=selPrev&&selPrev.selectedOptions[0]?selPrev.selectedOptions[0]:null;
+      const codPadre=optPrev?(optPrev.dataset.codigo||_codigoDe(optPrev.dataset.nombre||'')):'';
+      if(codPadre){ lista=regs.filter(r=>String(r.codigo||r.nombre).startsWith(codPadre)); }
+    }
+  }
   sel.innerHTML='<option value="">— elige —</option>'+
-    lista.map(r=>`<option value="${r.id}" data-nombre="${r.nombre.replace(/"/g,'&quot;')}">${r.nombre.replace(/</g,'&lt;')}</option>`).join('')+
+    lista.map(r=>`<option value="${r.id}" data-nombre="${r.nombre.replace(/"/g,'&quot;')}" data-codigo="${(r.codigo||'').replace(/"/g,'&quot;')}" data-tipo="${(r.tipo||'').replace(/"/g,'&quot;')}">${r.nombre.replace(/</g,'&lt;')}</option>`).join('')+
     `<option value="__nuevo__">➕ Crear nuevo ${pdef.label}…</option>`;
-  // Conservar selección previa si sigue siendo válida
   if(valorPrevio && [...sel.options].some(o=>o.value===valorPrevio)) sel.value=valorPrevio;
 }
 // Rellena TODOS los padres de un nivel, en orden (cascada completa).
