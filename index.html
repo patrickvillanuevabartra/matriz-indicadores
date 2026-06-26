@@ -2052,16 +2052,13 @@ async function npRenderCascada(){
   cont.innerHTML=''; nuevo.style.display='none';
   if(!nivel){ return; }
   const def=_nivelDef(nivel);
-  // Para cada padre, un desplegable con registros existentes + "➕ Crear nuevo…"
+  // Para cada padre, un desplegable; se llenan con filtrado en cascada (según los de arriba)
   for(const p of def.padres){
     const pdef=_nivelDef(p.key);
-    cont.insertAdjacentHTML('beforeend', `<div class="field" id="np_wrap_${p.key}"><label>${pdef.label} <span style="color:#c0392b">*</span></label><select id="np_padre_${p.key}" data-pkey="${p.key}" onchange="npPadreChange('${p.key}'); npActualizarCodigos();"><option value="">Cargando…</option></select><div id="np_inline_${p.key}"></div></div>`);
-    try{
-      const regs=await _npRegistros(p.key);
-      const sel=document.getElementById('np_padre_'+p.key);
-      sel.innerHTML='<option value="">— elige —</option>'+regs.map(r=>`<option value="${r.id}" data-nombre="${r.nombre.replace(/"/g,'&quot;')}">${r.nombre.replace(/</g,'&lt;')}</option>`).join('')+`<option value="__nuevo__">➕ Crear nuevo ${pdef.label}…</option>`;
-    }catch(_){ const sel=document.getElementById('np_padre_'+p.key); if(sel) sel.innerHTML='<option value="">(error al cargar)</option>'; }
+    cont.insertAdjacentHTML('beforeend', `<div class="field" id="np_wrap_${p.key}"><label>${pdef.label} <span style="color:#c0392b">*</span></label><select id="np_padre_${p.key}" data-pkey="${p.key}" onchange="npPadreChange('${p.key}'); npRellenarPadresDesde('${p.key}'); npActualizarCodigos();"><option value="">Cargando…</option></select><div id="np_inline_${p.key}"></div></div>`);
   }
+  // Rellenar todos los padres (en orden), aplicando el filtro en cascada
+  await npRellenarPadres(def);
   // Mostrar campos del elemento a crear (código + nombre)
   nuevo.style.display='';
   const lblCod=document.getElementById('np_lbl_codigo');
@@ -2137,6 +2134,73 @@ function npActualizarCodigos(){
   };
 }
 window.npActualizarCodigos=npActualizarCodigos;
+
+// Extrae el código-prefijo de un nombre (ej. "M02 Gestión..." → "M02", "M02.01 Algo" → "M02.01")
+function _codigoDe(nombre){
+  const m=String(nombre||'').trim().match(/^([A-Za-z]\d+(?:\.\d+)*)/);
+  return m?m[1]:'';
+}
+// Prefijo elegido hasta cierto padre (para filtrar el siguiente). Devuelve el código del padre inmediato
+// superior ya elegido, o la letra del Tipo si el padre es N0.
+function _prefijoParaPadre(def, pkey){
+  const idx=def.padres.findIndex(p=>p.key===pkey);
+  if(idx<=0){
+    // primer padre con código (N0): filtrar por la letra del Tipo
+    if(pkey==='n0'){
+      const selTipo=document.getElementById('np_padre_tipo');
+      const nom=selTipo&&selTipo.selectedOptions[0]?(selTipo.selectedOptions[0].dataset.nombre||selTipo.selectedOptions[0].textContent):'';
+      const t=String(nom).toLowerCase();
+      if(t.includes('estrat')) return 'E';
+      if(t.includes('mision')) return 'M';
+      if(t.includes('soporte')||t.includes('apoyo')) return 'S';
+      return '';
+    }
+    return '';
+  }
+  // el prefijo viene del padre inmediato superior ya elegido
+  const prev=def.padres[idx-1];
+  const sel=document.getElementById('np_padre_'+prev.key);
+  if(!sel||!sel.value||sel.value==='__nuevo__') return '';
+  const nom=sel.selectedOptions[0]?(sel.selectedOptions[0].dataset.nombre||sel.selectedOptions[0].textContent):'';
+  return _codigoDe(nom);
+}
+// Rellena el desplegable de un padre concreto, filtrando por el prefijo del padre superior.
+async function _npLlenarPadre(def, pkey){
+  const pdef=_nivelDef(pkey);
+  const sel=document.getElementById('np_padre_'+pkey);
+  if(!sel) return;
+  const valorPrevio=sel.value;
+  let regs=[];
+  try{ regs=await _npRegistros(pkey); }catch(_){ sel.innerHTML='<option value="">(error al cargar)</option>'; return; }
+  const prefijo=_prefijoParaPadre(def, pkey);
+  // Filtrar por prefijo del padre (el Tipo no se filtra: es la raíz)
+  let lista = (pkey==='tipo' || !prefijo) ? regs : regs.filter(r=>{ const c=_codigoDe(r.nombre); return c.startsWith(prefijo); });
+  // Si el filtro deja vacío pero hay prefijo, mostrar vacío (no hay hijos aún) — permite "crear nuevo"
+  sel.innerHTML='<option value="">— elige —</option>'+
+    lista.map(r=>`<option value="${r.id}" data-nombre="${r.nombre.replace(/"/g,'&quot;')}">${r.nombre.replace(/</g,'&lt;')}</option>`).join('')+
+    `<option value="__nuevo__">➕ Crear nuevo ${pdef.label}…</option>`;
+  // Conservar selección previa si sigue siendo válida
+  if(valorPrevio && [...sel.options].some(o=>o.value===valorPrevio)) sel.value=valorPrevio;
+}
+// Rellena TODOS los padres de un nivel, en orden (cascada completa).
+async function npRellenarPadres(def){
+  for(const p of def.padres){ await _npLlenarPadre(def, p.key); }
+}
+// Cuando cambia un padre, re-filtrar (y limpiar) los padres que están por debajo de él.
+async function npRellenarPadresDesde(pkey){
+  const nivel=document.getElementById('np_nivel').value;
+  const def=_nivelDef(nivel); if(!def) return;
+  const idx=def.padres.findIndex(p=>p.key===pkey);
+  if(idx<0) return;
+  // limpiar selección de los de abajo y rellenarlos filtrados
+  for(let i=idx+1;i<def.padres.length;i++){
+    const sel=document.getElementById('np_padre_'+def.padres[i].key);
+    if(sel) sel.value='';
+    const inl=document.getElementById('np_inline_'+def.padres[i].key); if(inl) inl.innerHTML='';
+  }
+  for(let i=idx+1;i<def.padres.length;i++){ await _npLlenarPadre(def, def.padres[i].key); }
+}
+window.npRellenarPadresDesde=npRellenarPadresDesde;
 
 // Si el usuario elige "Crear nuevo…" en un padre, mostrar un mini-input inline para crearlo al momento.
 function npPadreChange(pkey){
