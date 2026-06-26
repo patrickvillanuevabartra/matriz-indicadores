@@ -368,13 +368,17 @@
       <select id="invFiltroTipo" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los tipos</option></select>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse">
+    <div class="card"><div style="overflow-x:auto"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr>
-        <th style="width:120px">Nivel</th>
-        <th>Proceso / procedimiento <span style="color:var(--mist);font-weight:400">· ruta</span></th>
-        <th style="text-align:right;width:140px">Acciones</th>
+        <th style="min-width:90px">Tipo</th>
+        <th style="min-width:150px">Proceso N0</th>
+        <th style="min-width:160px">Proceso N1</th>
+        <th style="min-width:170px">Proceso N2</th>
+        <th style="min-width:150px">Proceso N3</th>
+        <th style="min-width:200px">Procedimiento</th>
+        <th style="text-align:right;width:120px">Acciones</th>
       </tr></thead>
-      <tbody id="tablaInventario"><tr><td colspan="3" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+      <tbody id="tablaInventario"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 
@@ -1303,21 +1307,21 @@ const ESTADO_REGISTRO_FIELD_ID = "cGoSkYwSnnWPj6W7tcHSoK"; // campo "Estado del 
 // Los códigos de PROCEDIMIENTO/N3/N2/N1/N0 son 'select' con lista cerrada; el nombre se guarda como "CÓDIGO Nombre".
 const JERARQUIA = [
   { key:'tipo', label:'Tipo de proceso', entity:()=>CONFIG.ENTITIES.TIPO_PROCESO,
-    nombreField:'dcRCkBagDdTBOwp8kqoMb0', codigoField:null, padres:[] },
+    nombreField:'dcRCkBagDdTBOwp8kqoMb0', colNombre:'Tipo de procesos', codigoField:null, padres:[] },
   { key:'n0', label:'Proceso nivel 0', entity:()=>CONFIG.ENTITIES.NIVEL0,
-    nombreField:'aKxhRdI8nlWPBdSSkph2Dm', codigoField:'bUW6ZcI8njgk5-gmkNpCog',
+    nombreField:'aKxhRdI8nlWPBdSSkph2Dm', colNombre:'Proceso nivel 0', codigoField:'bUW6ZcI8njgk5-gmkNpCog',
     padres:[ {key:'tipo', rel:'adBZWBW55kW64LiNlcMSkZ'} ] },
   { key:'n1', label:'Proceso nivel 1', entity:()=>CONFIG.ENTITIES.NIVEL1,
-    nombreField:'bExSoiW6LgkypdKZpdKSk7', codigoField:'dcOr1kWQbdMlldUCoyBmou',
+    nombreField:'bExSoiW6LgkypdKZpdKSk7', colNombre:'Proceso nivel 1', codigoField:'dcOr1kWQbdMlldUCoyBmou',
     padres:[ {key:'tipo', rel:'axW4FdPCjldlVcGtZcVCof'}, {key:'n0', rel:'c3WOhdNSjfeytdUSoqz8kF'} ] },
   { key:'n2', label:'Proceso nivel 2', entity:()=>CONFIG.ENTITIES.NIVEL2,
-    nombreField:'cixmkzF1bcGy_cGtjPWRb9', codigoField:'ckCYmQWRfhWPiNxCoHhfGH',
+    nombreField:'cixmkzF1bcGy_cGtjPWRb9', colNombre:'Proceso nivel 2', codigoField:'ckCYmQWRfhWPiNxCoHhfGH',
     padres:[ {key:'tipo', rel:'cCWPL5yaPdS4kTeqexWRvg'}, {key:'n0', rel:'dcGfVdIwLiW7bGqtyaBSoN'}, {key:'n1', rel:'asW4BcL8jeD43cN07cQsiR'} ] },
   { key:'n3', label:'Proceso nivel 3', entity:()=>CONFIG.ENTITIES.NIVEL3,
-    nombreField:'bhW7BcSuzcPykKW6hcQmoQ', codigoField:'b_kSkXW4jdJQ_cR8kjWPPB',
+    nombreField:'bhW7BcSuzcPykKW6hcQmoQ', colNombre:'Proceso nivel 3', codigoField:'b_kSkXW4jdJQ_cR8kjWPPB',
     padres:[ {key:'tipo', rel:'dcTspcN8naW73dQv5TWO1B'}, {key:'n0', rel:'a3B3jxu8jiWO5cimkCEN0q'}, {key:'n1', rel:'a7W6OMWPHdRypcGCkoW79-'}, {key:'n2', rel:'ddJu_cImnpyyk2W5pdRSo9'} ] },
   { key:'proc', label:'Procedimiento', entity:()=>CONFIG.ENTITIES.PROCEDIMIENTO,
-    nombreField:'coi8oUW41cMOk7cCk2W4vk', codigoField:'dcVSkHkSnhl5iaW7uMqCox',
+    nombreField:'coi8oUW41cMOk7cCk2W4vk', colNombre:'Procedimiento', codigoField:'dcVSkHkSnhl5iaW7uMqCox',
     padres:[ {key:'tipo', rel:'bTW5RdU8jfvRChwwFdPSkI'}, {key:'n0', rel:'dcUWH1c1zhW5bGiCkMjrK8'}, {key:'n1', rel:'cSWR_cI8jbqPpcGSkJd8oL'}, {key:'n2', rel:'ccWP_cOmnkj4oNbcOzaZq4'}, {key:'n3', rel:'cDW5SHlCnmW7bkgaaMW6fP'} ],
     estadoField:'cGoSkYwSnnWPj6W7tcHSoK' },
 ];
@@ -1354,10 +1358,20 @@ function detectarNivelAnalisis(nivel, vTipo, vN0, vN1, vN2){
   return null;
 }
 async function loadInventario(){
-  if(STATE.inventario.length) return STATE.inventario;
-  const data = await API.records(CONFIG.ENTITIES.PROCEDIMIENTO); // tabla integradora (inventario)
-  STATE.inventario = data.records||[];
-  return STATE.inventario;
+  if(STATE.inventario && STATE.inventario.length) return STATE.inventario;
+  // Reintentar si viene vacío (problema de timing/red al inicializar): no cachear el cero.
+  let regs=[];
+  for(let intento=1; intento<=3; intento++){
+    try{
+      const data = await API.records(CONFIG.ENTITIES.PROCEDIMIENTO); // tabla integradora (inventario)
+      regs = data.records||[];
+      if(regs.length) break; // datos válidos
+    }catch(_){ /* reintentar */ }
+    await new Promise(r=>setTimeout(r, 300*intento));
+  }
+  // Solo cachear si realmente trajo registros (evita guardar un vacío en falso)
+  if(regs.length) STATE.inventario = regs;
+  return regs;
 }
 
 // Calcula el "Nivel de análisis" (Proceso nivel 1/2/3 o Procedimiento) de una ficha,
@@ -1931,13 +1945,21 @@ async function _npRegistros(key){
   if(_NP_CACHE_REG[key]) return _NP_CACHE_REG[key];
   const def=_nivelDef(key);
   const data=await API.records(def.entity());
+  // Nombres de columna "literales" a descartar (cuando QuintaDB devuelve el nombre del campo en vez del valor)
+  const literales = new Set([def.colNombre, 'Tipo de procesos', 'Tipo de proceso', def.label].filter(Boolean).map(s=>String(s).toLowerCase()));
+  const esId = x => /^[a-zA-Z0-9_-]{22}$/.test(String(x));
   const regs=(data.records||[]).map(r=>{
     const v=r.values||{};
-    // El nombre está en el campo nombreField; si viene el literal, intentamos por nombre de columna.
-    let nombre=v[def.nombreField];
-    if(!nombre || /^[a-zA-Z0-9_-]{22}$/.test(String(nombre))){
-      // buscar el primer valor "texto" que parezca nombre
-      const cand=Object.values(v).find(x=>x && typeof x==='string' && !/^[a-zA-Z0-9_-]{22}$/.test(x));
+    let nombre='';
+    // 1) Intentar por el NOMBRE de columna (donde QuintaDB suele poner el valor real)
+    if(def.colNombre && v[def.colNombre] && !esId(v[def.colNombre]) && !literales.has(String(v[def.colNombre]).toLowerCase())){
+      nombre=v[def.colNombre];
+    }
+    // 2) Intentar por field-id
+    if(!nombre){ const cand=v[def.nombreField]; if(cand && !esId(cand) && !literales.has(String(cand).toLowerCase())) nombre=cand; }
+    // 3) Último recurso: cualquier valor de texto que no sea id ni literal de columna
+    if(!nombre){
+      const cand=Object.values(v).find(x=>x && typeof x==='string' && !esId(x) && !literales.has(String(x).toLowerCase()));
       nombre=cand||'(sin nombre)';
     }
     return { id:r.id, nombre:String(nombre).trim() };
@@ -2082,54 +2104,85 @@ async function renderInventario(){
     // Poblar filtro de tipos (una vez)
     const selTipo=document.getElementById('invFiltroTipo');
     if(selTipo && selTipo.options.length<=1){
-      const tipos=[...new Set(inv.map(r=>String((r.values||{})[INV_COLS.tipo]||'').trim()).filter(Boolean))].sort();
+      const tipos=[...new Set(inv.map(r=>String((r.values||{})[INV_COLS.tipo]||'').trim()).filter(t=>t && t!==INV_COLS.tipo))].sort();
       selTipo.innerHTML='<option value="">Todos los tipos</option>'+tipos.map(t=>`<option value="${t.replace(/"/g,'&quot;')}">${t.replace(/</g,'&lt;')}</option>`).join('');
     }
     const q=(document.getElementById('invBuscar').value||'').toLowerCase().trim();
     const fNivel=document.getElementById('invFiltroNivel').value;
     const fTipo=document.getElementById('invFiltroTipo').value;
     const verArch=document.getElementById('invVerArchivados').checked;
-    // Construir filas con metadatos
+    const limpio = s => { const t=String(s||'').trim(); return (!t || /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(t))?'':t; };
+    // Cada registro del inventario = una fila completa con sus 6 niveles
     let filas=inv.map(r=>{
-      const {nivel,nombre}=_invNivelElemento(r);
-      return { r, nivel, nombre, ruta:_invRuta(r), tipo:String((r.values||{})[INV_COLS.tipo]||'').trim(), archivado:_invArchivado(r) };
+      const v=r.values||{};
+      return {
+        r, id:r.id, archivado:_invArchivado(r),
+        tipo:limpio(v[INV_COLS.tipo]),
+        n0:limpio(v[INV_COLS.n0]), n1:limpio(v[INV_COLS.n1]),
+        n2:limpio(v[INV_COLS.n2]), n3:limpio(v[INV_COLS.n3]),
+        proc:limpio(v[INV_COLS.proc])
+      };
     });
     // Filtros
     filas=filas.filter(f=>{
       if(!verArch && f.archivado) return false;
-      if(fNivel && f.nivel!==fNivel) return false;
       if(fTipo && f.tipo!==fTipo) return false;
-      if(q){ const blob=(f.nombre+' '+f.ruta+' '+f.nivel).toLowerCase(); if(!blob.includes(q)) return false; }
+      if(fNivel){ const {nivel}=_invNivelElemento(f.r); if(nivel!==fNivel) return false; }
+      if(q){ const blob=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
       return true;
     });
-    // Orden: por ruta (agrupa la jerarquía), luego por profundidad
-    filas.sort((a,b)=>{ const c=a.ruta.localeCompare(b.ruta); if(c!==0) return c; return _invProfundidad(a.nivel)-_invProfundidad(b.nivel); });
+    // Orden jerárquico por las columnas (igual que el Excel)
+    filas.sort((a,b)=> (a.tipo.localeCompare(b.tipo)) || (a.n0.localeCompare(b.n0)) || (a.n1.localeCompare(b.n1)) || (a.n2.localeCompare(b.n2)) || (a.n3.localeCompare(b.n3)) || (a.proc.localeCompare(b.proc)) );
     document.getElementById('inv_total').textContent=filas.length;
-    if(!filas.length){ tb.innerHTML='<tr><td colspan="3"><div class="empty"><h3>Sin resultados</h3><p>Ajusta la búsqueda o los filtros.</p></div></td></tr>'; setConn(true); return; }
-    tb.innerHTML=filas.map(f=>{
-      const prof=_invProfundidad(f.nivel);
-      const bg=_INV_BADGE[f.nivel]||{bg:'#eee',fg:'#555'};
-      const badge=`<span style="display:inline-block;font-size:10px;font-weight:700;background:${bg.bg};color:${bg.fg};border-radius:10px;padding:2px 9px;white-space:nowrap">${f.nivel||'—'}</span>`;
-      const sangria=prof*18;
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin resultados</h3><p>Ajusta la búsqueda o los filtros.</p></div></td></tr>'; setConn(true); return; }
+    // Calcular rowspan por celda: una celda agrupa mientras la cadena de niveles superiores + el propio sea igual.
+    // Para cada columna, una celda "manda" (se dibuja) si difiere de la fila anterior en esa columna O en alguna superior.
+    const cols=['tipo','n0','n1','n2','n3'];
+    const claveHasta=(f,idx)=>cols.slice(0,idx+1).map(c=>f[c]).join('¦');
+    // Precalcular, para cada fila y columna, si es la primera de su grupo y cuántas filas abarca
+    const span={}; // span[filaIdx][col] = nº de filas (si lidera) o 0 (si la cubre la de arriba)
+    filas.forEach((f,i)=>{ span[i]={}; });
+    cols.forEach((c,ci)=>{
+      let i=0;
+      while(i<filas.length){
+        const clave=claveHasta(filas[i],ci);
+        let j=i+1;
+        while(j<filas.length && claveHasta(filas[j],ci)===clave) j++;
+        span[i][c]=j-i;            // la fila i lidera el grupo, abarca (j-i) filas
+        for(let k=i+1;k<j;k++) span[k][c]=0; // las demás quedan cubiertas
+        i=j;
+      }
+    });
+    const BADGE={ tipo:_INV_BADGE['Tipo de proceso'], n0:_INV_BADGE['Proceso nivel 0'], n1:_INV_BADGE['Proceso nivel 1'], n2:_INV_BADGE['Proceso nivel 2'], n3:_INV_BADGE['Proceso nivel 3'], proc:_INV_BADGE['Procedimiento'] };
+    const celdaNivel=(f,c)=>{
+      const val=f[c];
+      const bg=BADGE[c]||{bg:'#f4f4f4',fg:'#555'};
+      if(!val) return `<td style="vertical-align:top;border-top:1px solid var(--line);color:var(--mist);padding:8px 10px">—</td>`;
+      const borde = `border-left:3px solid ${bg.fg}33`;
+      return `<td style="vertical-align:top;border-top:1px solid var(--line);padding:8px 10px;${borde}"><div style="font-weight:600;color:var(--slate);line-height:1.35">${val.replace(/</g,'&lt;')}</div></td>`;
+    };
+    let html='';
+    filas.forEach((f,i)=>{
+      html+=`<tr style="${f.archivado?'opacity:.5':''}">`;
+      // columnas agrupadas con rowspan
+      cols.forEach(c=>{
+        if(span[i][c]>0){ const td=celdaNivel(f,c); html+= td.replace('<td ', `<td rowspan="${span[i][c]}" `); }
+      });
+      // procedimiento: siempre por fila (es el nivel más fino)
+      const bgP=BADGE.proc||{bg:'#e0f2f1',fg:'#00695c'};
       const archTag=f.archivado?'<span style="font-size:10px;color:var(--mist);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px">Archivado</span>':'';
-      const rid=f.r.id;
-      return `<tr style="${f.archivado?'opacity:.55':''}">
-        <td style="vertical-align:top">${badge}</td>
-        <td style="vertical-align:top">
-          <div style="padding-left:${sangria}px">
-            <div style="font-size:13px;font-weight:600;color:var(--brand)">${prof>0?'<span style="color:var(--mist)">└ </span>':''}${f.nombre.replace(/</g,'&lt;')}${archTag}</div>
-            ${f.ruta?`<div class="mono" style="font-size:11px;color:var(--mist);padding-left:${prof>0?14:0}px;margin-top:2px">${f.ruta.replace(/</g,'&lt;')}</div>`:''}
-          </div>
-        </td>
-        <td style="text-align:right;vertical-align:top;white-space:nowrap">
-          <button class="icon-btn" title="Editar" onclick="editarInventario('${rid}')">✏️</button>
-          <button class="icon-btn" title="${f.archivado?'Desarchivar':'Archivar'}" onclick="archivarInventario('${rid}', ${f.archivado?'false':'true'})">📦</button>
-          <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${rid}')">🗑️</button>
-        </td>
-      </tr>`;
-    }).join('');
+      html+=`<td style="vertical-align:top;border-top:1px solid var(--line);padding:8px 10px;border-left:3px solid ${bgP.fg}33">${f.proc?`<div style="font-weight:600;color:${bgP.fg};line-height:1.35">${f.proc.replace(/</g,'&lt;')}${archTag}</div>`:'<span style="color:var(--mist)">—</span>'}</td>`;
+      // acciones
+      html+=`<td style="text-align:right;vertical-align:top;white-space:nowrap;border-top:1px solid var(--line);padding:8px 6px">
+        <button class="icon-btn" title="Editar" onclick="editarInventario('${f.id}')">✏️</button>
+        <button class="icon-btn" title="${f.archivado?'Reactivar':'Archivar'}" onclick="archivarInventario('${f.id}', ${f.archivado?'false':'true'})">📦</button>
+        <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${f.id}')">🗑️</button>
+      </td>`;
+      html+=`</tr>`;
+    });
+    tb.innerHTML=html;
     setConn(true);
-  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="3"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="7"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 window.renderInventario=renderInventario;
 
@@ -4218,11 +4271,16 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
   aplicarNivelVisual('N0'); // fijar visibilidad inicial coherente con el nivel
   try{
     await initCascadaFicha();
-    // Verificación: si el desplegable de Tipo quedó vacío, avisar con claridad.
-    const tipo=document.getElementById('fi_tipo');
+    // Verificación: si el desplegable de Tipo quedó vacío, reintentar una vez recargando el inventario.
+    let tipo=document.getElementById('fi_tipo');
+    if(!tipo || tipo.options.length<=1){
+      STATE.inventario=[];                 // descartar posible vacío cacheado
+      try{ await loadInventario(); await initCascadaFicha(); }catch(_){}
+      tipo=document.getElementById('fi_tipo');
+    }
     if(!tipo || tipo.options.length<=1){
       toast('La cascada no cargó opciones del inventario. Revisa la consola (F12).', true);
-      console.warn('Inventario cargó', STATE.inventario.length, 'registros, pero el desplegable Tipo quedó vacío. Columna esperada:', INV_COLS.tipo);
+      console.warn('Inventario cargó', (STATE.inventario||[]).length, 'registros, pero el desplegable Tipo quedó vacío. Columna esperada:', INV_COLS.tipo);
       if(STATE.inventario[0]) console.warn('Columnas reales del inventario:', Object.keys(STATE.inventario[0].values||{}).filter(k=>!/^[a-zA-Z0-9_\-]{22}$/.test(k)));
     } else {
     }
