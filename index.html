@@ -1927,17 +1927,28 @@ let _NP_CACHE_OPC = {};      // key de nivel → opciones de código (select)
 let _NP_SCHEMA_OK = false;
 
 // Carga (una vez) las opciones de código de cada nivel leyendo el esquema de campos.
+// Códigos oficiales incrustados para los niveles altos (listas cortas y estables).
+const _CODIGOS_FIJOS = {
+  n0: ['E01','E02','E03','E04','E05','E06','M01','M02','M03','M04','M05','M06','M07','S01','S02','S03','S04','S05'],
+  n1: ['E01.01','E01.02','E01.03','E01.04','E01.05','E01.06','E02.01','E02.02','E02.03','E02.04','E02.05','E02.06','E03.01','E03.02','E03.03','E03.04','E03.05','E03.06','E04.01','E04.02','E04.03','E04.04','E04.05','E04.06','E05.01','E05.02','E06.01','E06.02','E06.03','M01.01','M01.02','M01.03','M01.04','M01.05','M01.06','M02.01','M03.01','M03.02','M03.03','M04.01','M04.02','M04.03','M05.01','S01.01','S02.01','S02.02','S03.01','S03.02','S04.01','S04.02','S04.03','S05.01']
+};
 async function _npCargarEsquema(){
   if(_NP_SCHEMA_OK) return;
-  for(const def of JERARQUIA){
-    if(!def.codigoField){ _NP_CACHE_OPC[def.key]=[]; continue; }
-    try{
-      const f=await API.call('/apps/'+CONFIG.APP_ID+'/entities/'+def.entity()+'/fields.json','GET','');
-      const fields=f.fields||f;
-      const campo=(Array.isArray(fields)?fields:[]).find(x=>x.id===def.codigoField);
-      _NP_CACHE_OPC[def.key]=campo?_opcionesSelect(campo.default):[];
-    }catch(_){ _NP_CACHE_OPC[def.key]=[]; }
-  }
+  // Niveles altos: usar las listas fijas incrustadas
+  _NP_CACHE_OPC.tipo=[];
+  _NP_CACHE_OPC.n0=[..._CODIGOS_FIJOS.n0];
+  _NP_CACHE_OPC.n1=[..._CODIGOS_FIJOS.n1];
+  // Niveles N2, N3 y Procedimiento: derivar los códigos de los que ya existen en el inventario
+  // (el endpoint del esquema no es accesible por el proxy). Cubre todos los códigos en uso.
+  try{
+    const inv=await loadInventario();
+    const COLCOD={ n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
+    Object.keys(COLCOD).forEach(k=>{
+      const set=new Set();
+      inv.forEach(r=>{ const v=r.values||{}; const c=v[COLCOD[k]]; if(c && !/^[a-zA-Z0-9_-]{22}$/.test(String(c)) && String(c).trim()!==COLCOD[k]) set.add(String(c).trim()); });
+      _NP_CACHE_OPC[k]=[...set].sort();
+    });
+  }catch(_){ _NP_CACHE_OPC.n2=_NP_CACHE_OPC.n2||[]; _NP_CACHE_OPC.n3=_NP_CACHE_OPC.n3||[]; _NP_CACHE_OPC.proc=_NP_CACHE_OPC.proc||[]; }
   _NP_SCHEMA_OK=true;
 }
 // Carga los registros existentes de un nivel (para elegir padre), devolviendo [{id, nombre}].
@@ -1982,6 +1993,7 @@ window.abrirNuevoProceso=abrirNuevoProceso;
 
 // Genera los desplegables de la cadena de padres según el nivel elegido.
 async function npRenderCascada(){
+  await _npCargarEsquema(); // asegurar que las opciones de código estén listas
   const nivel=document.getElementById('np_nivel').value;
   const cont=document.getElementById('np_cascada');
   const nuevo=document.getElementById('np_nuevo');
@@ -2006,7 +2018,12 @@ async function npRenderCascada(){
   if(def.codigoField){
     lblCod.style.display=''; selCod.style.display='';
     const opc=_NP_CACHE_OPC[nivel]||[];
-    selCod.innerHTML='<option value="">— elige código —</option>'+opc.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('');
+    selCod.innerHTML='<option value="">— elige código —</option>'+opc.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('')+'<option value="__otro__">✏️ Otro código (escribir)…</option>';
+    selCod.onchange=function(){
+      const w=document.getElementById('np_codigo_otro_wrap');
+      if(selCod.value==='__otro__'){ if(!w){ const d=document.createElement('div'); d.id='np_codigo_otro_wrap'; d.style.marginTop='6px'; d.innerHTML='<input id="np_codigo_otro" placeholder="Escribe el código (ej. M01.05.03)" style="width:100%">'; selCod.parentNode.appendChild(d);} }
+      else if(w){ w.remove(); }
+    };
   } else {
     // Tipo de proceso no tiene código
     lblCod.style.display='none'; selCod.style.display='none'; selCod.innerHTML='';
@@ -2065,7 +2082,8 @@ async function guardarNuevoProceso(){
       }
     }
     // 2) Crear el elemento objetivo
-    const cod = def.codigoField ? (document.getElementById('np_codigo').value||'') : '';
+    let cod = def.codigoField ? (document.getElementById('np_codigo').value||'') : '';
+    if(cod==='__otro__'){ cod=(document.getElementById('np_codigo_otro')||{}).value||''; cod=cod.trim(); }
     const nom = (document.getElementById('np_nombre').value||'').trim();
     if(!nom){ throw new Error('Escribe el nombre.'); }
     if(def.codigoField && !cod){ throw new Error('Elige el código.'); }
