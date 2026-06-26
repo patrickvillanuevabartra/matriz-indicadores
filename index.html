@@ -216,6 +216,7 @@
     <nav>
       <button data-view="fichas" class="active">Fichas de proceso</button>
       <button data-view="listado">Fichas registradas</button>
+      <button data-view="inventario" id="navInventario">Inventario de procesos</button>
       <button data-view="matriz" id="navMatriz">Matriz de indicadores</button>
       <button data-view="administracion" id="navAdmin" style="display:none">Administración</button>
     </nav>
@@ -347,6 +348,33 @@
     <div class="card"><div class="tabla-wrap" style="padding:6px 4px"><table>
       <thead><tr><th style="width:60px">Nivel</th><th style="width:200px">Proceso (ruta)</th><th style="width:200px">Objetivo</th><th>Indicadores por nivel de análisis</th><th style="text-align:right;width:120px">Acciones</th></tr></thead>
       <tbody id="tablaListado"><tr><td colspan="5" class="empty"><h3>Cargando…</h3></td></tr></tbody>
+    </table></div></div>
+  </section>
+
+  <!-- ===================== INVENTARIO DE PROCESOS Y PROCEDIMIENTOS ===================== -->
+  <section class="view" id="view-inventario">
+    <div class="page-head">
+      <div class="eyebrow">Estructura organizacional</div>
+      <h1>Inventario de procesos</h1>
+      <p>Árbol de procesos y procedimientos en los distintos niveles. Busca, filtra, edita, archiva o elimina.</p>
+      <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="inv_total">0</span> elemento(s)</p>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-primary" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
+      <div class="conn" style="margin-bottom:0;flex:1;min-width:200px">
+        <input id="invBuscar" placeholder="Buscar por proceso, procedimiento o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
+      </div>
+      <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los niveles</option><option value="Tipo de proceso">Tipo de proceso</option><option value="Proceso nivel 0">Proceso nivel 0</option><option value="Proceso nivel 1">Proceso nivel 1</option><option value="Proceso nivel 2">Proceso nivel 2</option><option value="Proceso nivel 3">Proceso nivel 3</option><option value="Procedimiento">Procedimiento</option></select>
+      <select id="invFiltroTipo" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los tipos</option></select>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
+    </div>
+    <div class="card"><div style="overflow-x:auto"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="width:120px">Nivel</th>
+        <th>Proceso / procedimiento <span style="color:var(--mist);font-weight:400">· ruta</span></th>
+        <th style="text-align:right;width:140px">Acciones</th>
+      </tr></thead>
+      <tbody id="tablaInventario"><tr><td colspan="3" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
   </section>
 
@@ -690,6 +718,40 @@
     <div class="modal-body"><div id="det_cuerpo"></div></div>
     <div class="modal-foot">
       <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalDetalle')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL NUEVO PROCESO (cascada 6 niveles) ===================== -->
+<div class="modal-bg" id="modalNuevoProceso">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Inventario</div><h2 style="font-size:18px">Crear nuevo proceso</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalNuevoProceso')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>¿Qué nivel quieres crear? <span style="color:#c0392b">*</span></label>
+        <select id="np_nivel" onchange="npRenderCascada()">
+          <option value="">— elige un nivel —</option>
+          <option value="tipo">Tipo de proceso</option>
+          <option value="n0">Proceso nivel 0</option>
+          <option value="n1">Proceso nivel 1</option>
+          <option value="n2">Proceso nivel 2</option>
+          <option value="n3">Proceso nivel 3</option>
+          <option value="proc">Procedimiento</option>
+        </select>
+      </div>
+      <div id="np_cascada"></div>
+      <div id="np_nuevo" style="display:none;border-top:1px solid var(--line);margin-top:10px;padding-top:12px">
+        <div class="field"><label id="np_lbl_codigo">Código <span style="color:#c0392b">*</span></label><select id="np_codigo"></select></div>
+        <div class="field"><label id="np_lbl_nombre">Nombre <span style="color:#c0392b">*</span></label><input id="np_nombre" placeholder="Nombre del proceso/procedimiento"></div>
+        <div class="hint" style="font-size:11px">El código se guardará como prefijo del nombre (ej. «E01.02 Planeamiento»).</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalNuevoProceso')">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="np_guardar" onclick="guardarNuevoProceso()">Crear</button>
     </div>
   </div>
 </div>
@@ -1179,6 +1241,7 @@ document.querySelectorAll('nav button').forEach(b=>{
     b.classList.add('active');
     document.getElementById('view-'+b.dataset.view).classList.add('active');
     if(b.dataset.view==='listado') renderListado();
+    if(b.dataset.view==='inventario') renderInventario();
     if(b.dataset.view==='matriz') renderMatriz();
     if(b.dataset.view==='administracion') cargarUsuarios();
   };
@@ -1231,7 +1294,38 @@ async function loadMaestra(entityKey, labelCol){
 }
 
 // Inventario: misma fuente única de la cascada que en riesgos.
-const INV_COLS = { tipo:'Tipo de proceso', n0:'Proceso nivel 0', n1:'Procesos nivel 1', n2:'Proceso nivel 2', n3:'Proceso nivel 3', proc:'Procedimiento' };
+const INV_COLS = { tipo:'Tipo de proceso', n0:'Proceso nivel 0', n1:'Procesos nivel 1', n2:'Proceso nivel 2', n3:'Proceso nivel 3', proc:'Procedimiento', estado:'Estado del registro' };
+// ⬇️ PEGA AQUÍ el id del campo "Estado del registro" creado en QuintaDB (tabla del inventario / PROCEDIMIENTO).
+const ESTADO_REGISTRO_FIELD_ID = "cGoSkYwSnnWPj6W7tcHSoK"; // campo "Estado del registro" (tabla PROCEDIMIENTO) — valores: "Activo" / "Archivado"
+
+// ===================== MAPA DE LAS 6 TABLAS JERÁRQUICAS (para crear procesos) =====================
+// Cada nivel: entity, campo del nombre, campo del código (select con opciones), y los rel a sus padres.
+// Los códigos de PROCEDIMIENTO/N3/N2/N1/N0 son 'select' con lista cerrada; el nombre se guarda como "CÓDIGO Nombre".
+const JERARQUIA = [
+  { key:'tipo', label:'Tipo de proceso', entity:()=>CONFIG.ENTITIES.TIPO_PROCESO,
+    nombreField:'dcRCkBagDdTBOwp8kqoMb0', codigoField:null, padres:[] },
+  { key:'n0', label:'Proceso nivel 0', entity:()=>CONFIG.ENTITIES.NIVEL0,
+    nombreField:'aKxhRdI8nlWPBdSSkph2Dm', codigoField:'bUW6ZcI8njgk5-gmkNpCog',
+    padres:[ {key:'tipo', rel:'adBZWBW55kW64LiNlcMSkZ'} ] },
+  { key:'n1', label:'Proceso nivel 1', entity:()=>CONFIG.ENTITIES.NIVEL1,
+    nombreField:'bExSoiW6LgkypdKZpdKSk7', codigoField:'dcOr1kWQbdMlldUCoyBmou',
+    padres:[ {key:'tipo', rel:'axW4FdPCjldlVcGtZcVCof'}, {key:'n0', rel:'c3WOhdNSjfeytdUSoqz8kF'} ] },
+  { key:'n2', label:'Proceso nivel 2', entity:()=>CONFIG.ENTITIES.NIVEL2,
+    nombreField:'cixmkzF1bcGy_cGtjPWRb9', codigoField:'ckCYmQWRfhWPiNxCoHhfGH',
+    padres:[ {key:'tipo', rel:'cCWPL5yaPdS4kTeqexWRvg'}, {key:'n0', rel:'dcGfVdIwLiW7bGqtyaBSoN'}, {key:'n1', rel:'asW4BcL8jeD43cN07cQsiR'} ] },
+  { key:'n3', label:'Proceso nivel 3', entity:()=>CONFIG.ENTITIES.NIVEL3,
+    nombreField:'bhW7BcSuzcPykKW6hcQmoQ', codigoField:'b_kSkXW4jdJQ_cR8kjWPPB',
+    padres:[ {key:'tipo', rel:'dcTspcN8naW73dQv5TWO1B'}, {key:'n0', rel:'a3B3jxu8jiWO5cimkCEN0q'}, {key:'n1', rel:'a7W6OMWPHdRypcGCkoW79-'}, {key:'n2', rel:'ddJu_cImnpyyk2W5pdRSo9'} ] },
+  { key:'proc', label:'Procedimiento', entity:()=>CONFIG.ENTITIES.PROCEDIMIENTO,
+    nombreField:'coi8oUW41cMOk7cCk2W4vk', codigoField:'dcVSkHkSnhl5iaW7uMqCox',
+    padres:[ {key:'tipo', rel:'bTW5RdU8jfvRChwwFdPSkI'}, {key:'n0', rel:'dcUWH1c1zhW5bGiCkMjrK8'}, {key:'n1', rel:'cSWR_cI8jbqPpcGSkJd8oL'}, {key:'n2', rel:'ccWP_cOmnkj4oNbcOzaZq4'}, {key:'n3', rel:'cDW5SHlCnmW7bkgaaMW6fP'} ],
+    estadoField:'cGoSkYwSnnWPj6W7tcHSoK' },
+];
+function _nivelDef(key){ return JERARQUIA.find(j=>j.key===key); }
+// Extrae las opciones de un campo select del esquema (las cargamos en vivo al abrir el form).
+function _opcionesSelect(defaultStr){
+  return String(defaultStr||'').split('slct').map(s=>s.trim()).filter(s=>s && s!=='Seleccione');
+}
 
 // Detecta el PRIMER nivel hacia abajo con datos reales (ignorando "N.D.").
 // Recibe el nivel de la ficha y los valores de cascada elegidos.
@@ -1398,7 +1492,10 @@ async function construirMapaIndicadores(){
 }
 function opcionesInv(inv, filtros, colSig){
   const set=new Set();
-  inv.forEach(r=>{ const v=r.values||{}; const ok=Object.entries(filtros).every(([c,val])=>!val||v[c]===val); if(ok&&v[colSig]) set.add(v[colSig]); });
+  inv.forEach(r=>{
+    if(_invArchivado(r)) return; // los procesos archivados no se ofrecen para crear/editar fichas
+    const v=r.values||{}; const ok=Object.entries(filtros).every(([c,val])=>!val||v[c]===val); if(ok&&v[colSig]) set.add(v[colSig]);
+  });
   return [...set].sort().map(x=>({value:x,label:x}));
 }
 
@@ -1758,10 +1855,364 @@ function leerTextoIndicador(vals){
 }
 
 let _GRP_DE_FICHA = {}; // nivel_id → id de la cabecera de grupo (para contar indicadores)
+// ===================== INVENTARIO DE PROCESOS Y PROCEDIMIENTOS =====================
+// Deriva el nivel y el nombre del elemento de un registro del inventario (el campo más profundo con valor).
+function _invNivelElemento(r){
+  const v=r.values||{}; const C=INV_COLS;
+  const escalera=[
+    {col:C.proc, label:'Procedimiento'},
+    {col:C.n3,   label:'Proceso nivel 3'},
+    {col:C.n2,   label:'Proceso nivel 2'},
+    {col:C.n1,   label:'Proceso nivel 1'},
+    {col:C.n0,   label:'Proceso nivel 0'},
+    {col:C.tipo, label:'Tipo de proceso'},
+  ];
+  for(const e of escalera){ const val=v[e.col]; if(val && String(val).trim() && String(val).trim()!==e.col){ return { nivel:e.label, nombre:String(val).trim() }; } }
+  return { nivel:'', nombre:'(sin nombre)' };
+}
+function _invRuta(r){
+  const v=r.values||{}; const C=INV_COLS;
+  const segs=[C.tipo,C.n0,C.n1,C.n2,C.n3,C.proc].map(c=>v[c]).map(s=>String(s||'').trim()).filter(s=>s && !/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(s));
+  return segs.join(' › ');
+}
+function _invProfundidad(nivelLabel){
+  return {'Tipo de proceso':0,'Proceso nivel 0':1,'Proceso nivel 1':2,'Proceso nivel 2':3,'Proceso nivel 3':4,'Procedimiento':5}[nivelLabel] ?? 0;
+}
+// ¿El registro está ARCHIVADO? (campo "Estado del registro" = "Archivado") — patrón robusto de Riesgos.
+// ¿La ruta de una ficha contiene algún proceso/procedimiento que esté ARCHIVADO en el inventario?
+// Devuelve la lista de nombres archivados encontrados (vacío si ninguno).
+function _procesosArchivadosEnRuta(rutaTxt){
+  if(!STATE.inventario || !STATE.inventario.length) return [];
+  const segs=String(rutaTxt||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
+  if(!segs.length) return [];
+  // Conjunto de nombres archivados (de cualquier nivel)
+  const archivados=new Set();
+  STATE.inventario.forEach(r=>{ if(_invArchivado(r)){ const {nombre}=_invNivelElemento(r); if(nombre) archivados.add(nombre.toLowerCase()); } });
+  if(!archivados.size) return [];
+  return segs.filter(s=>archivados.has(s.toLowerCase()));
+}
+
+function _invArchivado(r){
+  const v=r.values||{};
+  // Leer por NOMBRE de columna y por field-id; descartar el literal del nombre (bug QuintaDB).
+  let e = v[INV_COLS.estado];
+  if((!e || e===INV_COLS.estado) && ESTADO_REGISTRO_FIELD_ID) e = v[ESTADO_REGISTRO_FIELD_ID];
+  if(!e || e===INV_COLS.estado) return false;
+  return String(e).trim().toLowerCase()==='archivado';
+}
+const _INV_BADGE = {
+  'Tipo de proceso':{bg:'#e8eef7',fg:'#2c5282'}, 'Proceso nivel 0':{bg:'#e6f4ea',fg:'#1f7a3d'},
+  'Proceso nivel 1':{bg:'#fff3e0',fg:'#b06a00'}, 'Proceso nivel 2':{bg:'#fde8ef',fg:'#a01a52'},
+  'Proceso nivel 3':{bg:'#ede7f6',fg:'#5b3a9e'}, 'Procedimiento':{bg:'#e0f2f1',fg:'#00695c'}
+};
+window.editarInventario=editarInventario;
+
+// ===================== CREAR NUEVO PROCESO (cascada sobre las 6 tablas) =====================
+let _NP_CACHE_REG = {};      // key de nivel → registros existentes [{id, nombre}]
+let _NP_CACHE_OPC = {};      // key de nivel → opciones de código (select)
+let _NP_SCHEMA_OK = false;
+
+// Carga (una vez) las opciones de código de cada nivel leyendo el esquema de campos.
+async function _npCargarEsquema(){
+  if(_NP_SCHEMA_OK) return;
+  for(const def of JERARQUIA){
+    if(!def.codigoField){ _NP_CACHE_OPC[def.key]=[]; continue; }
+    try{
+      const f=await API.call('/apps/'+CONFIG.APP_ID+'/entities/'+def.entity()+'/fields.json','GET','');
+      const fields=f.fields||f;
+      const campo=(Array.isArray(fields)?fields:[]).find(x=>x.id===def.codigoField);
+      _NP_CACHE_OPC[def.key]=campo?_opcionesSelect(campo.default):[];
+    }catch(_){ _NP_CACHE_OPC[def.key]=[]; }
+  }
+  _NP_SCHEMA_OK=true;
+}
+// Carga los registros existentes de un nivel (para elegir padre), devolviendo [{id, nombre}].
+async function _npRegistros(key){
+  if(_NP_CACHE_REG[key]) return _NP_CACHE_REG[key];
+  const def=_nivelDef(key);
+  const data=await API.records(def.entity());
+  const regs=(data.records||[]).map(r=>{
+    const v=r.values||{};
+    // El nombre está en el campo nombreField; si viene el literal, intentamos por nombre de columna.
+    let nombre=v[def.nombreField];
+    if(!nombre || /^[a-zA-Z0-9_-]{22}$/.test(String(nombre))){
+      // buscar el primer valor "texto" que parezca nombre
+      const cand=Object.values(v).find(x=>x && typeof x==='string' && !/^[a-zA-Z0-9_-]{22}$/.test(x));
+      nombre=cand||'(sin nombre)';
+    }
+    return { id:r.id, nombre:String(nombre).trim() };
+  });
+  regs.sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  _NP_CACHE_REG[key]=regs;
+  return regs;
+}
+
+async function abrirNuevoProceso(){
+  document.getElementById('np_nivel').value='';
+  document.getElementById('np_cascada').innerHTML='';
+  document.getElementById('np_nuevo').style.display='none';
+  document.getElementById('np_codigo').innerHTML='';
+  document.getElementById('np_nombre').value='';
+  document.getElementById('modalNuevoProceso').classList.add('show'); document.body.style.overflow='hidden';
+  try{ await _npCargarEsquema(); }catch(_){}
+}
+window.abrirNuevoProceso=abrirNuevoProceso;
+
+// Genera los desplegables de la cadena de padres según el nivel elegido.
+async function npRenderCascada(){
+  const nivel=document.getElementById('np_nivel').value;
+  const cont=document.getElementById('np_cascada');
+  const nuevo=document.getElementById('np_nuevo');
+  cont.innerHTML=''; nuevo.style.display='none';
+  if(!nivel){ return; }
+  const def=_nivelDef(nivel);
+  // Para cada padre, un desplegable con registros existentes + "➕ Crear nuevo…"
+  for(const p of def.padres){
+    const pdef=_nivelDef(p.key);
+    cont.insertAdjacentHTML('beforeend', `<div class="field" id="np_wrap_${p.key}"><label>${pdef.label} <span style="color:#c0392b">*</span></label><select id="np_padre_${p.key}" data-pkey="${p.key}" onchange="npPadreChange('${p.key}')"><option value="">Cargando…</option></select><div id="np_inline_${p.key}"></div></div>`);
+    try{
+      const regs=await _npRegistros(p.key);
+      const sel=document.getElementById('np_padre_'+p.key);
+      sel.innerHTML='<option value="">— elige —</option>'+regs.map(r=>`<option value="${r.id}">${r.nombre.replace(/</g,'&lt;')}</option>`).join('')+`<option value="__nuevo__">➕ Crear nuevo ${pdef.label}…</option>`;
+    }catch(_){ const sel=document.getElementById('np_padre_'+p.key); if(sel) sel.innerHTML='<option value="">(error al cargar)</option>'; }
+  }
+  // Mostrar campos del elemento a crear (código + nombre)
+  nuevo.style.display='';
+  const lblCod=document.getElementById('np_lbl_codigo');
+  const selCod=document.getElementById('np_codigo');
+  document.getElementById('np_lbl_nombre').innerHTML=def.label+' <span style="color:#c0392b">*</span>';
+  if(def.codigoField){
+    lblCod.style.display=''; selCod.style.display='';
+    const opc=_NP_CACHE_OPC[nivel]||[];
+    selCod.innerHTML='<option value="">— elige código —</option>'+opc.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('');
+  } else {
+    // Tipo de proceso no tiene código
+    lblCod.style.display='none'; selCod.style.display='none'; selCod.innerHTML='';
+  }
+}
+window.npRenderCascada=npRenderCascada;
+
+// Si el usuario elige "Crear nuevo…" en un padre, mostrar un mini-input inline para crearlo al momento.
+function npPadreChange(pkey){
+  const sel=document.getElementById('np_padre_'+pkey);
+  const inline=document.getElementById('np_inline_'+pkey);
+  if(!sel||!inline) return;
+  if(sel.value==='__nuevo__'){
+    const pdef=_nivelDef(pkey);
+    const opc=_NP_CACHE_OPC[pkey]||[];
+    const codHtml = pdef.codigoField
+      ? `<select id="np_inlinecod_${pkey}" style="margin-bottom:6px"><option value="">— código —</option>${opc.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('')}</select>`
+      : '';
+    inline.innerHTML=`<div style="background:var(--card);border:1px dashed var(--brand-2);border-radius:8px;padding:8px 10px;margin-top:6px">
+      <div style="font-size:11px;color:var(--brand);font-weight:600;margin-bottom:6px">Nuevo ${pdef.label}</div>
+      ${codHtml}
+      <input id="np_inlinenom_${pkey}" placeholder="Nombre del ${pdef.label}" style="width:100%">
+    </div>`;
+  } else {
+    inline.innerHTML='';
+  }
+}
+window.npPadreChange=npPadreChange;
+
+async function guardarNuevoProceso(){
+  const btn=document.getElementById('np_guardar');
+  const nivel=document.getElementById('np_nivel').value;
+  if(!nivel){ toast('Elige qué nivel crear.', true); return; }
+  const def=_nivelDef(nivel);
+  btn.disabled=true; btn.textContent='Creando…';
+  try{
+    // 1) Resolver/crear cada padre, de arriba hacia abajo, para tener sus ids
+    const idsPadres={}; // key → recordId
+    for(const p of def.padres){
+      const sel=document.getElementById('np_padre_'+p.key);
+      let val=sel?sel.value:'';
+      if(!val){ throw new Error('Falta elegir '+_nivelDef(p.key).label+'.'); }
+      if(val==='__nuevo__'){
+        // Crear el padre al momento (recursivo hacia sus propios padres ya resueltos)
+        const pdef=_nivelDef(p.key);
+        const nom=(document.getElementById('np_inlinenom_'+p.key)||{}).value||'';
+        const cod=pdef.codigoField?((document.getElementById('np_inlinecod_'+p.key)||{}).value||''):'';
+        if(!nom.trim()){ throw new Error('Escribe el nombre del nuevo '+pdef.label+'.'); }
+        if(pdef.codigoField && !cod){ throw new Error('Elige el código del nuevo '+pdef.label+'.'); }
+        const nuevoId=await _npInsertar(pdef, idsPadres, cod, nom.trim());
+        idsPadres[p.key]=nuevoId;
+        // refrescar cache de ese nivel para futuras
+        delete _NP_CACHE_REG[p.key];
+      } else {
+        idsPadres[p.key]=val;
+      }
+    }
+    // 2) Crear el elemento objetivo
+    const cod = def.codigoField ? (document.getElementById('np_codigo').value||'') : '';
+    const nom = (document.getElementById('np_nombre').value||'').trim();
+    if(!nom){ throw new Error('Escribe el nombre.'); }
+    if(def.codigoField && !cod){ throw new Error('Elige el código.'); }
+    await _npInsertar(def, idsPadres, cod, nom);
+    toast('Proceso creado correctamente.');
+    cerrarModal('modalNuevoProceso');
+    // refrescar inventario y caches
+    STATE.inventario=[]; _NP_CACHE_REG={};
+    if(typeof renderInventario==='function') renderInventario();
+  }catch(e){ toast(e.message||'Error al crear.', true); }
+  finally{ btn.disabled=false; btn.textContent='Crear'; }
+}
+window.guardarNuevoProceso=guardarNuevoProceso;
+
+// Inserta un registro en la tabla de un nivel, enlazando los rel a los padres (idsPadres por key).
+// El nombre se guarda como "CÓDIGO Nombre" (código como prefijo) cuando hay código.
+async function _npInsertar(def, idsPadres, codigo, nombre){
+  const nombreFinal = codigo ? (codigo+' '+nombre) : nombre;
+  const campos={};
+  campos[def.nombreField]=nombreFinal;
+  if(def.codigoField && codigo) campos[def.codigoField]=codigo;
+  // rel a cada padre → como ARRAY (QuintaDB espera values[fid][]=id)
+  (def.padres||[]).forEach(p=>{ if(idsPadres[p.key]) campos[p.rel]=[idsPadres[p.key]]; });
+  if(def.estadoField) campos[def.estadoField]='Activo';
+  const res=await API.saveForm(null, campos, def.entity());
+  const newId = res && (res.id || (res.record&&res.record.id) || (res.dtype&&res.dtype.id) || (res.data&&res.data.id));
+  if(!newId) throw new Error('No se pudo confirmar la creación de '+def.label+'.');
+  return newId;
+}
+
+async function renderInventario(){
+  const tb=document.getElementById('tablaInventario');
+  if(!tb) return;
+  try{
+    const inv=await loadInventario();
+    // Poblar filtro de tipos (una vez)
+    const selTipo=document.getElementById('invFiltroTipo');
+    if(selTipo && selTipo.options.length<=1){
+      const tipos=[...new Set(inv.map(r=>String((r.values||{})[INV_COLS.tipo]||'').trim()).filter(Boolean))].sort();
+      selTipo.innerHTML='<option value="">Todos los tipos</option>'+tipos.map(t=>`<option value="${t.replace(/"/g,'&quot;')}">${t.replace(/</g,'&lt;')}</option>`).join('');
+    }
+    const q=(document.getElementById('invBuscar').value||'').toLowerCase().trim();
+    const fNivel=document.getElementById('invFiltroNivel').value;
+    const fTipo=document.getElementById('invFiltroTipo').value;
+    const verArch=document.getElementById('invVerArchivados').checked;
+    // Construir filas con metadatos
+    let filas=inv.map(r=>{
+      const {nivel,nombre}=_invNivelElemento(r);
+      return { r, nivel, nombre, ruta:_invRuta(r), tipo:String((r.values||{})[INV_COLS.tipo]||'').trim(), archivado:_invArchivado(r) };
+    });
+    // Filtros
+    filas=filas.filter(f=>{
+      if(!verArch && f.archivado) return false;
+      if(fNivel && f.nivel!==fNivel) return false;
+      if(fTipo && f.tipo!==fTipo) return false;
+      if(q){ const blob=(f.nombre+' '+f.ruta+' '+f.nivel).toLowerCase(); if(!blob.includes(q)) return false; }
+      return true;
+    });
+    // Orden: por ruta (agrupa la jerarquía), luego por profundidad
+    filas.sort((a,b)=>{ const c=a.ruta.localeCompare(b.ruta); if(c!==0) return c; return _invProfundidad(a.nivel)-_invProfundidad(b.nivel); });
+    document.getElementById('inv_total').textContent=filas.length;
+    if(!filas.length){ tb.innerHTML='<tr><td colspan="3"><div class="empty"><h3>Sin resultados</h3><p>Ajusta la búsqueda o los filtros.</p></div></td></tr>'; setConn(true); return; }
+    tb.innerHTML=filas.map(f=>{
+      const prof=_invProfundidad(f.nivel);
+      const bg=_INV_BADGE[f.nivel]||{bg:'#eee',fg:'#555'};
+      const badge=`<span style="display:inline-block;font-size:10px;font-weight:700;background:${bg.bg};color:${bg.fg};border-radius:10px;padding:2px 9px;white-space:nowrap">${f.nivel||'—'}</span>`;
+      const sangria=prof*18;
+      const archTag=f.archivado?'<span style="font-size:10px;color:var(--mist);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px">Archivado</span>':'';
+      const rid=f.r.id;
+      return `<tr style="${f.archivado?'opacity:.55':''}">
+        <td style="vertical-align:top">${badge}</td>
+        <td style="vertical-align:top">
+          <div style="padding-left:${sangria}px">
+            <div style="font-size:13px;font-weight:600;color:var(--brand)">${prof>0?'<span style="color:var(--mist)">└ </span>':''}${f.nombre.replace(/</g,'&lt;')}${archTag}</div>
+            ${f.ruta?`<div class="mono" style="font-size:11px;color:var(--mist);padding-left:${prof>0?14:0}px;margin-top:2px">${f.ruta.replace(/</g,'&lt;')}</div>`:''}
+          </div>
+        </td>
+        <td style="text-align:right;vertical-align:top;white-space:nowrap">
+          <button class="icon-btn" title="Editar" onclick="editarInventario('${rid}')">✏️</button>
+          <button class="icon-btn" title="${f.archivado?'Desarchivar':'Archivar'}" onclick="archivarInventario('${rid}', ${f.archivado?'false':'true'})">📦</button>
+          <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${rid}')">🗑️</button>
+        </td>
+      </tr>`;
+    }).join('');
+    setConn(true);
+  }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="3"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
+}
+window.renderInventario=renderInventario;
+
+// Cuenta cuántas fichas usan un proceso/procedimiento (por coincidencia en su ruta).
+async function _fichasQueUsan(nombre){
+  let total=0;
+  for(const n of ['N0','N1','N2']){
+    let fichas=[]; try{ fichas=await loadFichas(n); }catch(_){}
+    fichas.forEach(f=>{ const ruta=rutaFicha(f,n)||''; if(ruta.toLowerCase().includes(String(nombre).toLowerCase())) total++; });
+  }
+  return total;
+}
+
+async function eliminarInventario(rid){
+  const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
+  const {nombre}=_invNivelElemento(r);
+  const enUso=await _fichasQueUsan(nombre);
+  let msg='¿Eliminar «'+nombre+'» del inventario? Esta acción no se puede deshacer.';
+  if(enUso>0) msg='⚠️ «'+nombre+'» está en uso por '+enUso+' ficha(s). Si lo eliminas, esas fichas pueden quedar inconsistentes.\n\n¿Eliminar de todos modos?';
+  if(!confirm(msg)) return;
+  try{
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','DELETE',{});
+    toast('Elemento eliminado del inventario.');
+    STATE.inventario=[]; renderInventario();
+  }catch(e){ toast('Error al eliminar: '+e.message, true); }
+}
+window.eliminarInventario=eliminarInventario;
+
+async function archivarInventario(rid, archivar){
+  if(!ESTADO_REGISTRO_FIELD_ID){ toast('Falta configurar el campo «Estado del registro» en QuintaDB.', true); return; }
+  const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
+  const {nombre}=_invNivelElemento(r);
+  const accion = archivar ? 'archivar' : 'reactivar';
+  const nota = archivar
+    ? 'Saldrá de las vistas activas pero se conserva su historial. Podrás verlo con «Ver archivados».'
+    : 'Volverá a las vistas activas.';
+  if(archivar){
+    const enUso=await _fichasQueUsan(nombre);
+    let msg='¿Deseas archivar «'+nombre+'»?\n\n'+nota;
+    if(enUso>0) msg='⚠️ «'+nombre+'» está en uso por '+enUso+' ficha(s).\n\n¿Archivar de todos modos?\n\n'+nota;
+    if(!confirm(msg)) return;
+  } else {
+    if(!confirm('¿Deseas reactivar «'+nombre+'»?\n\n'+nota)) return;
+  }
+  try{
+    const campos={}; campos[ESTADO_REGISTRO_FIELD_ID]=archivar?'Archivado':'Activo';
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','PUT',{ values: JSON.stringify(campos) });
+    toast(archivar?'Elemento archivado.':'Elemento reactivado.');
+    STATE.inventario=[]; renderInventario();
+  }catch(e){ toast('Error al '+accion+': '+e.message, true); }
+}
+window.archivarInventario=archivarInventario;
+
+async function editarInventario(rid){
+  const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
+  const {nivel,nombre}=_invNivelElemento(r);
+  // Determinar qué columna es la editable (la del elemento más profundo)
+  const v=r.values||{}; const C=INV_COLS;
+  const colDe={'Procedimiento':C.proc,'Proceso nivel 3':C.n3,'Proceso nivel 2':C.n2,'Proceso nivel 1':C.n1,'Proceso nivel 0':C.n0,'Tipo de proceso':C.tipo}[nivel];
+  if(!colDe){ toast('No se pudo determinar el campo a editar.', true); return; }
+  // Necesitamos el field-id real de esa columna (no el nombre). Buscarlo en el registro.
+  let fieldId=null;
+  for(const k in v){ if(v[k]===colDe){ /* k es el field-id cuyo valor es el NOMBRE de la columna */ fieldId=k; break; } }
+  // Si no lo hallamos por ese patrón, intentamos por el nombre de columna directo
+  const nuevo=prompt('Editar '+nivel+':', nombre);
+  if(nuevo===null) return;
+  const limpio=String(nuevo).trim();
+  if(!limpio){ toast('El nombre no puede quedar vacío.', true); return; }
+  try{
+    const campos={};
+    if(fieldId) campos[fieldId]=limpio; else campos[colDe]=limpio;
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','PUT',{ values: JSON.stringify(campos) });
+    toast('Elemento actualizado.');
+    STATE.inventario=[]; renderInventario();
+  }catch(e){ toast('Error al editar: '+e.message, true); }
+}
+window.editarInventario=editarInventario;
+
 async function renderListado(){
   _GRP_DE_FICHA = {};
   const tb=document.getElementById('tablaListado');
   try{
+    try{ await loadInventario(); }catch(_){} // necesario para detectar procesos archivados en la ruta
     const niveles = LIST_FILTRO==='todos' ? ['N0','N1','N2'] : [LIST_FILTRO];
     const todas=[];
     for(const n of niveles){ const fichas=await loadFichas(n); fichas.forEach(r=>todas.push({r,nivel:n})); }
@@ -1792,11 +2243,13 @@ async function renderListado(){
       items.forEach(({r,nivel})=>{ _GRP_DE_FICHA[nivel+'_'+r.id]=cabId; });
       html+=items.map(({r,nivel})=>{
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
+        const arch=_procesosArchivadosEnRuta(ruta);
+        const archTag = arch.length ? `<div style="margin-top:4px"><span title="Proceso(s) archivado(s): ${arch.join(', ').replace(/"/g,'&quot;')}" style="display:inline-block;font-size:10px;font-weight:600;color:#b06a00;background:#fff3e0;border:1px solid #f0c987;border-radius:8px;padding:1px 7px">⚠️ Proceso archivado</span></div>` : '';
         const desagId='desag_'+nivel+'_'+r.id;
         _paraDesagregado.push({celdaId:desagId, r, nivel, nInd});
         return `<tr>
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
-          <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>60?ruta.slice(0,60)+'…':ruta}</td>
+          <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>60?ruta.slice(0,60)+'…':ruta}${archTag}</td>
           <td style="max-width:200px;vertical-align:top;font-size:12px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>80?obj.slice(0,80)+'…':obj):'<span class="hint">—</span>'}</td>
           <td id="${desagId}" style="vertical-align:top"><span class="hint">Cargando…</span></td>
           <td style="text-align:right;white-space:nowrap;vertical-align:top">
