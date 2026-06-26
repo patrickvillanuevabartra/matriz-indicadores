@@ -728,9 +728,9 @@
 
 <!-- ===================== MODAL NUEVO PROCESO (cascada 6 niveles) ===================== -->
 <div class="modal-bg" id="modalNuevoProceso">
-  <div class="modal" style="max-width:680px">
-    <div class="modal-head">
-      <div><div class="eyebrow">Inventario</div><h2 style="font-size:18px">Crear nuevo proceso</h2></div>
+  <div class="modal" id="modalNuevoProcesoBox" style="max-width:680px">
+    <div class="modal-head" id="npDragHandle" style="cursor:move" title="Arrastra para mover">
+      <div><div class="eyebrow">Inventario · <span style="font-weight:400">arrastra para mover</span></div><h2 style="font-size:18px">Crear nuevo proceso</h2></div>
       <button class="modal-close" onclick="cerrarModal('modalNuevoProceso')">×</button>
     </div>
     <div class="modal-body">
@@ -1987,9 +1987,43 @@ async function abrirNuevoProceso(){
   document.getElementById('np_codigo').innerHTML='';
   document.getElementById('np_nombre').value='';
   document.getElementById('modalNuevoProceso').classList.add('show'); document.body.style.overflow='hidden';
+  _npActivarArrastre();
   try{ await _npCargarEsquema(); }catch(_){}
 }
 window.abrirNuevoProceso=abrirNuevoProceso;
+
+// Hace el modal de nuevo proceso arrastrable por su cabecera.
+function _npActivarArrastre(){
+  const box=document.getElementById('modalNuevoProcesoBox');
+  const handle=document.getElementById('npDragHandle');
+  if(!box||!handle||box.dataset.dragReady) return;
+  box.dataset.dragReady='1';
+  box.style.position='relative';
+  let dx=0, dy=0, ox=0, oy=0, moviendo=false;
+  const onDown=(e)=>{
+    if(e.target.closest('.modal-close')) return;
+    moviendo=true;
+    const p=e.touches?e.touches[0]:e;
+    ox=p.clientX; oy=p.clientY;
+    const st=window.getComputedStyle(box);
+    dx=parseFloat(box.style.left||'0')||0; dy=parseFloat(box.style.top||'0')||0;
+    document.body.style.userSelect='none';
+    e.preventDefault();
+  };
+  const onMove=(e)=>{
+    if(!moviendo) return;
+    const p=e.touches?e.touches[0]:e;
+    box.style.left=(dx+(p.clientX-ox))+'px';
+    box.style.top=(dy+(p.clientY-oy))+'px';
+  };
+  const onUp=()=>{ moviendo=false; document.body.style.userSelect=''; };
+  handle.addEventListener('mousedown', onDown);
+  handle.addEventListener('touchstart', onDown, {passive:false});
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('mouseup', onUp);
+  document.addEventListener('touchend', onUp);
+}
 
 // Genera los desplegables de la cadena de padres según el nivel elegido.
 async function npRenderCascada(){
@@ -2003,11 +2037,11 @@ async function npRenderCascada(){
   // Para cada padre, un desplegable con registros existentes + "➕ Crear nuevo…"
   for(const p of def.padres){
     const pdef=_nivelDef(p.key);
-    cont.insertAdjacentHTML('beforeend', `<div class="field" id="np_wrap_${p.key}"><label>${pdef.label} <span style="color:#c0392b">*</span></label><select id="np_padre_${p.key}" data-pkey="${p.key}" onchange="npPadreChange('${p.key}')"><option value="">Cargando…</option></select><div id="np_inline_${p.key}"></div></div>`);
+    cont.insertAdjacentHTML('beforeend', `<div class="field" id="np_wrap_${p.key}"><label>${pdef.label} <span style="color:#c0392b">*</span></label><select id="np_padre_${p.key}" data-pkey="${p.key}" onchange="npPadreChange('${p.key}'); npActualizarCodigos();"><option value="">Cargando…</option></select><div id="np_inline_${p.key}"></div></div>`);
     try{
       const regs=await _npRegistros(p.key);
       const sel=document.getElementById('np_padre_'+p.key);
-      sel.innerHTML='<option value="">— elige —</option>'+regs.map(r=>`<option value="${r.id}">${r.nombre.replace(/</g,'&lt;')}</option>`).join('')+`<option value="__nuevo__">➕ Crear nuevo ${pdef.label}…</option>`;
+      sel.innerHTML='<option value="">— elige —</option>'+regs.map(r=>`<option value="${r.id}" data-nombre="${r.nombre.replace(/"/g,'&quot;')}">${r.nombre.replace(/</g,'&lt;')}</option>`).join('')+`<option value="__nuevo__">➕ Crear nuevo ${pdef.label}…</option>`;
     }catch(_){ const sel=document.getElementById('np_padre_'+p.key); if(sel) sel.innerHTML='<option value="">(error al cargar)</option>'; }
   }
   // Mostrar campos del elemento a crear (código + nombre)
@@ -2017,19 +2051,74 @@ async function npRenderCascada(){
   document.getElementById('np_lbl_nombre').innerHTML=def.label+' <span style="color:#c0392b">*</span>';
   if(def.codigoField){
     lblCod.style.display=''; selCod.style.display='';
-    const opc=_NP_CACHE_OPC[nivel]||[];
-    selCod.innerHTML='<option value="">— elige código —</option>'+opc.map(c=>`<option value="${c.replace(/"/g,'&quot;')}">${c}</option>`).join('')+'<option value="__otro__">✏️ Otro código (escribir)…</option>';
-    selCod.onchange=function(){
-      const w=document.getElementById('np_codigo_otro_wrap');
-      if(selCod.value==='__otro__'){ if(!w){ const d=document.createElement('div'); d.id='np_codigo_otro_wrap'; d.style.marginTop='6px'; d.innerHTML='<input id="np_codigo_otro" placeholder="Escribe el código (ej. M01.05.03)" style="width:100%">'; selCod.parentNode.appendChild(d);} }
-      else if(w){ w.remove(); }
-    };
+    npActualizarCodigos(); // pinta los códigos filtrados por el padre/tipo (al inicio, sin padre, muestra todos)
   } else {
-    // Tipo de proceso no tiene código
     lblCod.style.display='none'; selCod.style.display='none'; selCod.innerHTML='';
   }
 }
 window.npRenderCascada=npRenderCascada;
+
+// Devuelve el prefijo de código que corresponde al padre inmediato elegido (o al Tipo para N0).
+function _npPrefijoPadre(nivel){
+  const def=_nivelDef(nivel);
+  if(!def.padres.length) return '';
+  // El prefijo viene del padre inmediato (el último de la cadena), salvo N0 que viene del Tipo.
+  if(nivel==='n0'){
+    // Tipo → letra: Estratégico=E, Misional=M, Soporte/Apoyo=S
+    const selTipo=document.getElementById('np_padre_tipo');
+    const nom=selTipo&&selTipo.selectedOptions[0]?(selTipo.selectedOptions[0].dataset.nombre||selTipo.selectedOptions[0].textContent):'';
+    const t=String(nom).toLowerCase();
+    if(t.includes('estrat')) return 'E';
+    if(t.includes('mision')) return 'M';
+    if(t.includes('soporte')||t.includes('apoyo')) return 'S';
+    return '';
+  }
+  // Para N1..Proc: el prefijo es el CÓDIGO del padre inmediato (ej. padre N0 "M01 ..." → prefijo "M01")
+  const padreInmediato=def.padres[def.padres.length-1];
+  const sel=document.getElementById('np_padre_'+padreInmediato.key);
+  if(!sel||!sel.value||sel.value==='__nuevo__') return '';
+  const nom=sel.selectedOptions[0]?(sel.selectedOptions[0].dataset.nombre||sel.selectedOptions[0].textContent):'';
+  // El nombre del padre empieza con su código (ej. "M01.05 Algo") → extraer el código inicial
+  const m=String(nom).trim().match(/^([A-Za-z]\d+(?:\.\d+)*)/);
+  return m?m[1]:'';
+}
+// Sugiere el siguiente código correlativo disponible bajo un prefijo, mirando los existentes.
+function _npSiguienteCodigo(nivel, prefijo, opciones){
+  if(!prefijo) return '';
+  // Códigos ya usados en el inventario que empiezan con el prefijo
+  const usados=new Set();
+  try{
+    const COLCOD={ n0:'Código "Nivel 0"', n1:'Código "Nivel 1"', n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
+    (STATE.inventario||[]).forEach(r=>{ const v=r.values||{}; const c=v[COLCOD[nivel]]; if(c) usados.add(String(c).trim()); });
+  }catch(_){}
+  // Candidatos del catálogo que cuelgan del prefijo y aún no se usaron
+  const libres=opciones.filter(c=>c!==prefijo && c.startsWith(prefijo) && !usados.has(c));
+  if(libres.length) return libres.sort()[0];
+  return '';
+}
+// Repinta el desplegable de código filtrado por el prefijo del padre, y preselecciona el sugerido.
+function npActualizarCodigos(){
+  const nivel=document.getElementById('np_nivel').value;
+  const def=_nivelDef(nivel);
+  if(!def || !def.codigoField) return;
+  const selCod=document.getElementById('np_codigo');
+  if(!selCod) return;
+  const prefijo=_npPrefijoPadre(nivel);
+  let opc=_NP_CACHE_OPC[nivel]||[];
+  // Filtrar por prefijo del padre (si hay)
+  let filtradas = prefijo ? opc.filter(c=>c.startsWith(prefijo)) : opc.slice();
+  if(prefijo && !filtradas.length) filtradas=opc.slice(); // si el filtro deja vacío, mostrar todo como respaldo
+  const sugerido=_npSiguienteCodigo(nivel, prefijo, opc);
+  selCod.innerHTML='<option value="">— elige código —</option>'+
+    filtradas.map(c=>`<option value="${c.replace(/"/g,'&quot;')}" ${c===sugerido?'selected':''}>${c}${c===sugerido?'  (sugerido)':''}</option>`).join('')+
+    '<option value="__otro__">✏️ Otro código (escribir)…</option>';
+  selCod.onchange=function(){
+    const w=document.getElementById('np_codigo_otro_wrap');
+    if(selCod.value==='__otro__'){ if(!w){ const d=document.createElement('div'); d.id='np_codigo_otro_wrap'; d.style.marginTop='6px'; d.innerHTML='<input id="np_codigo_otro" placeholder="Escribe el código (ej. M01.05.03)" style="width:100%">'; selCod.parentNode.appendChild(d);} }
+    else if(w){ w.remove(); }
+  };
+}
+window.npActualizarCodigos=npActualizarCodigos;
 
 // Si el usuario elige "Crear nuevo…" en un padre, mostrar un mini-input inline para crearlo al momento.
 function npPadreChange(pkey){
@@ -4184,7 +4273,7 @@ async function guardarSegMeta(){
 }
 window.guardarSegMeta=guardarSegMeta;
 
-function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; if(id==='modalMetas'){ try{ renderMatriz(); }catch(_){} } }
+function cerrarModal(id){ document.getElementById(id).classList.remove('show'); document.body.style.overflow=''; if(id==='modalNuevoProceso'){ const b=document.getElementById('modalNuevoProcesoBox'); if(b){ b.style.left=''; b.style.top=''; } } if(id==='modalMetas'){ try{ renderMatriz(); }catch(_){} } }
 window.cerrarModal=cerrarModal;
 
 /* ============================================================
