@@ -375,7 +375,7 @@
       <div class="conn" style="margin-bottom:0;flex:1;min-width:200px">
         <input id="invBuscar" placeholder="Buscar por proceso, procedimiento o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
       </div>
-      <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los niveles</option><option value="Tipo de proceso">Con Tipo de proceso</option><option value="Proceso nivel 0">Con Proceso nivel 0</option><option value="Proceso nivel 1">Con Proceso nivel 1</option><option value="Proceso nivel 2">Con Proceso nivel 2</option><option value="Proceso nivel 3">Con Proceso nivel 3</option><option value="Procedimiento">Con Procedimiento</option></select>
+      <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Vista completa (Excel)</option><option value="Proceso nivel 0">Agrupar por Nivel 0</option><option value="Proceso nivel 1">Agrupar por Nivel 1</option><option value="Proceso nivel 2">Agrupar por Nivel 2</option><option value="Proceso nivel 3">Agrupar por Nivel 3</option></select>
       <select id="invFiltroTipo" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los tipos</option></select>
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
@@ -2324,8 +2324,7 @@ async function renderInventario(){
     const fNivel=document.getElementById('invFiltroNivel').value;
     const fTipo=document.getElementById('invFiltroTipo').value;
     const verArch=document.getElementById('invVerArchivados').checked;
-    const limpio = s => { const t=String(s||'').trim(); return (!t || /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(t))?'':t; };
-    // Cada registro del inventario = una fila completa con sus 6 niveles
+    // Filtros base (tipo, archivado, búsqueda)
     let filas=inv.map(r=>{
       const v=r.values||{};
       return {
@@ -2336,16 +2335,59 @@ async function renderInventario(){
         proc:limpio(v[INV_COLS.proc])
       };
     });
-    // Filtros
-    const colDeNivel={ 'Tipo de proceso':'tipo','Proceso nivel 0':'n0','Proceso nivel 1':'n1','Proceso nivel 2':'n2','Proceso nivel 3':'n3','Procedimiento':'proc' };
     filas=filas.filter(f=>{
       if(!verArch && f.archivado) return false;
       if(fTipo && f.tipo!==fTipo) return false;
-      // Filtro por nivel: la fila debe TENER contenido en ese nivel (la nueva vista es por ruta completa)
-      if(fNivel){ const col=colDeNivel[fNivel]; if(col && !f[col]) return false; }
       if(q){ const blob=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
       return true;
     });
+
+    // ===== MODO POR NIVEL (N0–N3): vista agrupada estilo QuintaDB =====
+    // padres por nivel: cada nivel agrupa bajo la cadena de sus padres
+    const padresPorNivel={ 'Proceso nivel 0':['tipo'], 'Proceso nivel 1':['tipo','n0'],
+                           'Proceso nivel 2':['tipo','n0','n1'], 'Proceso nivel 3':['tipo','n0','n1','n2'] };
+    const colPorNivel={ 'Proceso nivel 0':'n0','Proceso nivel 1':'n1','Proceso nivel 2':'n2','Proceso nivel 3':'n3' };
+    if(fNivel && colPorNivel[fNivel]){
+      const col=colPorNivel[fNivel];
+      const padres=padresPorNivel[fNivel];
+      // Elementos ÚNICOS de ese nivel (sin repetir), conservando una fila representativa (para acciones)
+      const vistos=new Map(); // clave: cadenaPadres + '¦' + valorNivel
+      filas.forEach(f=>{
+        if(!f[col]) return;
+        const cadena=padres.map(p=>f[p]).join(' ¦ ');
+        const clave=cadena+' ¦ '+f[col];
+        if(!vistos.has(clave)) vistos.set(clave, { grupo:padres.map(p=>f[p]).filter(Boolean).join(' - '), valor:f[col], archivado:f.archivado, repr:f });
+      });
+      let items=[...vistos.values()];
+      items.sort((a,b)=> a.grupo.localeCompare(b.grupo) || a.valor.localeCompare(b.valor));
+      document.getElementById('inv_total').textContent=items.length;
+      if(!items.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin resultados</h3><p>Ajusta la búsqueda o los filtros.</p></div></td></tr>'; setConn(true); return; }
+      const bg=_INV_BADGE[fNivel]||{bg:'#eee',fg:'#555'};
+      let html=''; let grupoActual=null; let nGrupo=0;
+      // Pre-contar por grupo
+      const conteo={}; items.forEach(it=>{ conteo[it.grupo]=(conteo[it.grupo]||0)+1; });
+      items.forEach(it=>{
+        if(it.grupo!==grupoActual){
+          grupoActual=it.grupo;
+          html+=`<tr><td colspan="7" style="background:var(--paper);padding:9px 12px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">${(it.grupo||'(sin grupo)').replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">(${conteo[it.grupo]})</span></td></tr>`;
+        }
+        const codigo=_codigoDe(it.valor);
+        const archTag=it.archivado?'<span style="font-size:10px;color:var(--mist);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px">Archivado</span>':'';
+        html+=`<tr style="${it.archivado?'opacity:.5':''}">
+          <td colspan="6" style="padding:8px 12px;border-top:1px solid var(--line)">
+            <span style="display:inline-block;min-width:90px;font-family:monospace;font-size:12px;color:${bg.fg};font-weight:700">${codigo||''}</span>
+            <span style="color:var(--slate);font-weight:600">${it.valor.replace(/</g,'&lt;')}${archTag}</span>
+          </td>
+          <td style="text-align:right;white-space:nowrap;border-top:1px solid var(--line);padding:8px 6px">
+            <button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>
+          </td>
+        </tr>`;
+      });
+      tb.innerHTML=html;
+      setConn(true);
+      return;
+    }
+    // ===== MODO COMPLETO (Todos / Procedimiento): tabla agrupada tipo Excel =====
     // Orden jerárquico por las columnas (igual que el Excel)
     filas.sort((a,b)=> (a.tipo.localeCompare(b.tipo)) || (a.n0.localeCompare(b.n0)) || (a.n1.localeCompare(b.n1)) || (a.n2.localeCompare(b.n2)) || (a.n3.localeCompare(b.n3)) || (a.proc.localeCompare(b.proc)) );
     document.getElementById('inv_total').textContent=filas.length;
