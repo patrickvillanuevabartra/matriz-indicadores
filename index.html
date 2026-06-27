@@ -678,7 +678,7 @@
             <div class="field full"><label>Plan de acción (enlace a Drive/SharePoint)</label><input type="url" id="pm_plan" placeholder="https://…"></div>
             <div class="field full"><label>Observación</label><textarea id="pm_obs"></textarea></div>
           </div>
-          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
         </div>
         <div class="tabla-wrap"><table>
           <thead><tr><th>Fecha</th><th>Periodo</th><th>Referencia</th><th>Meta</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
@@ -710,7 +710,7 @@
             <div class="field full hidden" id="sm_remed_box"><label>Plan de acción / mejora (enlace) <span class="hint" style="font-weight:400">— opcional; sugerido cuando una medición de cierre queda por debajo de la meta</span></label><input type="url" id="sm_remed" placeholder="https://…"><div id="sm_remed_nota" style="font-size:11px;color:var(--mist);margin-top:5px;line-height:1.5"></div></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
           </div>
-          <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="sm_cancelar" onclick="cancelarEdicionSeg()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
         </div>
         <div class="tabla-wrap"><table>
           <thead><tr><th>Fecha eval.</th><th>Ref.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
@@ -4098,6 +4098,34 @@ function _verDetalleSeg(segId){
 }
 window._verDetalleSeg=_verDetalleSeg;
 
+// Mostrar/ocultar el botón Cancelar en cada formulario al entrar/salir de modo edición.
+function _mostrarBtnCancelarMeta(v){ const b=document.getElementById('pm_cancelar'); if(b) b.style.display=v?'':'none'; }
+function _mostrarBtnCancelarSeg(v){ const b=document.getElementById('sm_cancelar'); if(b) b.style.display=v?'':'none'; }
+// Cancelar edición de meta: limpiar el formulario y volver a modo "crear".
+function cancelarEdicionMeta(){
+  PM_EDIT_ID=null;
+  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const ep=document.getElementById('pm_periodo'); if(ep) delete ep.dataset.touched;
+  _limpiarVarsMeta();
+  const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
+  _mostrarBtnCancelarMeta(false);
+}
+window.cancelarEdicionMeta=cancelarEdicionMeta;
+// Cancelar edición de seguimiento: limpiar el formulario y volver a modo "crear".
+function cancelarEdicionSeg(){
+  SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
+  ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  const ep=document.getElementById('sm_periodo'); if(ep) delete ep.dataset.touched;
+  const selP=document.getElementById('sm_prog'); if(selP) selP.value='';
+  const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
+  const mi=document.getElementById('sm_meta_info'); if(mi){ mi.classList.add('hidden'); mi.innerHTML=''; }
+  const stm=document.getElementById('sm_tipo_med'); if(stm) stm.value='Parcial';
+  _limpiarVarsSeg();
+  const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='+ Guardar seguimiento';
+  _mostrarBtnCancelarSeg(false);
+}
+window.cancelarEdicionSeg=cancelarEdicionSeg;
+
 // Editar una programación: carga sus valores en el formulario y cambia a modo edición
 function editarProgMeta(progId){
   const p=(STATE.progMetas||[]).find(x=>x.id===progId); if(!p) return;
@@ -4110,19 +4138,25 @@ function editarProgMeta(progId){
   set('pm_obs', limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación')));
   const ep=document.getElementById('pm_periodo'); if(ep){ ep.value=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; ep.dataset.touched='1'; }
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='✓ Actualizar programación';
-  // Rellenar variables de ref/meta desde el JSON guardado (si existe) y abrir su calculadora
+  _mostrarBtnCancelarMeta(true);
+  // Rellenar variables de ref/meta desde el JSON guardado (si existe)
   [['ref',PM.variables_ref],['meta',PM.variables_meta]].forEach(([which,campo])=>{
     if(!campo) return;
     try{
       const raw=leerCampo(p, campo.id, which==='ref'?'Variables referencia':'Variables meta');
-      if(raw){
-        const vals=JSON.parse(raw);
-        const grid=document.getElementById('pm_'+which+'_grid');
+      const vals=_parseVars(raw);
+      const grid=document.getElementById('pm_'+which+'_grid');
+      if(!grid) return;
+      let alguno=false;
+      // Rellenar por nombre de variable (la clave del JSON es el nombre de la variable)
+      grid.querySelectorAll('input[data-mkey]').forEach(inp=>{
+        const mkey=inp.getAttribute('data-mkey');
         const vars=_FORMULA_VARS_META[which]||[];
-        let alguno=false;
-        vars.forEach(v=>{ const inp=grid&&grid.querySelector('input[data-mkey="'+v.key+'"]'); if(inp && vals[v.nombre]!=null){ inp.value=vals[v.nombre]; alguno=true; } });
-        if(alguno){ const box=document.getElementById('pm_'+which+'_calc'); if(box) box.style.display=''; }
-      }
+        const v=vars.find(x=>x.key===mkey);
+        const nombre=v?v.nombre:null;
+        if(nombre!=null && vals[nombre]!=null){ inp.value=vals[nombre]; alguno=true; }
+      });
+      if(alguno){ const box=document.getElementById('pm_'+which+'_calc'); if(box) box.style.display=''; calcularValorMeta(which); }
     }catch(_){}
   });
   document.getElementById('pm_fecha').scrollIntoView({behavior:'smooth',block:'center'});
@@ -4169,6 +4203,7 @@ async function guardarProgMeta(){
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     const ep=document.getElementById('pm_periodo'); if(ep) delete ep.dataset.touched;
     _limpiarVarsMeta();   // dejar las variables de referencia y meta en blanco
+    _mostrarBtnCancelarMeta(false);
     await cargarProgMetas();
     STATE.matriz=[]; // forzar recálculo del contador de metas en la matriz al volver
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
@@ -4588,21 +4623,43 @@ function editarSegMeta(segId){
   if(SM.tipo_medicion){ const tm=leerCampo(s, SM.tipo_medicion.id, 'Tipo de medición'); const selTm=document.getElementById('sm_tipo_med'); if(selTm) selTm.value=(tm==='Cierre'?'Cierre':'Parcial'); }
   set('sm_obs', limpiarEtiqueta(leerCampo(s,SM.observacion.id,'Observación')));
   const elPer=document.getElementById('sm_periodo'); if(elPer){ elPer.value=SM.periodo?leerCampo(s,SM.periodo.id,'Periodo'):''; elPer.dataset.touched='1'; }
-  // Mostrar el panel con la meta propia y calcular % con el real actual
+  // Mostrar el panel con la meta propia (y variables ref/meta si la programación las tiene)
   const info=document.getElementById('sm_meta_info');
-  if(info && !isNaN(SM_EDIT_META)){ info.classList.remove('hidden'); info.innerHTML=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(SM_EDIT_REF)?'—':SM_EDIT_REF} &nbsp;·&nbsp; <strong>Meta:</strong> ${SM_EDIT_META}`; }
+  if(info && !isNaN(SM_EDIT_META)){
+    info.classList.remove('hidden');
+    let h=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(SM_EDIT_REF)?'—':SM_EDIT_REF} &nbsp;·&nbsp; <strong>Meta:</strong> ${SM_EDIT_META}`;
+    // Buscar la programación de este periodo para mostrar sus variables de entrada
+    const per=SM.periodo?leerCampo(s,SM.periodo.id,'Periodo'):'';
+    const prog=(STATE.progMetas||[]).find(p=>PM.periodo && leerCampo(p,PM.periodo.id,'Periodo')===per);
+    if(prog){
+      const vRef=PM.variables_ref?_parseVars(leerCampo(prog,PM.variables_ref.id,'Variables referencia')):{};
+      const vMeta=PM.variables_meta?_parseVars(leerCampo(prog,PM.variables_meta.id,'Variables meta')):{};
+      const fmt=o=>Object.keys(o).map(k=>`${String(k).replace(/</g,'&lt;')} = <strong>${String(o[k]).replace(/</g,'&lt;')}</strong>`).join(' &nbsp; ');
+      const partes=[];
+      if(Object.keys(vRef).length) partes.push(`<div style="margin-top:6px"><span style="color:var(--mist)">Variables de la referencia:</span> ${fmt(vRef)}</div>`);
+      if(Object.keys(vMeta).length) partes.push(`<div style="margin-top:4px"><span style="color:var(--mist)">Variables de la meta:</span> ${fmt(vMeta)}</div>`);
+      if(partes.length) h+=`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px">${partes.join('')}</div>`;
+    }
+    info.innerHTML=h;
+  }
   const real=numOf(leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
   const elAv=document.getElementById('sm_avance');
   if(elAv && !isNaN(SM_EDIT_META) && !isNaN(real)){ const pct=calcAvance(real, SM_EDIT_META, SM_EDIT_REF); if(pct!==null){ elAv.value=pct+'%'; const box=document.getElementById('sm_remed_box'); if(box) box.classList.toggle('hidden', !(pct<100)); } }
   const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='✓ Actualizar seguimiento';
-  // Rellenar las variables de la fórmula desde el JSON guardado (si existe)
-  if(SM.variables_calculo && _FORMULA_VARS.length){
+  _mostrarBtnCancelarSeg(true);
+  // Rellenar las variables del valor real desde el JSON guardado (por nombre de variable)
+  if(SM.variables_calculo){
     try{
       const raw=leerCampo(s, SM.variables_calculo.id, 'Variables de cálculo');
-      if(raw){
-        const vals=JSON.parse(raw);
-        const grid=document.getElementById('sm_vars_grid');
-        _FORMULA_VARS.forEach(v=>{ const inp=grid&&grid.querySelector('input[data-fkey="'+v.key+'"]'); if(inp && vals[v.nombre]!=null) inp.value=vals[v.nombre]; });
+      const vals=_parseVars(raw);
+      const grid=document.getElementById('sm_vars_grid');
+      if(grid){
+        grid.querySelectorAll('input[data-fkey]').forEach(inp=>{
+          const fkey=inp.getAttribute('data-fkey');
+          const v=(_FORMULA_VARS||[]).find(x=>x.key===fkey);
+          const nombre=v?v.nombre:null;
+          if(nombre!=null && vals[nombre]!=null) inp.value=vals[nombre];
+        });
       }
     }catch(_){}
   }
@@ -4670,6 +4727,7 @@ async function guardarSegMeta(){
     const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
     const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
     _limpiarVarsSeg();   // dejar las variables del indicador en blanco para el próximo seguimiento
+    _mostrarBtnCancelarSeg(false);
     await cargarSegMetas();
     STATE.matriz=[]; renderMatriz();
   }catch(err){ console.error('Error guardando seguimiento:', err); toast('Error: '+err.message, true); }
