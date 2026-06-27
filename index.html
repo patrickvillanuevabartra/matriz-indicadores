@@ -2350,35 +2350,43 @@ async function renderInventario(){
     const colPorNivel={ 'Proceso nivel 0':'n0','Proceso nivel 1':'n1','Proceso nivel 2':'n2','Proceso nivel 3':'n3' };
     if(fNivel && colPorNivel[fNivel]){
       const col=colPorNivel[fNivel];
-      const padres=padresPorNivel[fNivel];
-      // Elementos ÚNICOS de ese nivel (sin repetir), conservando una fila representativa (para acciones)
-      const vistos=new Map(); // clave: cadenaPadres + '¦' + valorNivel
+      const padres=padresPorNivel[fNivel];          // ej. ['tipo','n0'] para N1
+      const padresSinTipo=padres.filter(p=>p!=='tipo'); // los padres salvo el Tipo (que va como franja)
+      // Elementos ÚNICOS de ese nivel (sin repetir)
+      const vistos=new Map();
       filas.forEach(f=>{
         if(!f[col]) return;
-        const cadena=padres.map(p=>f[p]).join(' ¦ ');
-        const clave=cadena+' ¦ '+f[col];
-        if(!vistos.has(clave)) vistos.set(clave, { grupo:padres.map(p=>f[p]).filter(Boolean).join(' - '), valor:f[col], archivado:f.archivado, repr:f });
+        const clave=padres.map(p=>f[p]).join(' ¦ ')+' ¦ '+f[col];
+        if(!vistos.has(clave)) vistos.set(clave, {
+          tipo:f.tipo||'(sin tipo)',
+          subgrupo:padresSinTipo.map(p=>f[p]).filter(Boolean).join(' - '), // cadena de padres sin el Tipo
+          valor:f[col], archivado:f.archivado, repr:f
+        });
       });
       let items=[...vistos.values()];
-      items.sort((a,b)=> a.grupo.localeCompare(b.grupo) || a.valor.localeCompare(b.valor));
+      items.sort((a,b)=> a.tipo.localeCompare(b.tipo) || a.subgrupo.localeCompare(b.subgrupo) || a.valor.localeCompare(b.valor));
       document.getElementById('inv_total').textContent=items.length;
       if(!items.length){ tb.innerHTML='<tr><td colspan="7"><div class="empty"><h3>Sin resultados</h3><p>Ajusta la búsqueda o los filtros.</p></div></td></tr>'; setConn(true); return; }
       const bg=_INV_BADGE[fNivel]||{bg:'#eee',fg:'#555'};
-      let html=''; let grupoActual=null; let nGrupo=0;
-      // Pre-contar por grupo
-      const conteo={}; items.forEach(it=>{ conteo[it.grupo]=(conteo[it.grupo]||0)+1; });
+      // Conteos: por Tipo (para la franja) y por subgrupo (para el encabezado de proceso padre)
+      const cntTipo={}, cntSub={};
+      items.forEach(it=>{ cntTipo[it.tipo]=(cntTipo[it.tipo]||0)+1; const k=it.tipo+'¦'+it.subgrupo; cntSub[k]=(cntSub[k]||0)+1; });
+      let html=''; let tipoActual=null, subActual=null;
       items.forEach(it=>{
-        if(it.grupo!==grupoActual){
-          grupoActual=it.grupo;
-          html+=`<tr><td colspan="7" style="background:var(--paper);padding:9px 12px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">${(it.grupo||'(sin grupo)').replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">(${conteo[it.grupo]})</span></td></tr>`;
+        // Franja grande de TIPO (una sola vez)
+        if(it.tipo!==tipoActual){
+          tipoActual=it.tipo; subActual=null;
+          html+=`<tr><td colspan="7" style="background:var(--brand);color:#fff;padding:11px 14px;font-weight:800;font-size:14px;letter-spacing:.01em">${it.tipo.replace(/</g,'&lt;')} <span style="opacity:.8;font-weight:600">(${cntTipo[it.tipo]})</span></td></tr>`;
         }
-        const codigo=_codigoDe(it.valor);
+        // Encabezado de SUBGRUPO (proceso padre), solo si el nivel tiene padres además del Tipo
+        if(padresSinTipo.length && it.subgrupo!==subActual){
+          subActual=it.subgrupo;
+          html+=`<tr><td colspan="7" style="background:var(--paper);padding:8px 14px 8px 26px;font-weight:700;color:var(--brand);font-size:13px;border-top:1px solid var(--line)">${(it.subgrupo||'(sin proceso padre)').replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">(${cntSub[it.tipo+'¦'+it.subgrupo]})</span></td></tr>`;
+        }
+        // Elemento: solo el nombre (ya incluye el código como prefijo). Sin código duplicado a la izquierda.
         const archTag=it.archivado?'<span style="font-size:10px;color:var(--mist);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px">Archivado</span>':'';
         html+=`<tr style="${it.archivado?'opacity:.5':''}">
-          <td colspan="6" style="padding:8px 12px;border-top:1px solid var(--line)">
-            <span style="display:inline-block;min-width:90px;font-family:monospace;font-size:12px;color:${bg.fg};font-weight:700">${codigo||''}</span>
-            <span style="color:var(--slate);font-weight:600">${it.valor.replace(/</g,'&lt;')}${archTag}</span>
-          </td>
+          <td colspan="6" style="padding:8px 14px 8px ${padresSinTipo.length?42:26}px;border-top:1px solid var(--line);color:var(--slate);font-weight:600">${it.valor.replace(/</g,'&lt;')}${archTag}</td>
           <td style="text-align:right;white-space:nowrap;border-top:1px solid var(--line);padding:8px 6px">
             <button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>
           </td>
