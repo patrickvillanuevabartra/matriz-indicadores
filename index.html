@@ -375,8 +375,9 @@
       <div class="conn" style="margin-bottom:0;flex:1;min-width:200px">
         <input id="invBuscar" placeholder="Buscar por proceso, procedimiento o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
       </div>
-      <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los niveles</option><option value="Tipo de proceso">Tipo de proceso</option><option value="Proceso nivel 0">Proceso nivel 0</option><option value="Proceso nivel 1">Proceso nivel 1</option><option value="Proceso nivel 2">Proceso nivel 2</option><option value="Proceso nivel 3">Proceso nivel 3</option><option value="Procedimiento">Procedimiento</option></select>
+      <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los niveles</option><option value="Tipo de proceso">Con Tipo de proceso</option><option value="Proceso nivel 0">Con Proceso nivel 0</option><option value="Proceso nivel 1">Con Proceso nivel 1</option><option value="Proceso nivel 2">Con Proceso nivel 2</option><option value="Proceso nivel 3">Con Proceso nivel 3</option><option value="Procedimiento">Con Procedimiento</option></select>
       <select id="invFiltroTipo" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los tipos</option></select>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
     </div>
     <div class="card"><div style="overflow-x:auto"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse;font-size:12px">
@@ -2336,10 +2337,12 @@ async function renderInventario(){
       };
     });
     // Filtros
+    const colDeNivel={ 'Tipo de proceso':'tipo','Proceso nivel 0':'n0','Proceso nivel 1':'n1','Proceso nivel 2':'n2','Proceso nivel 3':'n3','Procedimiento':'proc' };
     filas=filas.filter(f=>{
       if(!verArch && f.archivado) return false;
       if(fTipo && f.tipo!==fTipo) return false;
-      if(fNivel){ const {nivel}=_invNivelElemento(f.r); if(nivel!==fNivel) return false; }
+      // Filtro por nivel: la fila debe TENER contenido en ese nivel (la nueva vista es por ruta completa)
+      if(fNivel){ const col=colDeNivel[fNivel]; if(col && !f[col]) return false; }
       if(q){ const blob=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
       return true;
     });
