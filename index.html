@@ -2324,6 +2324,7 @@ async function renderInventario(){
     const fNivel=document.getElementById('invFiltroNivel').value;
     const fTipo=document.getElementById('invFiltroTipo').value;
     const verArch=document.getElementById('invVerArchivados').checked;
+    const limpio = s => { const t=String(s||'').trim(); return (!t || /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(t))?'':t; };
     // Filtros base (tipo, archivado, búsqueda)
     let filas=inv.map(r=>{
       const v=r.values||{};
