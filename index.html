@@ -739,6 +739,20 @@
 </div>
 
 <!-- ===================== MODAL EDITAR INVENTARIO (6 niveles) ===================== -->
+<!-- ===================== MODAL DETALLE DE VARIABLES ===================== -->
+<div class="modal-bg" id="modalDetalleVars">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Detalle de cálculo</div><h2 style="font-size:18px" id="dv_titulo">Detalle</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalDetalleVars')">×</button>
+    </div>
+    <div class="modal-body" id="dv_cuerpo"></div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-primary" onclick="cerrarModal('modalDetalleVars')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalEditInv">
   <div class="modal" id="modalEditInvBox" style="max-width:640px">
     <div class="modal-head" id="eiDragHandle" style="cursor:move" title="Arrastra para mover">
@@ -3838,6 +3852,24 @@ window.calcularValorReal=calcularValorReal;
 
 // ===== Cálculo por fórmula para REFERENCIA y META (pestaña Programación) =====
 let _FORMULA_VARS_META={ ref:[], meta:[] };
+// Limpia (deja en blanco) los inputs de variables del Seguimiento y recalcula el valor real.
+function _limpiarVarsSeg(){
+  const grid=document.getElementById('sm_vars_grid');
+  if(grid){ grid.querySelectorAll('input').forEach(inp=>{ inp.value=''; }); }
+  const real=document.getElementById('sm_real'); if(real && real.readOnly) real.value='';
+}
+window._limpiarVarsSeg=_limpiarVarsSeg;
+// Limpia los inputs de variables de la calculadora de referencia/meta (Programación) y el valor.
+function _limpiarVarsMeta(which){
+  const arr = which? [which] : ['ref','meta'];
+  arr.forEach(w=>{
+    const grid=document.getElementById('pm_'+w+'_grid');
+    if(grid){ grid.querySelectorAll('input').forEach(inp=>{ inp.value=''; }); }
+    const campo=document.getElementById('pm_'+w); if(campo && campo.readOnly) campo.value='';
+  });
+}
+window._limpiarVarsMeta=_limpiarVarsMeta;
+
 function construirCamposFormulaMeta(which, formula){
   const vars=detectarVariablesFormula(formula);
   _FORMULA_VARS_META[which]=vars;
@@ -3999,12 +4031,72 @@ async function cargarProgMetas(){
       const planLink=plan?` · <a href="${plan}" target="_blank" style="color:var(--brand);font-size:11px">plan ↗</a>`:'';
       return `<tr><td>${fmtFecha(f)||'—'}</td><td><strong style="color:var(--brand);font-size:12px">${per?per.replace(/</g,'&lt;'):'—'}</strong></td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td>
         <td style="text-align:right;white-space:nowrap">
+          <button class="icon-btn" title="Ver detalle" onclick="_verDetalleProg('${r.id}')">👁️</button>
           <button class="icon-btn" title="Editar" onclick="editarProgMeta('${r.id}')" style="${soloLectura()?'display:none':''}">✏️</button>
           <button class="icon-btn" title="Eliminar" onclick="eliminarProgMeta('${r.id}')" style="${soloLectura()?'display:none':''}">🗑️</button>
         </td></tr>`;
     }).join('');
   }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
+
+// Parsea un JSON de variables guardado {var:valor}. Tolera vacío/erróneo.
+function _parseVars(jsonStr){
+  if(!jsonStr) return {};
+  try{ const o=JSON.parse(jsonStr); return (o && typeof o==='object')?o:{}; }catch(_){ return {}; }
+}
+// Construye el HTML de una tabla de variables var→valor
+function _htmlVars(obj){
+  const keys=Object.keys(obj||{});
+  if(!keys.length) return '<p class="hint" style="margin:4px 0">No se registraron variables para este cálculo.</p>';
+  return '<table style="width:100%;border-collapse:collapse;font-size:13px;margin:4px 0">'+
+    keys.map(k=>`<tr style="border-top:1px solid var(--line)"><td style="padding:5px 8px;color:var(--slate)">${String(k).replace(/</g,'&lt;')}</td><td style="padding:5px 8px;text-align:right;font-weight:700;color:var(--brand)">${String(obj[k]).replace(/</g,'&lt;')}</td></tr>`).join('')+
+    '</table>';
+}
+// Ojito en metas programadas: muestra valores calculados + variables de referencia y meta
+function _verDetalleProg(progId){
+  const r=(STATE.progMetas||[]).find(x=>x.id===progId); if(!r) return;
+  const ref=leerCampo(r,PM.valor_ref.id,'Valor de referencia');
+  const meta=leerCampo(r,PM.valor_meta.id,'Valor meta');
+  const per=PM.periodo?leerCampo(r,PM.periodo.id,'Periodo'):'';
+  const varsRef=PM.variables_ref?_parseVars(leerCampo(r,PM.variables_ref.id,'Variables referencia')):{};
+  const varsMeta=PM.variables_meta?_parseVars(leerCampo(r,PM.variables_meta.id,'Variables meta')):{};
+  let h='';
+  if(per) h+=`<div style="font-size:12px;color:var(--mist);margin-bottom:10px">Periodo: <strong style="color:var(--brand)">${per.replace(/</g,'&lt;')}</strong></div>`;
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+    <div style="background:var(--paper);border-radius:9px;padding:12px"><div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700">Referencia</div><div style="font-size:24px;font-weight:800;color:var(--slate)">${ref||'—'}</div></div>
+    <div style="background:var(--paper);border-radius:9px;padding:12px"><div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700">Meta</div><div style="font-size:24px;font-weight:800;color:var(--brand)">${meta||'—'}</div></div>
+  </div>`;
+  h+=`<div style="font-weight:700;color:var(--slate);font-size:13px;margin:8px 0 2px">Variables de la referencia</div>${_htmlVars(varsRef)}`;
+  h+=`<div style="font-weight:700;color:var(--slate);font-size:13px;margin:12px 0 2px">Variables de la meta</div>${_htmlVars(varsMeta)}`;
+  document.getElementById('dv_titulo').textContent='Detalle de la programación';
+  document.getElementById('dv_cuerpo').innerHTML=h;
+  document.getElementById('modalDetalleVars').classList.add('show'); document.body.style.overflow='hidden';
+}
+window._verDetalleProg=_verDetalleProg;
+
+// Ojito en seguimientos: muestra valor real + variables del cálculo del real
+function _verDetalleSeg(segId){
+  const r=(STATE.segMetas||[]).find(x=>x.id===segId); if(!r) return;
+  const real=SM.valor_real?leerCampo(r,SM.valor_real.id,'Valor real'):'';
+  const ref=SM.ref_seg?leerCampo(r,SM.ref_seg.id,'Referencia seguimiento'):'';
+  const meta=SM.meta_seg?leerCampo(r,SM.meta_seg.id,'Meta seguimiento'):'';
+  const per=SM.periodo?leerCampo(r,SM.periodo.id,'Periodo'):'';
+  const av=SM.avance_app?leerCampo(r,SM.avance_app.id,'Avance'):'';
+  const varsReal=SM.variables_calculo?_parseVars(leerCampo(r,SM.variables_calculo.id,'Variables de cálculo')):{};
+  let h='';
+  if(per) h+=`<div style="font-size:12px;color:var(--mist);margin-bottom:10px">Periodo: <strong style="color:var(--brand)">${per.replace(/</g,'&lt;')}</strong></div>`;
+  h+=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px">
+    <div style="background:var(--paper);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--mist);text-transform:uppercase;font-weight:700">Referencia</div><div style="font-size:20px;font-weight:800;color:var(--slate)">${ref||'—'}</div></div>
+    <div style="background:var(--paper);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--mist);text-transform:uppercase;font-weight:700">Meta</div><div style="font-size:20px;font-weight:800;color:var(--slate)">${meta||'—'}</div></div>
+    <div style="background:var(--paper);border-radius:9px;padding:10px"><div style="font-size:10px;color:var(--mist);text-transform:uppercase;font-weight:700">Real</div><div style="font-size:20px;font-weight:800;color:var(--brand)">${real||'—'}</div></div>
+  </div>`;
+  if(av) h+=`<div style="font-size:13px;color:var(--slate);margin-bottom:12px">Avance: <strong style="color:var(--brand)">${String(av).replace(/</g,'&lt;')}%</strong></div>`;
+  h+=`<div style="font-weight:700;color:var(--slate);font-size:13px;margin:8px 0 2px">Variables usadas para el valor real</div>${_htmlVars(varsReal)}`;
+  document.getElementById('dv_titulo').textContent='Detalle del seguimiento';
+  document.getElementById('dv_cuerpo').innerHTML=h;
+  document.getElementById('modalDetalleVars').classList.add('show'); document.body.style.overflow='hidden';
+}
+window._verDetalleSeg=_verDetalleSeg;
 
 // Editar una programación: carga sus valores en el formulario y cambia a modo edición
 function editarProgMeta(progId){
@@ -4076,6 +4168,7 @@ async function guardarProgMeta(){
     const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
     const ep=document.getElementById('pm_periodo'); if(ep) delete ep.dataset.touched;
+    _limpiarVarsMeta();   // dejar las variables de referencia y meta en blanco
     await cargarProgMetas();
     STATE.matriz=[]; // forzar recálculo del contador de metas en la matriz al volver
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
@@ -4350,19 +4443,30 @@ function evaluarRemediacion(){
   const elAvance=document.getElementById('sm_avance');
   const box=document.getElementById('sm_remed_box');
   const real=parseFloat(document.getElementById('sm_real').value);
-  let meta=null, ref=null, periodoProg='';
+  let meta=null, ref=null, periodoProg='', progElegida=null;
   if(selProg && selProg.value && STATE.progMetas){
     const p=STATE.progMetas.find(x=>x.id===selProg.value);
-    if(p){ meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); periodoProg=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; }
+    if(p){ progElegida=p; meta=parseFloat(leerCampo(p,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(p,PM.valor_ref.id,'Valor de referencia')); periodoProg=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; }
   }
   // Heredar el periodo de la programación elegida (el seguimiento toma el mismo periodo)
   const elPer=document.getElementById('sm_periodo');
   if(elPer && periodoProg){ elPer.value=periodoProg; elPer.dataset.touched='1'; }
-  // Panel informativo de la meta seleccionada
+  // Panel informativo de la meta seleccionada + variables usadas para referencia y meta
   if(info){
     if(!isNaN(meta)){
       info.classList.remove('hidden');
-      info.innerHTML=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(ref)?'—':ref} &nbsp;·&nbsp; <strong>Meta:</strong> ${meta}`;
+      let h=`Evaluando contra → <strong>Referencia:</strong> ${isNaN(ref)?'—':ref} &nbsp;·&nbsp; <strong>Meta:</strong> ${meta}`;
+      // Antecedente: variables de entrada que se usaron para calcular esa referencia y meta
+      if(progElegida){
+        const vRef=PM.variables_ref?_parseVars(leerCampo(progElegida,PM.variables_ref.id,'Variables referencia')):{};
+        const vMeta=PM.variables_meta?_parseVars(leerCampo(progElegida,PM.variables_meta.id,'Variables meta')):{};
+        const fmt=o=>Object.keys(o).map(k=>`${String(k).replace(/</g,'&lt;')} = <strong>${String(o[k]).replace(/</g,'&lt;')}</strong>`).join(' &nbsp; ');
+        const partes=[];
+        if(Object.keys(vRef).length) partes.push(`<div style="margin-top:6px"><span style="color:var(--mist)">Variables de la referencia:</span> ${fmt(vRef)}</div>`);
+        if(Object.keys(vMeta).length) partes.push(`<div style="margin-top:4px"><span style="color:var(--mist)">Variables de la meta:</span> ${fmt(vMeta)}</div>`);
+        if(partes.length) h+=`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);font-size:12px">${partes.join('')}</div>`;
+      }
+      info.innerHTML=h;
     } else { info.classList.add('hidden'); info.innerHTML=''; }
   }
   // Cálculo del % de avance en vivo (fórmula de brecha)
@@ -4457,6 +4561,7 @@ async function cargarSegMetas(){
         const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
         return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(refN)?'—':refN}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
           <td style="text-align:right;white-space:nowrap">
+            <button class="icon-btn" title="Ver detalle" onclick="_verDetalleSeg('${r.id}')">👁️</button>
             <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')" style="${soloLectura()?'display:none':''}">✏️</button>
             <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${r.id}')" style="${soloLectura()?'display:none':''}">🗑️</button>
           </td></tr>`;
@@ -4564,6 +4669,7 @@ async function guardarSegMeta(){
     const selP=document.getElementById('sm_prog'); if(selP) selP.value='';
     const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
     const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
+    _limpiarVarsSeg();   // dejar las variables del indicador en blanco para el próximo seguimiento
     await cargarSegMetas();
     STATE.matriz=[]; renderMatriz();
   }catch(err){ console.error('Error guardando seguimiento:', err); toast('Error: '+err.message, true); }
