@@ -3194,96 +3194,61 @@ async function renderTablero(){
   if(!cont) return;
   try{
     const recs=await loadMatriz();
-    let total=recs.length, medidos=0, porMedir=0;
-    let verde=0, ambar=0, rojo=0;
-    const atencion=[];     // medidos con avance < 70%
-    const pendientes=[];   // sin medición todavía
+    const total=recs.length;
+    // Clasificar cada indicador en 3 etapas segun tenga meta programada y/o seguimiento
+    const sinNada=[], soloMeta=[], metaYseg=[];
     recs.forEach(m=>{
       const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'—';
-      const av=(m._avance===null||m._avance===undefined)?null:m._avance;
-      if(av===null){ porMedir++; pendientes.push({ ind, ofi }); return; }
-      medidos++;
-      if(av>=100) verde++;
-      else if(av>=70) ambar++;
-      else { rojo++; atencion.push({ ind, ofi, av }); }
+      const tieneMeta=(m._progMetas||0)>0;
+      const tieneSeg=(m._periodos||0)>0;
+      const item={ ind, ofi, id:m.id };
+      // Etapas: con seguimiento = etapa más avanzada; solo meta = intermedia; nada = inicial
+      if(tieneSeg) metaYseg.push(item);
+      else if(tieneMeta) soloMeta.push(item);
+      else sinNada.push(item);
     });
-    atencion.sort((a,b)=>a.av-b.av);
-    const pct = (n)=> total?Math.round(n/total*100):0;
-    const tarjeta=(titulo, valor, sub, color)=>`
-      <div style="background:var(--card);border:1px solid var(--line);border-left:4px solid ${color};border-radius:11px;padding:16px 18px;min-width:0">
+    const pct=n=>total?Math.round(n/total*100):0;
+    // Tarjeta clickeable que ancla a su lista
+    const tarjeta=(titulo, valor, sub, color, ancla)=>`
+      <a href="#${ancla}" style="text-decoration:none;display:block">
+      <div style="background:var(--card);border:1px solid var(--line);border-left:4px solid ${color};border-radius:11px;padding:16px 18px;min-width:0;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 2px 10px rgba(0,0,0,.08)'" onmouseout="this.style.boxShadow='none'">
         <div style="font-size:12px;color:var(--mist);font-weight:600;text-transform:uppercase;letter-spacing:.04em">${titulo}</div>
         <div style="font-size:30px;font-weight:800;color:${color};line-height:1.1;margin-top:6px">${valor}</div>
         ${sub?`<div style="font-size:12px;color:var(--slate);margin-top:4px">${sub}</div>`:''}
-      </div>`;
-    const seg=(label,n,color)=>{
-      const w=medidos?Math.round(n/medidos*100):0;
-      return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-        <div style="width:90px;font-size:12px;color:var(--slate);font-weight:600">${label}</div>
-        <div style="flex:1;background:var(--paper);border-radius:8px;overflow:hidden;height:22px;border:1px solid var(--line)">
-          <div style="width:${w}%;height:100%;background:${color};display:flex;align-items:center;padding-left:8px;color:#fff;font-size:11px;font-weight:700">${n>0?n:''}</div>
-        </div>
-        <div style="width:42px;text-align:right;font-size:12px;color:var(--mist)">${w}%</div>
-      </div>`;
+      </div></a>`;
+    // Lista de una etapa
+    const lista=(titulo, items, color, ancla, descripcion)=>{
+      let h=`<div id="${ancla}" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px;scroll-margin-top:90px">
+        <div style="font-weight:700;color:${color};margin-bottom:4px;font-size:15px">${titulo} <span style="color:var(--mist);font-weight:600">(${items.length})</span></div>
+        <div style="font-size:12px;color:var(--mist);margin-bottom:14px">${descripcion}</div>`;
+      if(!items.length){ h+='<p class="hint" style="margin:0">Ninguno en esta etapa.</p>'; }
+      else {
+        h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+        h+='<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Indicador</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Oficina</th></tr></thead><tbody>';
+        items.forEach(it=>{
+          h+=`<tr style="border-top:1px solid var(--line)">
+            <td style="padding:7px 8px;color:var(--slate)">${String(it.ind).replace(/</g,'&lt;')}</td>
+            <td style="padding:7px 8px;color:var(--mist)">${String(it.ofi).replace(/</g,'&lt;')}</td>
+          </tr>`;
+        });
+        h+='</tbody></table></div>';
+      }
+      h+='</div>';
+      return h;
     };
     let html='';
-    // Tarjetas: total, medidos, por medir, en meta
-    html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px">
-      ${tarjeta('Indicadores', total, 'en la matriz', 'var(--brand)')}
-      ${tarjeta('Medidos', medidos, pct(medidos)+'% ya tienen medición', '#2c5282')}
-      ${tarjeta('Por medir', porMedir, 'aún sin medición', '#b8860b')}
-      ${tarjeta('En meta', verde, 'de los medidos, avance ≥ 100%', '#1f7a3d')}
-    </div>`;
-    // Progreso de medición (cuántos del total ya se midieron)
-    const wMed = total?Math.round(medidos/total*100):0;
-    html+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px">
-      <div style="font-weight:700;color:var(--brand);margin-bottom:12px">Avance de la medición <span style="font-weight:400;color:var(--mist);font-size:12px">· ${medidos} de ${total} indicadores medidos</span></div>
-      <div style="background:var(--paper);border-radius:8px;overflow:hidden;height:26px;border:1px solid var(--line)">
-        <div style="width:${wMed}%;height:100%;background:#2c5282;display:flex;align-items:center;padding-left:10px;color:#fff;font-size:12px;font-weight:700">${wMed>8?wMed+'%':''}</div>
-      </div>
-    </div>`;
-    // Semáforo de cumplimiento (sobre los medidos)
-    html+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px">
-      <div style="font-weight:700;color:var(--brand);margin-bottom:14px">Semáforo de cumplimiento <span style="font-weight:400;color:var(--mist);font-size:12px">· sobre ${medidos} medido(s)</span></div>`;
-    if(medidos===0){ html+='<p class="hint">Aún no hay mediciones registradas. Cuando registres seguimientos, aquí verás cuántos están en verde, ámbar o rojo.</p>'; }
-    else {
-      html+=seg('🟢 En meta', verde, '#1f7a3d')+seg('🟡 Parcial', ambar, '#d4a017')+seg('🔴 Bajo', rojo, '#c0392b');
-      html+=`<div style="font-size:11px;color:var(--mist);margin-top:8px">En meta ≥100% · Parcial 70–99% · Bajo &lt;70% (avance respecto a la meta)</div>`;
-    }
-    html+=`</div>`;
-    // Indicadores medidos con avance bajo (si los hay)
-    if(atencion.length){
-      html+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px">
-        <div style="font-weight:700;color:#c0392b;margin-bottom:14px">🔴 Medidos con avance bajo <span style="font-weight:400;color:var(--mist);font-size:12px">· avance &lt; 70%</span></div>
-        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr><th style="text-align:left;padding:6px 8px">Indicador</th><th style="text-align:left;padding:6px 8px">Oficina</th><th style="text-align:right;padding:6px 8px">Avance</th></tr></thead><tbody>`;
-      atencion.slice(0,15).forEach(a=>{
-        const color=a.av<40?'#c0392b':'#d4a017';
-        html+=`<tr style="border-top:1px solid var(--line)">
-          <td style="padding:7px 8px;color:var(--slate)">${String(a.ind).replace(/</g,'&lt;')}</td>
-          <td style="padding:7px 8px;color:var(--mist)">${String(a.ofi).replace(/</g,'&lt;')}</td>
-          <td style="padding:7px 8px;text-align:right;font-weight:700;color:${color}">${Math.round(a.av)}%</td>
-        </tr>`;
-      });
-      html+='</tbody></table></div></div>';
-    }
-    // Indicadores por medir (los que faltan cargar)
-    html+=`<div style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px">
-      <div style="font-weight:700;color:#b8860b;margin-bottom:14px">📋 Indicadores por medir <span style="font-weight:400;color:var(--mist);font-size:12px">· aún sin seguimiento registrado</span></div>`;
-    if(!pendientes.length){ html+='<p class="hint">Todos los indicadores ya tienen al menos una medición. 👍</p>'; }
-    else {
-      html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
-      html+='<thead><tr><th style="text-align:left;padding:6px 8px">Indicador</th><th style="text-align:left;padding:6px 8px">Oficina</th></tr></thead><tbody>';
-      pendientes.slice(0,20).forEach(p=>{
-        html+=`<tr style="border-top:1px solid var(--line)">
-          <td style="padding:7px 8px;color:var(--slate)">${String(p.ind).replace(/</g,'&lt;')}</td>
-          <td style="padding:7px 8px;color:var(--mist)">${String(p.ofi).replace(/</g,'&lt;')}</td>
-        </tr>`;
-      });
-      html+='</tbody></table></div>';
-      if(pendientes.length>20) html+=`<div style="font-size:12px;color:var(--mist);margin-top:8px">… y ${pendientes.length-20} más</div>`;
-    }
-    html+=`</div>`;
+    // 3 tarjetas
+    html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:8px">
+      ${tarjeta('Sin nada', sinNada.length, 'sin meta ni seguimiento', '#c0392b', 'lst-sinnada')}
+      ${tarjeta('Solo meta', soloMeta.length, 'meta programada, sin medir', '#b8860b', 'lst-solometa')}
+      ${tarjeta('Meta + seguimiento', metaYseg.length, 'programado y medido', '#1f7a3d', 'lst-completo')}
+    </div>
+    <div style="font-size:12px;color:var(--mist);margin-bottom:20px">Total: ${total} indicador(es) en la matriz · haz clic en una tarjeta para ver su lista</div>`;
+    // 3 listas
+    html+=lista('🔴 Sin nada', sinNada, '#c0392b', 'lst-sinnada', 'Indicadores que aún no tienen meta programada ni seguimiento. Falta programar su meta.');
+    html+=lista('🟡 Solo meta programada', soloMeta, '#b8860b', 'lst-solometa', 'Indicadores con meta definida pero sin medición registrada. Falta registrar su seguimiento.');
+    html+=lista('🟢 Meta + seguimiento', metaYseg, '#1f7a3d', 'lst-completo', 'Indicadores con meta programada y al menos una medición registrada.');
     cont.innerHTML=html;
     setConn(true);
   }catch(e){ setConn(false,e.message); cont.innerHTML=`<div class="empty"><h3>No se pudo cargar el tablero</h3><p>${e.message}</p></div>`; }
