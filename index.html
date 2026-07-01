@@ -4521,6 +4521,9 @@ function _periodosFactibles(){
   // Semestres: del actual + ambos del próximo año (al inicio de su primer mes, +3 para ir tras mes y trimestre)
   for(let s=semActual;s<=2;s++) lista.push({orden:anio*10000+((s-1)*6+1)*100+3,     txt:anio+'-'+(s===1?'I':'II')});
   for(let s=1;s<=2;s++)         lista.push({orden:(anio+1)*10000+((s-1)*6+1)*100+3, txt:(anio+1)+'-'+(s===1?'I':'II')});
+  // Años: el actual y el próximo (se ubican al inicio del año, orden 0 para que encabecen su año)
+  lista.push({orden:anio*10000+0,     txt:'Año '+anio});
+  lista.push({orden:(anio+1)*10000+0, txt:'Año '+(anio+1)});
   lista.sort((a,b)=>a.orden-b.orden);
   return lista.map(x=>x.txt);
 }
