@@ -775,7 +775,9 @@
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:12px">Nueva programación de meta</div>
           <div class="grid">
             <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha" onchange="sugerirPeriodoProg()"></div>
-            <div class="field"><label>Periodo <span style="color:var(--mist);font-weight:400">(se sugiere; ajustable)</span></label><input id="pm_periodo" placeholder="Ej. Enero 2026, 2026-I" oninput="this.dataset.touched='1'"></div>
+            <div class="field"><label>Periodo <span style="color:var(--mist);font-weight:400">(se sugiere; ajustable)</span></label>
+              <select id="pm_periodo_sel" onchange="_periodoSelChange('pm')"></select>
+              <input id="pm_periodo" placeholder="Ej. Enero 2026, 2026-I" oninput="this.dataset.touched='1'" style="margin-top:6px"></div>
             <div class="field">
               <label>Valor de referencia (línea base)</label>
               <input type="number" step="any" id="pm_ref" readonly style="background:var(--paper)" placeholder="se calcula con la fórmula">
@@ -4332,6 +4334,7 @@ async function abrirMetas(matId){
   const sf=document.getElementById('mt_seg_form'); if(sf) sf.style.display = sl?'none':'';
   setMetaTab('prog');
   document.getElementById('modalMetas').classList.add('show'); document.body.style.overflow='hidden';
+  _llenarPeriodoSel('pm','');   // desplegable de periodos factibles en programación
   await cargarProgMetas();
   await cargarSegMetas();
 }
@@ -4476,7 +4479,7 @@ function _mostrarBtnCancelarSeg(v){ const b=document.getElementById('sm_cancelar
 function cancelarEdicionMeta(){
   PM_EDIT_ID=null;
   ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-  const ep=document.getElementById('pm_periodo'); if(ep) delete ep.dataset.touched;
+  const ep=document.getElementById('pm_periodo'); if(ep){ delete ep.dataset.touched; ep.style.display='none'; } _llenarPeriodoSel('pm','');
   _limpiarVarsMeta();
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
   _mostrarBtnCancelarMeta(false);
@@ -4497,6 +4500,51 @@ function cancelarEdicionSeg(){
 }
 window.cancelarEdicionSeg=cancelarEdicionSeg;
 
+// Genera la lista de periodos factibles: lo que resta del año actual + todo el próximo año.
+// Incluye trimestres (Qn AAAA) y semestres (AAAA-I / AAAA-II), ordenados cronológicamente.
+function _periodosFactibles(){
+  const hoy=new Date();
+  const anio=hoy.getFullYear();
+  const mes=hoy.getMonth()+1;            // 1-12
+  const qActual=Math.ceil(mes/3);        // trimestre actual (1-4)
+  const semActual=mes<=6?1:2;            // semestre actual (1-2)
+  const lista=[];
+  // Trimestres: del actual del año en curso hasta Q4 del próximo año
+  for(let q=qActual;q<=4;q++) lista.push({orden:anio*100+q*10, txt:'Q'+q+' '+anio});
+  for(let q=1;q<=4;q++) lista.push({orden:(anio+1)*100+q*10, txt:'Q'+q+' '+(anio+1)});
+  // Semestres: del actual del año en curso + ambos del próximo año
+  for(let s=semActual;s<=2;s++) lista.push({orden:anio*100+s*10+5, txt:anio+'-'+(s===1?'I':'II')});
+  for(let s=1;s<=2;s++) lista.push({orden:(anio+1)*100+s*10+5, txt:(anio+1)+'-'+(s===1?'I':'II')});
+  // Ordenar cronológicamente y devolver solo los textos
+  lista.sort((a,b)=>a.orden-b.orden);
+  return lista.map(x=>x.txt);
+}
+// Llena un <select> de periodo (prefijo 'pm' o 'sm') con los factibles + "Otro".
+function _llenarPeriodoSel(prefijo, valorActual){
+  const sel=document.getElementById(prefijo+'_periodo_sel'); if(!sel) return;
+  const opts=_periodosFactibles();
+  // Si el valor actual no está en la lista (ej. un periodo antiguo al editar), incluirlo arriba
+  let extra='';
+  if(valorActual && !opts.includes(valorActual)) extra=`<option value="${String(valorActual).replace(/"/g,'&quot;')}">${String(valorActual).replace(/</g,'&lt;')} (actual)</option>`;
+  sel.innerHTML='<option value="">— elige periodo —</option>'+extra+opts.map(o=>`<option value="${o}">${o}</option>`).join('')+'<option value="__otro__">✏️ Otro (escribir)…</option>';
+  const inp=document.getElementById(prefijo+'_periodo');
+  // Estado inicial del input segun el valor
+  if(valorActual && (opts.includes(valorActual) || extra)){ sel.value=valorActual; if(inp) inp.style.display='none'; }
+  else if(valorActual){ sel.value='__otro__'; if(inp){ inp.style.display=''; inp.value=valorActual; } }
+  else { sel.value=''; if(inp){ inp.style.display='none'; inp.value=''; } }
+}
+// Maneja el cambio del <select> de periodo: si es un valor de lista, lo copia al input (oculto);
+// si es "Otro", muestra el input para escribir.
+function _periodoSelChange(prefijo){
+  const sel=document.getElementById(prefijo+'_periodo_sel');
+  const inp=document.getElementById(prefijo+'_periodo');
+  if(!sel||!inp) return;
+  if(sel.value==='__otro__'){ inp.style.display=''; inp.value=''; inp.dataset.touched='1'; inp.focus(); }
+  else if(sel.value===''){ inp.style.display='none'; inp.value=''; }
+  else { inp.style.display='none'; inp.value=sel.value; inp.dataset.touched='1'; }
+}
+window._periodoSelChange=_periodoSelChange;
+
 // Editar una programación: carga sus valores en el formulario y cambia a modo edición
 function editarProgMeta(progId){
   const p=(STATE.progMetas||[]).find(x=>x.id===progId); if(!p) return;
@@ -4507,7 +4555,7 @@ function editarProgMeta(progId){
   set('pm_meta', leerCampo(p,PM.valor_meta.id,'Valor meta'));
   set('pm_plan', leerCampo(p,PM.plan_accion.id,'Plan de acción'));
   set('pm_obs', limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación')));
-  const ep=document.getElementById('pm_periodo'); if(ep){ ep.value=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; ep.dataset.touched='1'; }
+  const ep=document.getElementById('pm_periodo'); if(ep){ const perVal=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; ep.value=perVal; ep.dataset.touched='1'; _llenarPeriodoSel('pm', perVal); }
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='✓ Actualizar programación';
   _mostrarBtnCancelarMeta(true);
   // Rellenar variables de ref/meta desde el JSON guardado (si existe)
@@ -4572,7 +4620,7 @@ async function guardarProgMeta(){
     PM_EDIT_ID=null;
     const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
-    const ep=document.getElementById('pm_periodo'); if(ep) delete ep.dataset.touched;
+    const ep=document.getElementById('pm_periodo'); if(ep){ delete ep.dataset.touched; ep.style.display='none'; } _llenarPeriodoSel('pm','');
     _limpiarVarsMeta();   // dejar las variables de referencia y meta en blanco
     _mostrarBtnCancelarMeta(false);
     await cargarProgMetas();
