@@ -4501,21 +4501,26 @@ function cancelarEdicionSeg(){
 window.cancelarEdicionSeg=cancelarEdicionSeg;
 
 // Genera la lista de periodos factibles: lo que resta del año actual + todo el próximo año.
-// Incluye trimestres (Qn AAAA) y semestres (AAAA-I / AAAA-II), ordenados cronológicamente.
+// Incluye meses (Mes AAAA), trimestres (Qn AAAA) y semestres (AAAA-I / AAAA-II), en orden cronológico.
 function _periodosFactibles(){
+  const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const hoy=new Date();
   const anio=hoy.getFullYear();
   const mes=hoy.getMonth()+1;            // 1-12
   const qActual=Math.ceil(mes/3);        // trimestre actual (1-4)
   const semActual=mes<=6?1:2;            // semestre actual (1-2)
   const lista=[];
-  // Trimestres: del actual del año en curso hasta Q4 del próximo año
-  for(let q=qActual;q<=4;q++) lista.push({orden:anio*100+q*10, txt:'Q'+q+' '+anio});
-  for(let q=1;q<=4;q++) lista.push({orden:(anio+1)*100+q*10, txt:'Q'+q+' '+(anio+1)});
-  // Semestres: del actual del año en curso + ambos del próximo año
-  for(let s=semActual;s<=2;s++) lista.push({orden:anio*100+s*10+5, txt:anio+'-'+(s===1?'I':'II')});
-  for(let s=1;s<=2;s++) lista.push({orden:(anio+1)*100+s*10+5, txt:(anio+1)+'-'+(s===1?'I':'II')});
-  // Ordenar cronológicamente y devolver solo los textos
+  // El "orden" ubica cada periodo en el tiempo. Para intercalar, uso: AAAAMM*10 + desempate.
+  // Mes → al inicio de su mes; Trimestre → al inicio de su primer mes; Semestre → al inicio de su primer mes.
+  // Meses: del mes actual hasta diciembre del próximo año
+  for(let m=mes;m<=12;m++)  lista.push({orden:anio*10000+m*100+1,      txt:MESES[m-1]+' '+anio});
+  for(let m=1;m<=12;m++)    lista.push({orden:(anio+1)*10000+m*100+1,  txt:MESES[m-1]+' '+(anio+1)});
+  // Trimestres: del actual hasta Q4 del próximo año (se ubican al inicio de su primer mes, +2 para ir tras el mes)
+  for(let q=qActual;q<=4;q++) lista.push({orden:anio*10000+((q-1)*3+1)*100+2,     txt:'Q'+q+' '+anio});
+  for(let q=1;q<=4;q++)       lista.push({orden:(anio+1)*10000+((q-1)*3+1)*100+2, txt:'Q'+q+' '+(anio+1)});
+  // Semestres: del actual + ambos del próximo año (al inicio de su primer mes, +3 para ir tras mes y trimestre)
+  for(let s=semActual;s<=2;s++) lista.push({orden:anio*10000+((s-1)*6+1)*100+3,     txt:anio+'-'+(s===1?'I':'II')});
+  for(let s=1;s<=2;s++)         lista.push({orden:(anio+1)*10000+((s-1)*6+1)*100+3, txt:(anio+1)+'-'+(s===1?'I':'II')});
   lista.sort((a,b)=>a.orden-b.orden);
   return lista.map(x=>x.txt);
 }
