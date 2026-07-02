@@ -3661,7 +3661,7 @@ async function renderTablero(){
 }
 // ===== Estado y lógica del semáforo interactivo del tablero =====
 let _TAB_MEDICIONES=[];         // [{ind, ofi, periodo, pct}]
-let _TAB_FILTRO={ oficina:'', periodo:'', rango:null };
+let _TAB_FILTRO={ oficinas:[], periodos:[], rango:null };
 // Rangos del ejemplo SESIGUE: 100% / 75–99% / 50–74% / <50%
 const _TAB_RANGOS=[
   { key:'r100', label:'100% de avance',        color:'#0f6b4f', test:p=>p>=100 },
@@ -3671,50 +3671,47 @@ const _TAB_RANGOS=[
 ];
 function _tabMedicionesFiltradas(){
   return _TAB_MEDICIONES.filter(m=>{
-    if(_TAB_FILTRO.oficina && m.ofi!==_TAB_FILTRO.oficina) return false;
-    if(_TAB_FILTRO.periodo && m.periodo!==_TAB_FILTRO.periodo) return false;
+    if(_TAB_FILTRO.oficinas.length && !_TAB_FILTRO.oficinas.includes(m.ofi)) return false;
+    if(_TAB_FILTRO.periodos.length && !_TAB_FILTRO.periodos.includes(m.periodo)) return false;
     return true;
   });
 }
 function _tabRenderSemaforo(){
   const cont=document.getElementById('tab-sem-cuerpo'); if(!cont) return;
-  // Opciones de filtro
   const oficinas=[...new Set(_TAB_MEDICIONES.map(m=>m.ofi))].sort();
   const periodos=[...new Set(_TAB_MEDICIONES.map(m=>m.periodo))].sort();
   const datos=_tabMedicionesFiltradas();
-  // Conteo por rango
   const conteos={}; _TAB_RANGOS.forEach(r=>conteos[r.key]=0);
   datos.forEach(m=>{ const r=_TAB_RANGOS.find(x=>x.test(m.pct)); if(r) conteos[r.key]++; });
   const totalMed=datos.length;
+  // Chip de filtro (marcable)
+  const chip=(label, activo, onclick)=>`<button onclick="${onclick}" style="font:inherit;font-size:12px;font-weight:600;border-radius:16px;padding:5px 12px;cursor:pointer;border:1.5px solid ${activo?'var(--brand)':'var(--line)'};background:${activo?'var(--brand)':'var(--card)'};color:${activo?'#fff':'var(--slate)'}">${activo?'✓ ':''}${String(label).replace(/</g,'&lt;')}</button>`;
   let h='';
-  // Filtros
-  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
-    <select id="tab_f_oficina" onchange="_tabSetFiltro('oficina',this.value)" style="min-width:180px">
-      <option value="">Todas las oficinas</option>${oficinas.map(o=>`<option value="${o.replace(/"/g,'&quot;')}" ${_TAB_FILTRO.oficina===o?'selected':''}>${o.replace(/</g,'&lt;')}</option>`).join('')}
-    </select>
-    <select id="tab_f_periodo" onchange="_tabSetFiltro('periodo',this.value)" style="min-width:150px">
-      <option value="">Todos los periodos</option>${periodos.map(p=>`<option value="${p.replace(/"/g,'&quot;')}" ${_TAB_FILTRO.periodo===p?'selected':''}>${p.replace(/</g,'&lt;')}</option>`).join('')}
-    </select>
-    ${(_TAB_FILTRO.oficina||_TAB_FILTRO.periodo||_TAB_FILTRO.rango)?`<button class="btn btn-ghost btn-sm" onclick="_tabLimpiar()">Limpiar</button>`:''}
-  </div>`;
+  // Filtros de oficina (multi)
+  h+=`<div style="margin-bottom:10px"><div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700;margin-bottom:6px">Oficinas ${_TAB_FILTRO.oficinas.length?'('+_TAB_FILTRO.oficinas.length+' seleccionadas)':'(todas)'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${oficinas.map(o=>chip(o, _TAB_FILTRO.oficinas.includes(o), `_tabToggleFiltro('oficinas','${o.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')`)).join('')}</div></div>`;
+  // Filtros de periodo (multi)
+  h+=`<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700;margin-bottom:6px">Periodos ${_TAB_FILTRO.periodos.length?'('+_TAB_FILTRO.periodos.length+' seleccionados)':'(todos)'}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">${periodos.map(p=>chip(p, _TAB_FILTRO.periodos.includes(p), `_tabToggleFiltro('periodos','${p.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')`)).join('')}</div></div>`;
+  if(_TAB_FILTRO.oficinas.length||_TAB_FILTRO.periodos.length||_TAB_FILTRO.rango){ h+=`<div style="margin-bottom:14px"><button class="btn btn-ghost btn-sm" onclick="_tabLimpiar()">Limpiar selección</button></div>`; }
   if(!totalMed){ h+='<p class="hint">No hay mediciones con avance para los filtros elegidos.</p>'; cont.innerHTML=h; return; }
-  // Barras del semáforo (clic para ver ranking)
+  // Barras del semáforo
   h+='<div style="display:flex;flex-direction:column;gap:8px">';
   _TAB_RANGOS.forEach(r=>{
     const n=conteos[r.key]; const w=totalMed?Math.round(n/totalMed*100):0;
     const activo=_TAB_FILTRO.rango===r.key;
-    h+=`<div onclick="_tabSetRango('${r.key}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px;border-radius:8px;${activo?'background:var(--paper);outline:2px solid '+r.color:''}">
+    const vacio=(n===0);
+    h+=`<div onclick="${vacio?'':`_tabSetRango('${r.key}')`}" style="${vacio?'opacity:.55;':'cursor:pointer;'}display:flex;align-items:center;gap:10px;padding:6px;border-radius:8px;${activo?'background:var(--paper);outline:2px solid '+r.color:''}">
       <div style="width:16px;height:16px;border-radius:4px;background:${r.color};flex-shrink:0"></div>
       <div style="width:180px;font-size:13px;color:var(--slate);font-weight:600">${r.label}</div>
       <div style="flex:1;background:var(--paper);border-radius:8px;overflow:hidden;height:24px;border:1px solid var(--line)">
-        <div style="width:${w}%;height:100%;background:${r.color};display:flex;align-items:center;padding-left:8px;color:#fff;font-size:12px;font-weight:700">${n>0?n:''}</div>
+        ${n>0?`<div style="width:${w}%;height:100%;background:${r.color};display:flex;align-items:center;padding-left:8px;color:#fff;font-size:12px;font-weight:700">${n}</div>`:''}
       </div>
-      <div style="width:80px;text-align:right;font-size:12px;color:var(--mist)">${n} · ${w}%</div>
+      <div style="width:80px;text-align:right;font-size:12px;color:var(--mist)">${n>0?(n+' · '+w+'%'):'—'}</div>
     </div>`;
   });
   h+='</div>';
-  h+=`<div style="font-size:11px;color:var(--mist);margin-top:8px">Total de mediciones${(_TAB_FILTRO.oficina||_TAB_FILTRO.periodo)?' (filtradas)':''}: ${totalMed} · haz clic en un rango para ver el ranking</div>`;
-  // Ranking del rango seleccionado
+  h+=`<div style="font-size:11px;color:var(--mist);margin-top:8px">Total de mediciones${(_TAB_FILTRO.oficinas.length||_TAB_FILTRO.periodos.length)?' (filtradas)':''}: ${totalMed} · haz clic en un rango para ver el ranking</div>`;
   h+='<div id="tab-ranking" style="margin-top:16px"></div>';
   cont.innerHTML=h;
   _tabRenderRanking();
@@ -3741,10 +3738,15 @@ function _tabRenderRanking(){
   h+='</tbody></table></div>';
   cont.innerHTML=h;
 }
-function _tabSetFiltro(campo,val){ _TAB_FILTRO[campo]=val; _tabRenderSemaforo(); }
+function _tabToggleFiltro(campo,val){
+  const arr=_TAB_FILTRO[campo];
+  const i=arr.indexOf(val);
+  if(i>=0) arr.splice(i,1); else arr.push(val);
+  _tabRenderSemaforo();
+}
 function _tabSetRango(key){ _TAB_FILTRO.rango=(_TAB_FILTRO.rango===key)?null:key; _tabRenderSemaforo(); }
-function _tabLimpiar(){ _TAB_FILTRO={ oficina:'', periodo:'', rango:null }; _tabRenderSemaforo(); }
-window._tabSetFiltro=_tabSetFiltro; window._tabSetRango=_tabSetRango; window._tabLimpiar=_tabLimpiar;
+function _tabLimpiar(){ _TAB_FILTRO={ oficinas:[], periodos:[], rango:null }; _tabRenderSemaforo(); }
+window._tabToggleFiltro=_tabToggleFiltro; window._tabSetRango=_tabSetRango; window._tabLimpiar=_tabLimpiar;
 window._tabRenderSemaforo=_tabRenderSemaforo;
 
 window.renderTablero=renderTablero;
