@@ -3584,16 +3584,19 @@ async function renderTablero(){
     const total=recs.length;
     // Clasificar cada indicador en 3 etapas segun tenga meta programada y/o seguimiento
     const sinNada=[], soloMeta=[], metaYseg=[];
+    const porOficina={}; // { oficina: {total, sinNada, soloMeta, metaYseg} }
     recs.forEach(m=>{
       const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
-      const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'—';
+      const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'(Sin oficina)';
       const tieneMeta=(m._progMetas||0)>0;
       const tieneSeg=(m._periodos||0)>0;
       const item={ ind, ofi, id:m.id };
+      if(!porOficina[ofi]) porOficina[ofi]={total:0,sinNada:0,soloMeta:0,metaYseg:0};
+      porOficina[ofi].total++;
       // Etapas: con seguimiento = etapa más avanzada; solo meta = intermedia; nada = inicial
-      if(tieneSeg) metaYseg.push(item);
-      else if(tieneMeta) soloMeta.push(item);
-      else sinNada.push(item);
+      if(tieneSeg){ metaYseg.push(item); porOficina[ofi].metaYseg++; }
+      else if(tieneMeta){ soloMeta.push(item); porOficina[ofi].soloMeta++; }
+      else { sinNada.push(item); porOficina[ofi].sinNada++; }
     });
     const pct=n=>total?Math.round(n/total*100):0;
     // Tarjeta clickeable que ancla a su lista
@@ -3627,15 +3630,45 @@ async function renderTablero(){
     let html='';
     // 3 tarjetas
     html+=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:8px">
-      ${tarjeta('Sin nada', sinNada.length, 'sin meta ni seguimiento', '#c0392b', 'lst-sinnada')}
-      ${tarjeta('Solo meta', soloMeta.length, 'meta programada, sin medir', '#b8860b', 'lst-solometa')}
-      ${tarjeta('Meta + seguimiento', metaYseg.length, 'programado y medido', '#1f7a3d', 'lst-completo')}
+      ${tarjeta('Sin nada', sinNada.length, 'sin meta ni seguimiento', '#c0392b', 'tab-por-oficina')}
+      ${tarjeta('Solo meta', soloMeta.length, 'meta programada, sin medir', '#b8860b', 'tab-por-oficina')}
+      ${tarjeta('Meta + seguimiento', metaYseg.length, 'programado y medido', '#1f7a3d', 'tab-por-oficina')}
     </div>
     <div style="font-size:12px;color:var(--mist);margin-bottom:20px">Total: ${total} indicador(es) en la matriz · haz clic en una tarjeta para ver su lista</div>`;
-    // 3 listas
-    html+=lista('🔴 Sin nada', sinNada, '#c0392b', 'lst-sinnada', 'Indicadores que aún no tienen meta programada ni seguimiento. Falta programar su meta.');
-    html+=lista('🟡 Solo meta programada', soloMeta, '#b8860b', 'lst-solometa', 'Indicadores con meta definida pero sin medición registrada. Falta registrar su seguimiento.');
-    html+=lista('🟢 Meta + seguimiento', metaYseg, '#1f7a3d', 'lst-completo', 'Indicadores con meta programada y al menos una medición registrada.');
+    // Tabla-resumen por oficina (Total / Sin nada / Solo meta / Meta+seg)
+    const oficinasOrd=Object.keys(porOficina).sort();
+    const tot={total:0,sinNada:0,soloMeta:0,metaYseg:0};
+    oficinasOrd.forEach(o=>{ const d=porOficina[o]; tot.total+=d.total; tot.sinNada+=d.sinNada; tot.soloMeta+=d.soloMeta; tot.metaYseg+=d.metaYseg; });
+    const celdaN=(n,color)=> n>0?`<span style="font-weight:700;color:${color}">${n}</span>`:`<span style="color:var(--mist)">—</span>`;
+    html+=`<div id="tab-por-oficina" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px;scroll-margin-top:90px">
+      <div style="font-weight:700;color:var(--brand);margin-bottom:4px;font-size:15px">Estado de indicadores por oficina</div>
+      <div style="font-size:12px;color:var(--mist);margin-bottom:14px">Cuántos indicadores tiene cada oficina y en qué etapa se encuentran.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr>
+          <th style="text-align:left;padding:8px 10px;color:var(--mist);font-size:11px;text-transform:uppercase">Oficina</th>
+          <th style="text-align:center;padding:8px 10px;color:var(--mist);font-size:11px;text-transform:uppercase">Total</th>
+          <th style="text-align:center;padding:8px 10px;color:#c0392b;font-size:11px;text-transform:uppercase">🔴 Sin nada</th>
+          <th style="text-align:center;padding:8px 10px;color:#b8860b;font-size:11px;text-transform:uppercase">🟡 Solo meta</th>
+          <th style="text-align:center;padding:8px 10px;color:#1f7a3d;font-size:11px;text-transform:uppercase">🟢 Meta + seg</th>
+        </tr></thead><tbody>`;
+    oficinasOrd.forEach(o=>{
+      const d=porOficina[o];
+      html+=`<tr style="border-top:1px solid var(--line)">
+        <td style="padding:9px 10px;color:var(--slate);font-weight:600">${String(o).replace(/</g,'&lt;')}</td>
+        <td style="padding:9px 10px;text-align:center;font-weight:700;color:var(--brand)">${d.total}</td>
+        <td style="padding:9px 10px;text-align:center">${celdaN(d.sinNada,'#c0392b')}</td>
+        <td style="padding:9px 10px;text-align:center">${celdaN(d.soloMeta,'#b8860b')}</td>
+        <td style="padding:9px 10px;text-align:center">${celdaN(d.metaYseg,'#1f7a3d')}</td>
+      </tr>`;
+    });
+    html+=`<tr style="border-top:2px solid var(--brand-2);background:var(--paper)">
+        <td style="padding:10px;font-weight:800;color:var(--brand)">TOTAL</td>
+        <td style="padding:10px;text-align:center;font-weight:800;color:var(--brand)">${tot.total}</td>
+        <td style="padding:10px;text-align:center;font-weight:800;color:#c0392b">${tot.sinNada}</td>
+        <td style="padding:10px;text-align:center;font-weight:800;color:#b8860b">${tot.soloMeta}</td>
+        <td style="padding:10px;text-align:center;font-weight:800;color:#1f7a3d">${tot.metaYseg}</td>
+      </tr>`;
+    html+=`</tbody></table></div></div>`;
 
     // ===== Semáforo interactivo de avance (por rangos, con filtros oficina/periodo y ranking) =====
     // Construir la lista de mediciones: una fila por (indicador × periodo con avance)
