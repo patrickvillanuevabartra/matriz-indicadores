@@ -3636,10 +3636,117 @@ async function renderTablero(){
     html+=lista('🔴 Sin nada', sinNada, '#c0392b', 'lst-sinnada', 'Indicadores que aún no tienen meta programada ni seguimiento. Falta programar su meta.');
     html+=lista('🟡 Solo meta programada', soloMeta, '#b8860b', 'lst-solometa', 'Indicadores con meta definida pero sin medición registrada. Falta registrar su seguimiento.');
     html+=lista('🟢 Meta + seguimiento', metaYseg, '#1f7a3d', 'lst-completo', 'Indicadores con meta programada y al menos una medición registrada.');
+
+    // ===== Semáforo interactivo de avance (por rangos, con filtros oficina/periodo y ranking) =====
+    // Construir la lista de mediciones: una fila por (indicador × periodo con avance)
+    _TAB_MEDICIONES=[];
+    recs.forEach(m=>{
+      const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
+      const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'—';
+      (m._avancePeriodos||[]).forEach(p=>{
+        if(p.pct===null||p.pct===undefined) return;
+        _TAB_MEDICIONES.push({ ind, ofi, periodo:p.periodo||'(sin periodo)', pct:p.pct });
+      });
+    });
+    html+=`<div id="tab-semaforo" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-top:20px;scroll-margin-top:90px">
+      <div style="font-weight:700;color:var(--brand);margin-bottom:4px;font-size:15px">Avance de cumplimiento por rangos</div>
+      <div style="font-size:12px;color:var(--mist);margin-bottom:14px">Filtra por oficina y periodo, y haz clic en un rango para ver el ranking de indicadores (mayor a menor % de avance).</div>
+      <div id="tab-sem-cuerpo"></div>
+    </div>`;
+
     cont.innerHTML=html;
+    _tabRenderSemaforo(); // pinta filtros + barras del semáforo
     setConn(true);
   }catch(e){ setConn(false,e.message); cont.innerHTML=`<div class="empty"><h3>No se pudo cargar el tablero</h3><p>${e.message}</p></div>`; }
 }
+// ===== Estado y lógica del semáforo interactivo del tablero =====
+let _TAB_MEDICIONES=[];         // [{ind, ofi, periodo, pct}]
+let _TAB_FILTRO={ oficina:'', periodo:'', rango:null };
+// Rangos del ejemplo SESIGUE: 100% / 75–99% / 50–74% / <50%
+const _TAB_RANGOS=[
+  { key:'r100', label:'100% de avance',        color:'#0f6b4f', test:p=>p>=100 },
+  { key:'r75',  label:'75% a 99% de avance',   color:'#4aa88e', test:p=>p>=75 && p<100 },
+  { key:'r50',  label:'50% a 74% de avance',   color:'#8fc9b9', test:p=>p>=50 && p<75 },
+  { key:'rlow', label:'Menor al 50% de avance',color:'#c0392b', test:p=>p<50 },
+];
+function _tabMedicionesFiltradas(){
+  return _TAB_MEDICIONES.filter(m=>{
+    if(_TAB_FILTRO.oficina && m.ofi!==_TAB_FILTRO.oficina) return false;
+    if(_TAB_FILTRO.periodo && m.periodo!==_TAB_FILTRO.periodo) return false;
+    return true;
+  });
+}
+function _tabRenderSemaforo(){
+  const cont=document.getElementById('tab-sem-cuerpo'); if(!cont) return;
+  // Opciones de filtro
+  const oficinas=[...new Set(_TAB_MEDICIONES.map(m=>m.ofi))].sort();
+  const periodos=[...new Set(_TAB_MEDICIONES.map(m=>m.periodo))].sort();
+  const datos=_tabMedicionesFiltradas();
+  // Conteo por rango
+  const conteos={}; _TAB_RANGOS.forEach(r=>conteos[r.key]=0);
+  datos.forEach(m=>{ const r=_TAB_RANGOS.find(x=>x.test(m.pct)); if(r) conteos[r.key]++; });
+  const totalMed=datos.length;
+  let h='';
+  // Filtros
+  h+=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
+    <select id="tab_f_oficina" onchange="_tabSetFiltro('oficina',this.value)" style="min-width:180px">
+      <option value="">Todas las oficinas</option>${oficinas.map(o=>`<option value="${o.replace(/"/g,'&quot;')}" ${_TAB_FILTRO.oficina===o?'selected':''}>${o.replace(/</g,'&lt;')}</option>`).join('')}
+    </select>
+    <select id="tab_f_periodo" onchange="_tabSetFiltro('periodo',this.value)" style="min-width:150px">
+      <option value="">Todos los periodos</option>${periodos.map(p=>`<option value="${p.replace(/"/g,'&quot;')}" ${_TAB_FILTRO.periodo===p?'selected':''}>${p.replace(/</g,'&lt;')}</option>`).join('')}
+    </select>
+    ${(_TAB_FILTRO.oficina||_TAB_FILTRO.periodo||_TAB_FILTRO.rango)?`<button class="btn btn-ghost btn-sm" onclick="_tabLimpiar()">Limpiar</button>`:''}
+  </div>`;
+  if(!totalMed){ h+='<p class="hint">No hay mediciones con avance para los filtros elegidos.</p>'; cont.innerHTML=h; return; }
+  // Barras del semáforo (clic para ver ranking)
+  h+='<div style="display:flex;flex-direction:column;gap:8px">';
+  _TAB_RANGOS.forEach(r=>{
+    const n=conteos[r.key]; const w=totalMed?Math.round(n/totalMed*100):0;
+    const activo=_TAB_FILTRO.rango===r.key;
+    h+=`<div onclick="_tabSetRango('${r.key}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:6px;border-radius:8px;${activo?'background:var(--paper);outline:2px solid '+r.color:''}">
+      <div style="width:16px;height:16px;border-radius:4px;background:${r.color};flex-shrink:0"></div>
+      <div style="width:180px;font-size:13px;color:var(--slate);font-weight:600">${r.label}</div>
+      <div style="flex:1;background:var(--paper);border-radius:8px;overflow:hidden;height:24px;border:1px solid var(--line)">
+        <div style="width:${w}%;height:100%;background:${r.color};display:flex;align-items:center;padding-left:8px;color:#fff;font-size:12px;font-weight:700">${n>0?n:''}</div>
+      </div>
+      <div style="width:80px;text-align:right;font-size:12px;color:var(--mist)">${n} · ${w}%</div>
+    </div>`;
+  });
+  h+='</div>';
+  h+=`<div style="font-size:11px;color:var(--mist);margin-top:8px">Total de mediciones${(_TAB_FILTRO.oficina||_TAB_FILTRO.periodo)?' (filtradas)':''}: ${totalMed} · haz clic en un rango para ver el ranking</div>`;
+  // Ranking del rango seleccionado
+  h+='<div id="tab-ranking" style="margin-top:16px"></div>';
+  cont.innerHTML=h;
+  _tabRenderRanking();
+}
+function _tabRenderRanking(){
+  const cont=document.getElementById('tab-ranking'); if(!cont) return;
+  if(!_TAB_FILTRO.rango){ cont.innerHTML='<p class="hint" style="margin:0">Haz clic en un rango de arriba para ver el ranking de indicadores.</p>'; return; }
+  const r=_TAB_RANGOS.find(x=>x.key===_TAB_FILTRO.rango); if(!r) return;
+  const datos=_tabMedicionesFiltradas().filter(m=>r.test(m.pct));
+  datos.sort((a,b)=>b.pct-a.pct); // mayor a menor
+  let h=`<div style="font-weight:700;color:${r.color};margin-bottom:10px">${r.label} <span style="color:var(--mist);font-weight:600">(${datos.length})</span></div>`;
+  if(!datos.length){ h+='<p class="hint" style="margin:0">Sin indicadores en este rango con los filtros actuales.</p>'; cont.innerHTML=h; return; }
+  h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
+  h+='<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">#</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Indicador</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Oficina</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Periodo</th><th style="text-align:right;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">% Avance</th></tr></thead><tbody>';
+  datos.forEach((m,i)=>{
+    h+=`<tr style="border-top:1px solid var(--line)">
+      <td style="padding:7px 8px;color:var(--mist);font-weight:700">${i+1}</td>
+      <td style="padding:7px 8px;color:var(--slate)">${String(m.ind).replace(/</g,'&lt;')}</td>
+      <td style="padding:7px 8px;color:var(--mist)">${String(m.ofi).replace(/</g,'&lt;')}</td>
+      <td style="padding:7px 8px;color:var(--mist)">${String(m.periodo).replace(/</g,'&lt;')}</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:700;color:${r.color}">${Math.round(m.pct)}%</td>
+    </tr>`;
+  });
+  h+='</tbody></table></div>';
+  cont.innerHTML=h;
+}
+function _tabSetFiltro(campo,val){ _TAB_FILTRO[campo]=val; _tabRenderSemaforo(); }
+function _tabSetRango(key){ _TAB_FILTRO.rango=(_TAB_FILTRO.rango===key)?null:key; _tabRenderSemaforo(); }
+function _tabLimpiar(){ _TAB_FILTRO={ oficina:'', periodo:'', rango:null }; _tabRenderSemaforo(); }
+window._tabSetFiltro=_tabSetFiltro; window._tabSetRango=_tabSetRango; window._tabLimpiar=_tabLimpiar;
+window._tabRenderSemaforo=_tabRenderSemaforo;
+
 window.renderTablero=renderTablero;
 
 // Salta a la vista "Fichas registradas" pre-filtrada por el proceso de origen,
