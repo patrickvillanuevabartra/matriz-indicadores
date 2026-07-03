@@ -2973,12 +2973,22 @@ async function guardarEdicionInventario(){
   }
   btn.disabled=true; btn.textContent='Guardando…';
   try{
-    // La app trabaja con el campo de texto plano "Ruta completa" (field-id cIWOeqW6vkuildQSkfW4WT),
-    // que sí se puede escribir por API. Al editar un nivel, se reconstruye la ruta de texto de
-    // TODAS las filas que comparten ese nivel y se guarda ahí. No se tocan los campos relacionales.
+    // La app trabaja con el campo de texto plano "Ruta completa" (field-id cIWOeqW6vkuildQSkfW4WT).
+    // Al editar un nivel, reconstruye la ruta de las filas afectadas y la guarda ahí.
     const FID_RUTA='cIWOeqW6vkuildQSkfW4WT';
     const ordenKeys=['tipo','n0','n1','n2','n3','proc'];
-    // Para cada cambio, ubicar las filas afectadas por el valor actual de ese nivel
+    const _sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    // Guardar una fila con reintentos y sin colgarse
+    const guardarFila=async(id,campos)=>{
+      for(let intento=1;intento<=3;intento++){
+        try{ await API.saveForm(id,campos,CONFIG.ENTITIES.PROCEDIMIENTO); return true; }
+        catch(e){ if(intento<3) await _sleep(1500); else return false; }
+      }
+      return false;
+    };
+    // Recolectar TODAS las filas a actualizar (de todos los cambios) evitando duplicados
+    const inv=await loadInventario();
+    const porFila=new Map(); // id -> {fila, cambios:{key:nuevoNombre}}
     for(const c of cambios){
       const m=String(c.nombre).match(/^([A-Za-z]\d+(?:\.\d+)*)\s+/);
       const codPrefijo=m?m[1]:'';
@@ -2987,26 +2997,33 @@ async function guardarEdicionInventario(){
         nuevoNombre=codPrefijo+' '+nuevoNombre;
       }
       const colNombre=INV_COLS[c.key];
-      const inv=await loadInventario();
-      const filas=inv.filter(r=>{
+      inv.forEach(r=>{
         const val=(r.values||{})[colNombre];
-        return val && String(val).trim()===String(c.nombre).trim();
+        if(val && String(val).trim()===String(c.nombre).trim()){
+          if(!porFila.has(r.id)) porFila.set(r.id,{fila:r,cambios:{}});
+          porFila.get(r.id).cambios[c.key]=nuevoNombre;
+        }
       });
-      for(const fila of filas){
-        const v=fila.values||{};
-        // Reconstruir la ruta con el nivel editado cambiado
-        const partes=ordenKeys.map(k=>{
-          const actual=(v[INV_COLS[k]]||'');
-          return (k===c.key)? nuevoNombre : actual;
-        });
-        const nuevaRuta=partes.join(' › ');
-        const campos={}; campos[FID_RUTA]=nuevaRuta;
-        await API.saveForm(fila.id, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
-        // actualizar en memoria para que las siguientes iteraciones usen el valor nuevo
-        v[INV_COLS[c.key]]=nuevoNombre; v['Ruta completa']=nuevaRuta;
-      }
     }
-    toast('Cambios guardados.');
+    const total=porFila.size;
+    let hechos=0, fallos=0, i=0;
+    for(const {fila,cambios:camb} of porFila.values()){
+      const v=fila.values||{};
+      // Reconstruir la ruta aplicando los cambios de esta fila
+      const partes=ordenKeys.map(k=> (camb[k]!==undefined)? camb[k] : (v[INV_COLS[k]]||'') );
+      const nuevaRuta=partes.join(' › ');
+      const campos={}; campos[FID_RUTA]=nuevaRuta;
+      const ok=await guardarFila(fila.id,campos);
+      if(ok){ hechos++; // actualizar en memoria
+        ordenKeys.forEach(k=>{ if(camb[k]!==undefined) v[INV_COLS[k]]=camb[k]; });
+        v['Ruta completa']=nuevaRuta;
+      } else fallos++;
+      i++;
+      if(total>1){ btn.textContent='Guardando… '+i+'/'+total; }
+      if(i%20===0) await _sleep(3000); else await _sleep(400); // pausas anti-saturación
+    }
+    if(fallos>0) toast('Guardado con '+fallos+' error(es) de '+total+'. Puede que algunas filas no se actualizaran.', true);
+    else toast('Cambios guardados.');
     cerrarModal('modalEditInv');
     STATE.inventario=[]; _NP_CACHE_REG={};
     renderInventario();
