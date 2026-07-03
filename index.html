@@ -1537,7 +1537,31 @@ async function loadInventario(){
     await new Promise(r=>setTimeout(r, 300*intento));
   }
   // Solo cachear si realmente trajo registros (evita guardar un vacío en falso)
-  if(regs.length) STATE.inventario = regs;
+  if(regs.length){
+    // Derivar los niveles desde el campo de texto plano "Ruta completa" (field-id cIWOeqW6vkuildQSkfW4WT),
+    // que es fiable por API. Formato: "Tipo › N0 › N1 › N2 › N3 › Procedimiento".
+    // Esto evita depender de los campos relacionales (que se vacían al escribir por API).
+    const FID_RUTA='cIWOeqW6vkuildQSkfW4WT';
+    const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento|Ruta completa)$/i;
+    regs.forEach(r=>{
+      const v=r.values||{};
+      let ruta = v['Ruta completa'];
+      if(!ruta || generico.test(String(ruta).trim())) ruta = v[FID_RUTA];
+      if(!ruta || generico.test(String(ruta).trim())) return; // sin ruta usable
+      const segs=String(ruta).split(/\s*›\s*/).map(s=>s.trim()).filter(Boolean);
+      if(segs.length>=6){
+        // Sobrescribir los valores de nivel con los de la ruta (texto fiable)
+        v[INV_COLS.tipo]=segs[0];
+        v[INV_COLS.n0]=segs[1];
+        v[INV_COLS.n1]=segs[2];
+        v[INV_COLS.n2]=segs[3];
+        v[INV_COLS.n3]=segs[4];
+        v[INV_COLS.proc]=segs[5];
+        r._rutaTexto=ruta;
+      }
+    });
+    STATE.inventario = regs;
+  }
   return regs;
 }
 
@@ -2949,37 +2973,37 @@ async function guardarEdicionInventario(){
   }
   btn.disabled=true; btn.textContent='Guardando…';
   try{
+    // La app trabaja con el campo de texto plano "Ruta completa" (field-id cIWOeqW6vkuildQSkfW4WT),
+    // que sí se puede escribir por API. Al editar un nivel, se reconstruye la ruta de texto de
+    // TODAS las filas que comparten ese nivel y se guarda ahí. No se tocan los campos relacionales.
+    const FID_RUTA='cIWOeqW6vkuildQSkfW4WT';
+    const ordenKeys=['tipo','n0','n1','n2','n3','proc'];
+    // Para cada cambio, ubicar las filas afectadas por el valor actual de ese nivel
     for(const c of cambios){
-      const def=c.def;
-      // El código se conserva como prefijo: si el nombre original tenía código, mantenerlo.
       const m=String(c.nombre).match(/^([A-Za-z]\d+(?:\.\d+)*)\s+/);
       const codPrefijo=m?m[1]:'';
-      // Si el usuario ya escribió el código en el nuevo nombre, no duplicar
       let nuevoNombre=c.nuevo;
       if(codPrefijo && !new RegExp('^'+codPrefijo.replace(/\./g,'\\.')).test(nuevoNombre)){
         nuevoNombre=codPrefijo+' '+nuevoNombre;
       }
-      // Actualizar el TEXTO directamente en la tabla PROCEDIMIENTO (donde la app lee),
-      // en TODAS las filas que comparten ese mismo valor de nivel. Se reenvían TODOS
-      // los campos de texto de la fila (no solo el que cambió) para no vaciar el resto.
-      const fidPorKey={ tipo:'bTW5RdU8jfvRChwwFdPSkI', n0:'dcUWH1c1zhW5bGiCkMjrK8', n1:'cSWR_cI8jbqPpcGSkJd8oL', n2:'ccWP_cOmnkj4oNbcOzaZq4', n3:'cDW5SHlCnmW7bkgaaMW6fP', proc:'coi8oUW41cMOk7cCk2W4vk' };
       const colNombre=INV_COLS[c.key];
       const inv=await loadInventario();
-      const filasAfectadas=inv.filter(r=>{
+      const filas=inv.filter(r=>{
         const val=(r.values||{})[colNombre];
         return val && String(val).trim()===String(c.nombre).trim();
       });
-      for(const fila of filasAfectadas){
-        const fv=fila.values||{};
-        // Reenviar TODOS los campos de texto de la fila, cambiando solo el nivel editado
-        const campos={};
-        campos[fidPorKey.tipo] = (c.key==='tipo') ? nuevoNombre : (fv[INV_COLS.tipo]||'');
-        campos[fidPorKey.n0]   = (c.key==='n0')   ? nuevoNombre : (fv[INV_COLS.n0]||'');
-        campos[fidPorKey.n1]   = (c.key==='n1')   ? nuevoNombre : (fv[INV_COLS.n1]||'');
-        campos[fidPorKey.n2]   = (c.key==='n2')   ? nuevoNombre : (fv[INV_COLS.n2]||'');
-        campos[fidPorKey.n3]   = (c.key==='n3')   ? nuevoNombre : (fv[INV_COLS.n3]||'');
-        campos[fidPorKey.proc] = (c.key==='proc') ? nuevoNombre : (fv[INV_COLS.proc]||'');
+      for(const fila of filas){
+        const v=fila.values||{};
+        // Reconstruir la ruta con el nivel editado cambiado
+        const partes=ordenKeys.map(k=>{
+          const actual=(v[INV_COLS[k]]||'');
+          return (k===c.key)? nuevoNombre : actual;
+        });
+        const nuevaRuta=partes.join(' › ');
+        const campos={}; campos[FID_RUTA]=nuevaRuta;
         await API.saveForm(fila.id, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
+        // actualizar en memoria para que las siguientes iteraciones usen el valor nuevo
+        v[INV_COLS[c.key]]=nuevoNombre; v['Ruta completa']=nuevaRuta;
       }
     }
     toast('Cambios guardados.');
