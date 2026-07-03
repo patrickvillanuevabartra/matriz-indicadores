@@ -18,6 +18,7 @@ const CONFIG = {
     FICHA_N0:     "cPWRXeWRrcK4kivMVdSY5l", // Ficha de Proceso Nivel 0
     FICHA_N1:     "dcPJraW45hsOokWQZcJ8kA", // Ficha de Proceso Nivel 1
     FICHA_N2:     "dcKg7dPWfdRyo7WPHVW511", // Ficha de Proceso Nivel 2
+    FICHA_N3:     "cRj0ZdPuvcNyo1aaj7WPn1", // Ficha de Proceso Nivel 3
     SUBIND_FICHA: "cOW7VdImnlW59tW4zEzHm-", // Subform "Indicadores de desempeño ficha de procesos"
     MATRIZ_IND:   "c3tCkaW7PlAyotgSoCxSor", // Matriz de Indicadores
     PROG_METAS:   "b3ArS2hmjbhiovy1ddICkM", // Programación de metas
@@ -132,6 +133,38 @@ const CONFIG = {
     rel_matriz:        { id: "cmC3GrWOLdRiodW4JdUu8S", type: "rel", entity: "MATRIZ_IND" },
     proceso_txt:       { id: "bqd8ken8jbWRGnWQddVmkM", type: "text" } // ruta del proceso (texto)
   },
+
+  // ---- FICHA NIVEL 3 -----------------------------------------------------
+  FICHA_N3_FIELDS: {
+    tipo_proceso:      { id: "dcLmkvuSnnzOosCmohcNjI", type: "rel", entity: "TIPO_PROCESO" },
+    proceso_n0:        { id: "c5W4ZdOY9dGlNdPCkjASk6", type: "rel", entity: "NIVEL0" },
+    proceso_n1:        { id: "c_i3ZdPSnaW5_dN8kelvai", type: "rel", entity: "NIVEL1" },
+    proceso_n2:        { id: "c-WONdHsjdIAazW7jXpaaY", type: "rel", entity: "NIVEL2" },
+    objetivo:          { id: "bJrmoAWP5gW77dNd7dSCkz", type: "text" },
+    dueno:             { id: "cVxLldJNzhW68sW4tdJGz7", type: "rel", entity: "RESPONSABLES" },
+    dueno_txt:         { id: "c4WPO8jSjdbik-mmolWQW5", type: "string" },
+    alcance:           { id: "dcKCoRdvXdMlJdKCoTW7qV", type: "text" },
+    base_legal:        { id: "dcQmouwmjgslZcO27dT8km", type: "text" },
+    proveedores:       { id: "dcRxbmW7fcMPFdSuqcwZG9", type: "text" },
+    entrada:           { id: "dcQSobW5LeCytcHdHLW51X", type: "text" },
+    proceso_n3:        { id: "c_DrGykSjgW4ZdJYhdOmoU", type: "rel", entity: "NIVEL3" },
+    procedimiento:     { id: "bSW60GCw1cHykJW63cHuu5", type: "rel", entity: "PROCEDIMIENTO" },
+    producto:          { id: "dcMh_cGCjoeOogWQ7cI8oN", type: "text" },
+    receptor:          { id: "dcICkkE15cG4FdKmkYW6ag", type: "text" },
+    subform_indicador: { id: "bFW4tcUmnhoOoSW4_dUCo0", type: "subform", entity: "SUBIND_FICHA" },
+    indicadores_txt:   { id: "ciWQVcNc5cOk5idmo3gmo1", type: "text" },
+    controles:         { id: "abzerPWQHdOljcW7pcT8oj", type: "text" },
+    docs_internos:     { id: "bMW5H5W7vcSldcOCoTD8kI", type: "text" },
+    docs_externos:     { id: "ddLXBcSqLeW4SXbvP9umkC", type: "text" },
+    rrhh:              { id: "chWPPhWPTdS4tcMserhSkj", type: "text" },
+    sistemas:          { id: "ddMCoLp3jppiorWQdcN8k4", type: "text" },
+    registros:         { id: "ddMmkMwCnoWQZcUreLC8kR", type: "text" },
+    instalaciones:     { id: "dcPCoKWRbeWQy3cSk9Emo7", type: "text" },
+    equipos:           { id: "bnW7LHCmjabykeW5VdJCoh", type: "text" },
+    rel_matriz:        { id: "dcQ8k5s8nbWR4NeCkBfYOY", type: "rel", entity: "MATRIZ_IND" },
+    proceso_txt:       { id: "c2yxZdHrnkWQZdS8o4WRz0", type: "text" }
+  },
+
 
   // ---- SUBFORMULARIO "Indicadores de desempeño ficha de procesos" --------
   SUBIND_FICHA_FIELDS: {
