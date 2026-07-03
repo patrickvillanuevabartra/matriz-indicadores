@@ -2960,8 +2960,10 @@ async function guardarEdicionInventario(){
         nuevoNombre=codPrefijo+' '+nuevoNombre;
       }
       // Actualizar el TEXTO directamente en la tabla PROCEDIMIENTO (donde la app lee),
-      // en TODAS las filas que comparten ese mismo valor de nivel. Esto es robusto
-      // porque no depende de los IDs relacionales (que QuintaDB no expone por API).
+      // en TODAS las filas que comparten ese mismo valor de nivel. Se escribe por
+      // field-id (QuintaDB no acepta escritura por nombre de columna).
+      const fidPorKey={ tipo:'bTW5RdU8jfvRChwwFdPSkI', n0:'dcUWH1c1zhW5bGiCkMjrK8', n1:'cSWR_cI8jbqPpcGSkJd8oL', n2:'ccWP_cOmnkj4oNbcOzaZq4', n3:'cDW5SHlCnmW7bkgaaMW6fP', proc:'coi8oUW41cMOk7cCk2W4vk' };
+      const fid=fidPorKey[c.key];
       const colNombre=INV_COLS[c.key];
       const inv=await loadInventario();
       const filasAfectadas=inv.filter(r=>{
@@ -2969,7 +2971,7 @@ async function guardarEdicionInventario(){
         return val && String(val).trim()===String(c.nombre).trim();
       });
       for(const fila of filasAfectadas){
-        const campos={}; campos[colNombre]=nuevoNombre;
+        const campos={}; campos[fid]=nuevoNombre;
         await API.saveForm(fila.id, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
       }
     }
