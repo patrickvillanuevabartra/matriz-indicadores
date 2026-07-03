@@ -2912,7 +2912,7 @@ async function editarInventario(rid){
     if(!n.nombre && n.key!=='proc') return ''; // no mostrar niveles vacíos (salvo procedimiento)
     return `<div class="field">
       <label>${n.label}${n.key!=='proc'&&n.key!=='tipo'?' <span class="hint" style="font-weight:400">· compartido</span>':''}</label>
-      <input id="ei_nivel_${n.key}" data-key="${n.key}" value="${(n.nombre||'').replace(/"/g,'&quot;')}" ${n.recId?'':'disabled'}>
+      <input id="ei_nivel_${n.key}" data-key="${n.key}" value="${(n.nombre||'').replace(/"/g,'&quot;')}">
     </div>`;
   }).join('');
   document.getElementById('modalEditInv').classList.add('show'); document.body.style.overflow='hidden';
@@ -2959,8 +2959,19 @@ async function guardarEdicionInventario(){
       if(codPrefijo && !new RegExp('^'+codPrefijo.replace(/\./g,'\\.')).test(nuevoNombre)){
         nuevoNombre=codPrefijo+' '+nuevoNombre;
       }
-      const campos={}; campos[def.nombreField]=nuevoNombre;
-      await API.saveForm(c.recId, campos, def.entity());
+      // Actualizar el TEXTO directamente en la tabla PROCEDIMIENTO (donde la app lee),
+      // en TODAS las filas que comparten ese mismo valor de nivel. Esto es robusto
+      // porque no depende de los IDs relacionales (que QuintaDB no expone por API).
+      const colNombre=INV_COLS[c.key];
+      const inv=await loadInventario();
+      const filasAfectadas=inv.filter(r=>{
+        const val=(r.values||{})[colNombre];
+        return val && String(val).trim()===String(c.nombre).trim();
+      });
+      for(const fila of filasAfectadas){
+        const campos={}; campos[colNombre]=nuevoNombre;
+        await API.saveForm(fila.id, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
+      }
     }
     toast('Cambios guardados.');
     cerrarModal('modalEditInv');
