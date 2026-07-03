@@ -15,7 +15,7 @@
     --paper:#f7f8fa; --card:#ffffff; --brand:#1f5641; --brand-2:#2e7d5b;
     --brand:#0f8f5e; --brand-2:#0fa968;
     --accent:#0f8f5e; --accent-2:#0fa968;
-    --n0:#0f8f5e; --n1:#2e7d5b; --n2:#3a8c5f;
+    --n0:#0f8f5e; --n1:#2e7d5b; --n2:#3a8c5f; --n3:#46996a;
     --ok:#3a8c5f; --warn:#d97706; --bad:#c0392b;
     --shadow:0 1px 2px rgba(16,22,29,.04),0 4px 16px rgba(16,22,29,.06);
   }
@@ -55,7 +55,7 @@
   .nivel-tab:hover{border-color:var(--brand-2)}
   .nivel-tab.active{border-color:var(--brand);box-shadow:0 0 0 3px rgba(15,143,94,.12)}
   .nivel-tab .nt-mark{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:#fff;padding:3px 9px;border-radius:6px;display:inline-block;margin-bottom:8px}
-  .nivel-tab.n0 .nt-mark{background:var(--n0)} .nivel-tab.n1 .nt-mark{background:var(--n1)} .nivel-tab.n2 .nt-mark{background:var(--n2)}
+  .nivel-tab.n0 .nt-mark{background:var(--n0)} .nivel-tab.n1 .nt-mark{background:var(--n1)} .nivel-tab.n2 .nt-mark{background:var(--n2)} .nivel-tab.n3 .nt-mark{background:var(--n3)}
   .nivel-tab .nt-title{font-family:'IBM Plex Sans',sans-serif;font-weight:600;font-size:16px;color:var(--ink)}
   .nivel-tab .nt-desc{font-size:12px;color:var(--mist);margin-top:3px}
 
@@ -369,6 +369,11 @@
         <div class="nt-title">Subproceso</div>
         <div class="nt-desc">Hasta N2, con N3, procedimiento</div>
       </div>
+      <div class="nivel-tab n3" data-nivel="N3" onclick="setNivel('N3')">
+        <span class="nt-mark">NIVEL 3</span>
+        <div class="nt-title">Proceso operativo</div>
+        <div class="nt-desc">Hasta N3, con su procedimiento (N4)</div>
+      </div>
     </div>
 
     <form id="formFicha" class="card">
@@ -381,7 +386,7 @@
           <div class="field niv-n1 niv-n2"><label>Proceso nivel 1</label><select id="fi_n1" disabled></select></div>
           <div class="field niv-n2"><label>Proceso nivel 2</label><select id="fi_n2" disabled></select></div>
           <!-- N3 y Procedimiento NO van en Identificación; se detectan en SIPOC -->
-          <select id="fi_n3" disabled class="hidden"></select>
+          <div class="field niv-n3" style="display:none"><label>Proceso nivel 3</label><select id="fi_n3" disabled></select></div>
           <select id="fi_proc" disabled class="hidden"></select>
           <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="fi_ruta">Selecciona la jerarquía arriba…</div></div>
           <div class="field full"><label>Objetivo del proceso</label><textarea id="fi_objetivo"></textarea></div>
@@ -440,6 +445,7 @@
         <button class="list-tab" data-f="N0" onclick="setListFiltro('N0')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 0</button>
         <button class="list-tab" data-f="N1" onclick="setListFiltro('N1')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 1</button>
         <button class="list-tab" data-f="N2" onclick="setListFiltro('N2')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 2</button>
+        <button class="list-tab" data-f="N3" onclick="setListFiltro('N3')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 3</button>
       </div>
     </div>
 
@@ -1397,8 +1403,8 @@ function setConn(ok,msg){ const d=document.getElementById('connDot'),x=document.
 function genId22(){ const c='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'; let s=''; for(let i=0;i<22;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 const esBasura = x => (!x || /^[a-zA-Z0-9_\-]{22}$/.test(String(x)));
 // devuelve el field-config del nivel activo
-function FF(){ return NIVEL==='N0'?CONFIG.FICHA_N0_FIELDS : NIVEL==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS; }
-function entFicha(n){ return n==='N0'?CONFIG.ENTITIES.FICHA_N0 : n==='N1'?CONFIG.ENTITIES.FICHA_N1 : CONFIG.ENTITIES.FICHA_N2; }
+function FF(){ return NIVEL==='N0'?CONFIG.FICHA_N0_FIELDS : NIVEL==='N1'?CONFIG.FICHA_N1_FIELDS : NIVEL==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS; }
+function entFicha(n){ return n==='N0'?CONFIG.ENTITIES.FICHA_N0 : n==='N1'?CONFIG.ENTITIES.FICHA_N1 : n==='N3'?CONFIG.ENTITIES.FICHA_N3 : CONFIG.ENTITIES.FICHA_N2; }
 
 /* ============================================================
    NAVEGACIÓN
@@ -1429,9 +1435,10 @@ function aplicarNivelVisual(n){
   // Visibilidad de los campos de jerarquía en la sección I (Identificación):
   //   N0 → solo Tipo y N0.   N1 → + Proceso N1.   N2 → + Proceso N1 y N2.
   const wrap=id=>{ const el=document.getElementById(id); return el?el.closest('.field'):null; };
-  const w1=wrap('fi_n1'), w2=wrap('fi_n2');
-  if(w1) w1.classList.toggle('hidden', !(n==='N1'||n==='N2'));
-  if(w2) w2.classList.toggle('hidden', n!=='N2');
+  const w1=wrap('fi_n1'), w2=wrap('fi_n2'), w3=wrap('fi_n3');
+  if(w1) w1.classList.toggle('hidden', !(n==='N1'||n==='N2'||n==='N3'));
+  if(w2) w2.classList.toggle('hidden', !(n==='N2'||n==='N3'));
+  if(w3){ w3.classList.toggle('hidden', n!=='N3'); if(n==='N3') w3.style.display=''; }
 }
 // setNivel = cambiar de nivel manualmente (clic en las pestañas) → sí reinicia el formulario.
 function setNivel(n){
@@ -1637,7 +1644,7 @@ async function construirMapaIndicadores(){
   // ---- FASE 1: reunir, por cada ficha, sus subIds (releyendo individual solo si faltan) ----
   const fichasInfo=[]; // {nivel, fichaId, fichaRuta, fichaOrden, f}
   let _fOrden=0;
-  for(const nivel of ['N0','N1','N2']){
+  for(const nivel of ['N0','N1','N2','N3']){
     let fichas=[];
     try{ fichas=await loadFichas(nivel); }catch(_){ fichas=[]; }
     for(const f of fichas){
@@ -1712,19 +1719,23 @@ async function initCascadaFicha(){
   const inv = await loadInventario();
   const C=INV_COLS;
   const tipo=document.getElementById('fi_tipo'), n0=document.getElementById('fi_n0'),
-        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2');
+        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2'),
+        n3=document.getElementById('fi_n3');
   const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
   // Asegura que el contenedor .field de un select esté visible (quita 'hidden' del wrapper).
   const mostrarCampo=(el)=>{ const wrap=el && el.closest('.field'); if(wrap) wrap.classList.remove('hidden'); };
   fillSelect(tipo, opcionesInv(inv,{},C.tipo));
-  tipo.onchange=()=>{ [n0,n1,n2].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } trasCascada(); };
-  n0.onchange=()=>{ [n1,n2].forEach(reset);
-    if(n0.value && (NIVEL==='N1'||NIVEL==='N2')){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; mostrarCampo(n1); }
+  tipo.onchange=()=>{ [n0,n1,n2,n3].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } trasCascada(); };
+  n0.onchange=()=>{ [n1,n2,n3].forEach(reset);
+    if(n0.value && (NIVEL==='N1'||NIVEL==='N2'||NIVEL==='N3')){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; mostrarCampo(n1); }
     trasCascada(); };
-  n1.onchange=()=>{ [n2].forEach(reset);
-    if(n1.value && NIVEL==='N2'){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; mostrarCampo(n2); }
+  n1.onchange=()=>{ [n2,n3].forEach(reset);
+    if(n1.value && (NIVEL==='N2'||NIVEL==='N3')){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; mostrarCampo(n2); }
     trasCascada(); };
-  n2.onchange=trasCascada;
+  n2.onchange=()=>{ [n3].forEach(reset);
+    if(n2.value && NIVEL==='N3'){ fillSelect(n3,opcionesInv(inv,{[C.n1]:n1.value,[C.n2]:n2.value},C.n3)); n3.disabled=false; mostrarCampo(n3); }
+    trasCascada(); };
+  n3.onchange=trasCascada;
 }
 // Tras cualquier cambio en la cascada: actualizar ruta y detectar el subproceso SIPOC.
 function trasCascada(){
@@ -2019,19 +2030,19 @@ async function loadFichas(nivel, forzar){
 }
 // Lee la ruta de proceso (texto) de forma robusta
 function rutaFicha(r, nivel){
-  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
   const v=r.values||{};
   const cand=[v[F.proceso_txt.id], v['Proceso']].find(x=>x && x!=='Proceso' && String(x).length>1);
   return cand||'—';
 }
 function objFicha(r, nivel){
-  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
   const v=r.values||{};
   const cand=[v[F.objetivo.id], v['Objetivo del proceso']].find(x=>x && x!=='Objetivo del proceso' && !esBasura(x));
   return cand||'';
 }
 function nIndFicha(r, nivel){
-  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
   return getSubIds(r, F).length;
 }
 // Obtiene los IDs de subregistros del subformulario de indicadores, de forma robusta.
@@ -2866,7 +2877,7 @@ function mpPintarProcGroups(){
 // Cuenta cuántas fichas usan un proceso/procedimiento (por coincidencia en su ruta).
 async function _fichasQueUsan(nombre){
   let total=0;
-  for(const n of ['N0','N1','N2']){
+  for(const n of ['N0','N1','N2','N3']){
     let fichas=[]; try{ fichas=await loadFichas(n); }catch(_){}
     fichas.forEach(f=>{ const ruta=rutaFicha(f,n)||''; if(ruta.toLowerCase().includes(String(nombre).toLowerCase())) total++; });
   }
@@ -3052,7 +3063,7 @@ async function renderListado(){
   const tb=document.getElementById('tablaListado');
   try{
     try{ await loadInventario(); }catch(_){} // necesario para detectar procesos archivados en la ruta
-    const niveles = LIST_FILTRO==='todos' ? ['N0','N1','N2'] : [LIST_FILTRO];
+    const niveles = LIST_FILTRO==='todos' ? ['N0','N1','N2','N3'] : [LIST_FILTRO];
     const todas=[];
     for(const n of niveles){ const fichas=await loadFichas(n); fichas.forEach(r=>todas.push({r,nivel:n})); }
     const filtro=(document.getElementById('listBuscar').value||'').toLowerCase();
@@ -3180,7 +3191,7 @@ function _pintaDesagregado(naLabel, items){
    ============================================================ */
 let ED_STATE = { nivel:null, id:null, indicadores:[] };
 
-const EDF = n => n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+const EDF = n => n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : NIVEL==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
 
 async function editarFicha(nivel, id){
  try{
@@ -3503,7 +3514,8 @@ async function reconstruirCascadaFicha(ruta){
   const inv = await loadInventario();
   const C = INV_COLS;
   const tipo=document.getElementById('fi_tipo'), n0=document.getElementById('fi_n0'),
-        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2');
+        n1=document.getElementById('fi_n1'), n2=document.getElementById('fi_n2'),
+        n3=document.getElementById('fi_n3');
   const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
   [n0,n1,n2].forEach(reset);
   if(tipo && tipo.options.length<=1) fillSelect(tipo, opcionesInv(inv,{},C.tipo));
@@ -3862,7 +3874,7 @@ async function renderMatriz(){
     if(!filas.length){ tb.innerHTML='<tr><td colspan="10"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
     // Asegurar fichas cargadas (para resolver a qué ficha pertenece cada indicador) y
     // cargar el orden de subformularios SOLO de las fichas presentes, en paralelo.
-    try{ await Promise.all(['N0','N1','N2'].map(n=>loadFichas(n))); }catch(_){}
+    try{ await Promise.all(['N0','N1','N2','N3'].map(n=>loadFichas(n))); }catch(_){}
     try{ await loadInventario(); }catch(_){}
     try{ await construirMapaIndicadores(); }catch(_){}
     // Agrupar por OFICINA de medición (ancla principal, igual que antes y que "Fichas registradas").
@@ -4039,7 +4051,7 @@ async function abrirAgregarIndicador(){
   ['ag_responsable','ag_celular','ag_correo','ag_formula','ag_fuente','ag_proposito'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('modalAgregar').classList.add('show'); document.body.style.overflow='hidden';
   _AG_FICHA_OPTS=[];
-  for(const n of ['N0','N1','N2']){
+  for(const n of ['N0','N1','N2','N3']){
     const fichas=await loadFichas(n);
     fichas.forEach(r=>{
       const ruta=rutaFicha(r,n);
@@ -4106,7 +4118,7 @@ async function cargarIndicadoresFicha(){
   try{ const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','GET',{name_value:1}); r=d.record; }catch(_){}
   if(!r){ const fichas=await loadFichas(nivel); r=fichas.find(x=>x.id===id); }
   if(!r){ box.classList.add('hidden'); return; }
-  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : CONFIG.FICHA_N2_FIELDS;
+  const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
   const ruta=rutaFicha(r,nivel);
   const subIds=getSubIds(r, F);
   const lecturas = await Promise.all(subIds.map(sid=>
@@ -5380,13 +5392,13 @@ const FILTRO_CAMPOS_MAT = {
   proceso:      { label:'Proceso (ruta)',   get:r=>leerCampo(r,MAT.proceso_ruta.id,'Proceso (ruta)') },
   ofiMed:       { label:'Oficina medición', get:r=>leerCampo(r,MAT.oficina_medicion.id,'Oficina o área responsable de la medición') },
   ofiDue:       { label:'Oficina dueña',    get:r=>leerCampo(r,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador') },
-  nivel:        { label:'Nivel',            get:r=>{ const ruta=leerCampo(r,MAT.proceso_ruta.id,'Proceso (ruta)'); return nivelDesdeRuta(ruta)||''; }, opciones:['N0','N1','N2'] },
+  nivel:        { label:'Nivel',            get:r=>{ const ruta=leerCampo(r,MAT.proceso_ruta.id,'Proceso (ruta)'); return nivelDesdeRuta(ruta)||''; }, opciones:['N0','N1','N2','N3'] },
   frecMed:      { label:'Frecuencia medición', get:r=>leerCampo(r,MAT.frecuencia_medicion.id,'Frecuencia de medición'), opciones:['Mensual','Bimensual','Trimestral','Semestral','Anual','A demanda'] }
 };
 // --- Campos de FICHAS ---
 const FILTRO_CAMPOS_LIST = {
   proceso:      { label:'Proceso (ruta)',   get:o=>rutaFicha(o.r,o.nivel) },
-  nivel:        { label:'Nivel',            get:o=>o.nivel, opciones:['N0','N1','N2'] },
+  nivel:        { label:'Nivel',            get:o=>o.nivel, opciones:['N0','N1','N2','N3'] },
   dueno:        { label:'Dueño',            get:o=>leerDueno(o.r, EDF(o.nivel)) },
   objetivo:     { label:'Objetivo',         get:o=>objFicha(o.r,o.nivel) }
 };
