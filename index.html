@@ -1076,7 +1076,7 @@ const API = {
 /* ============================================================
    ESTADO + utilidades
    ============================================================ */
-const STATE = { inventario:[], fichas:{N0:[],N1:[],N2:[]}, maestras:{}, matriz:[], progMetas:[], segMetas:[] };
+const STATE = { inventario:[], fichas:{N0:[],N1:[],N2:[],N3:[]}, maestras:{}, matriz:[], progMetas:[], segMetas:[] };
 let NIVEL = 'N0';                 // nivel de ficha activo en el formulario
 let INDICADORES = [];             // indicadores capturados para la ficha en curso
 let EDIT_FICHA = null;            // {nivel, id} si se está editando
@@ -1508,22 +1508,24 @@ function _opcionesSelect(defaultStr){
 // Detecta el PRIMER nivel hacia abajo con datos reales (ignorando "N.D.").
 // Recibe el nivel de la ficha y los valores de cascada elegidos.
 // Devuelve { nivelCol, nivelLabel, elementos:[...] } o null si no hay nada.
-function detectarNivelAnalisis(nivel, vTipo, vN0, vN1, vN2){
+function detectarNivelAnalisis(nivel, vTipo, vN0, vN1, vN2, vN3){
   const inv = STATE.inventario||[];
   const C = INV_COLS;
   const coincide = r => {
     const v=r.values||{};
     if(vTipo && v[C.tipo]!==vTipo) return false;
     if(vN0 && v[C.n0]!==vN0) return false;
-    if((nivel==='N1'||nivel==='N2') && vN1 && v[C.n1]!==vN1) return false;
-    if(nivel==='N2' && vN2 && v[C.n2]!==vN2) return false;
+    if((nivel==='N1'||nivel==='N2'||nivel==='N3') && vN1 && v[C.n1]!==vN1) return false;
+    if((nivel==='N2'||nivel==='N3') && vN2 && v[C.n2]!==vN2) return false;
+    if(nivel==='N3' && vN3 && v[C.n3]!==vN3) return false;
     return true;
   };
   const filas = inv.filter(coincide);
   // Desde dónde buscar hacia abajo según el nivel de la ficha.
   const orden = nivel==='N0' ? [[C.n1,'Proceso nivel 1'],[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
               : nivel==='N1' ? [[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
-              : [[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]; // N2
+              : nivel==='N2' ? [[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
+              : [[C.proc,'Procedimiento']]; // N3 → analiza directamente el procedimiento (N4)
   const noVacio = x => x && !esBasura(x) && !/N\.?D\.?\s*$/i.test(String(x).trim()); // ignora "N.D."
   for(const [col,label] of orden){
     const elementos=[...new Set(filas.map(r=>(r.values||{})[col]).filter(noVacio))].sort();
@@ -1751,7 +1753,7 @@ function detectarSubprocesoSIPOC(){
   const checks=document.getElementById('fi_sipoc_checks');
   const nivelLbl=document.getElementById('fi_sipoc_nivel');
   if(!picker||!checks) return;
-  const det = detectarNivelAnalisis(NIVEL, g('fi_tipo'), g('fi_n0'), g('fi_n1'), g('fi_n2'));
+  const det = detectarNivelAnalisis(NIVEL, g('fi_tipo'), g('fi_n0'), g('fi_n1'), g('fi_n2'), g('fi_n3'));
   if(!det){ picker.classList.add('hidden'); checks.innerHTML=''; document.getElementById('fi_sipoc_cards').innerHTML=''; SIPOC_FORM={}; return; }
   picker.classList.remove('hidden');
   nivelLbl.textContent = det.nivelLabel;
