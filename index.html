@@ -2960,10 +2960,9 @@ async function guardarEdicionInventario(){
         nuevoNombre=codPrefijo+' '+nuevoNombre;
       }
       // Actualizar el TEXTO directamente en la tabla PROCEDIMIENTO (donde la app lee),
-      // en TODAS las filas que comparten ese mismo valor de nivel. Se escribe por
-      // field-id (QuintaDB no acepta escritura por nombre de columna).
+      // en TODAS las filas que comparten ese mismo valor de nivel. Se reenvían TODOS
+      // los campos de texto de la fila (no solo el que cambió) para no vaciar el resto.
       const fidPorKey={ tipo:'bTW5RdU8jfvRChwwFdPSkI', n0:'dcUWH1c1zhW5bGiCkMjrK8', n1:'cSWR_cI8jbqPpcGSkJd8oL', n2:'ccWP_cOmnkj4oNbcOzaZq4', n3:'cDW5SHlCnmW7bkgaaMW6fP', proc:'coi8oUW41cMOk7cCk2W4vk' };
-      const fid=fidPorKey[c.key];
       const colNombre=INV_COLS[c.key];
       const inv=await loadInventario();
       const filasAfectadas=inv.filter(r=>{
@@ -2971,7 +2970,15 @@ async function guardarEdicionInventario(){
         return val && String(val).trim()===String(c.nombre).trim();
       });
       for(const fila of filasAfectadas){
-        const campos={}; campos[fid]=nuevoNombre;
+        const fv=fila.values||{};
+        // Reenviar TODOS los campos de texto de la fila, cambiando solo el nivel editado
+        const campos={};
+        campos[fidPorKey.tipo] = (c.key==='tipo') ? nuevoNombre : (fv[INV_COLS.tipo]||'');
+        campos[fidPorKey.n0]   = (c.key==='n0')   ? nuevoNombre : (fv[INV_COLS.n0]||'');
+        campos[fidPorKey.n1]   = (c.key==='n1')   ? nuevoNombre : (fv[INV_COLS.n1]||'');
+        campos[fidPorKey.n2]   = (c.key==='n2')   ? nuevoNombre : (fv[INV_COLS.n2]||'');
+        campos[fidPorKey.n3]   = (c.key==='n3')   ? nuevoNombre : (fv[INV_COLS.n3]||'');
+        campos[fidPorKey.proc] = (c.key==='proc') ? nuevoNombre : (fv[INV_COLS.proc]||'');
         await API.saveForm(fila.id, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
       }
     }
