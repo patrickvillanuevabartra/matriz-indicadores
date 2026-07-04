@@ -497,7 +497,7 @@
         <th style="min-width:160px">Proceso N1</th>
         <th style="min-width:170px">Proceso N2</th>
         <th style="min-width:150px">Proceso N3</th>
-        <th style="min-width:200px">Procedimiento</th>
+        <th style="min-width:200px">Nivel 4</th>
         <th style="text-align:right;width:120px">Acciones</th>
       </tr></thead>
       <tbody id="tablaInventario"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
@@ -912,7 +912,7 @@
           <option value="n1">Proceso nivel 1</option>
           <option value="n2">Proceso nivel 2</option>
           <option value="n3">Proceso nivel 3</option>
-          <option value="proc">Procedimiento</option>
+          <option value="proc">Nivel 4</option>
         </select>
       </div>
       <div id="np_cascada"></div>
@@ -992,6 +992,7 @@
           <div class="field"><label>Proceso nivel 0 <span class="req">*</span></label><select id="ed_n0" disabled></select></div>
           <div class="field" id="ed_w_n1"><label>Proceso nivel 1</label><select id="ed_n1" disabled></select></div>
           <div class="field" id="ed_w_n2"><label>Proceso nivel 2</label><select id="ed_n2" disabled></select></div>
+          <div class="field" id="ed_w_n3"><label>Proceso nivel 3</label><select id="ed_n3" disabled></select></div>
           <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="ed_ruta">—</div></div>
           <div class="field full"><label>Objetivo del proceso</label><textarea id="ed_objetivo"></textarea></div>
           <div class="field"><label>Dueño del proceso (unidad orgánica) <span style="color:#c0392b">*</span></label><select id="ed_dueno"></select></div>
@@ -1522,10 +1523,10 @@ function detectarNivelAnalisis(nivel, vTipo, vN0, vN1, vN2, vN3){
   };
   const filas = inv.filter(coincide);
   // Desde dónde buscar hacia abajo según el nivel de la ficha.
-  const orden = nivel==='N0' ? [[C.n1,'Proceso nivel 1'],[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
-              : nivel==='N1' ? [[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
-              : nivel==='N2' ? [[C.n3,'Proceso nivel 3'],[C.proc,'Procedimiento']]
-              : [[C.proc,'Procedimiento']]; // N3 → analiza directamente el procedimiento (N4)
+  const orden = nivel==='N0' ? [[C.n1,'Proceso nivel 1'],[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Nivel 4']]
+              : nivel==='N1' ? [[C.n2,'Proceso nivel 2'],[C.n3,'Proceso nivel 3'],[C.proc,'Nivel 4']]
+              : nivel==='N2' ? [[C.n3,'Proceso nivel 3'],[C.proc,'Nivel 4']]
+              : [[C.proc,'Nivel 4']]; // N3 → analiza directamente el procedimiento (N4)
   const noVacio = x => x && !esBasura(x) && !/N\.?D\.?\s*$/i.test(String(x).trim()); // ignora "N.D."
   for(const [col,label] of orden){
     const elementos=[...new Set(filas.map(r=>(r.values||{})[col]).filter(noVacio))].sort();
@@ -1884,6 +1885,7 @@ function valoresCascada(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   if(NIVEL==='N0') return [g('fi_tipo'), g('fi_n0')];
   if(NIVEL==='N1') return [g('fi_tipo'), g('fi_n0'), g('fi_n1')];
+  if(NIVEL==='N3') return [g('fi_tipo'), g('fi_n0'), g('fi_n1'), g('fi_n2'), g('fi_n3')];
   return [g('fi_tipo'), g('fi_n0'), g('fi_n1'), g('fi_n2')]; // N2
 }
 function actualizarRuta(){
@@ -2078,7 +2080,7 @@ let _GRP_DE_FICHA = {}; // nivel_id → id de la cabecera de grupo (para contar 
 function _invNivelElemento(r){
   const v=r.values||{}; const C=INV_COLS;
   const escalera=[
-    {col:C.proc, label:'Procedimiento'},
+    {col:C.proc, label:'Nivel 4'},
     {col:C.n3,   label:'Proceso nivel 3'},
     {col:C.n2,   label:'Proceso nivel 2'},
     {col:C.n1,   label:'Proceso nivel 1'},
@@ -3222,8 +3224,9 @@ async function editarFicha(nivel, id){
     )) : Promise.resolve([]);
   const F=F0; const v=r.values||{};
   // Visibilidad de niveles en el modal
-  document.getElementById('ed_w_n1').classList.toggle('hidden', !(nivel==='N1'||nivel==='N2'));
-  document.getElementById('ed_w_n2').classList.toggle('hidden', nivel!=='N2');
+  document.getElementById('ed_w_n1').classList.toggle('hidden', !(nivel==='N1'||nivel==='N2'||nivel==='N3'));
+  document.getElementById('ed_w_n2').classList.toggle('hidden', !(nivel==='N2'||nivel==='N3'));
+  { const w3=document.getElementById('ed_w_n3'); if(w3) w3.classList.toggle('hidden', nivel!=='N3'); }
   // Lectura robusta (igual que el listado)
   const cur=(def,nombre)=>{ if(!def) return ''; const cand=[v[def.id], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x)); return cand||''; };
   const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
@@ -3301,42 +3304,46 @@ function cerrarModalEdit(){
 window.cerrarModalEdit=cerrarModalEdit;
 function mostrarCargaEdit(on){ const el=document.getElementById('ed_cargando'); if(el) el.style.display = on?'flex':'none'; }
 
-// Cascada del modal (Tipo→N0→N1→N2 según nivel)
+// Cascada del modal (Tipo→N0→N1→N2→N3 según nivel)
 async function initCascadaModal(){
   const inv = await loadInventario();
   const C=INV_COLS;
   const tipo=document.getElementById('ed_tipo'), n0=document.getElementById('ed_n0'),
-        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2');
+        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2'), n3=document.getElementById('ed_n3');
   const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
   fillSelect(tipo, opcionesInv(inv,{},C.tipo));
   const nivel=()=>ED_STATE.nivel;
-  tipo.onchange=()=>{ [n0,n1,n2].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } trasCascadaModal(); };
-  n0.onchange=()=>{ [n1,n2].forEach(reset); if(n0.value && (nivel()==='N1'||nivel()==='N2')){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; } trasCascadaModal(); };
-  n1.onchange=()=>{ [n2].forEach(reset); if(n1.value && nivel()==='N2'){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } trasCascadaModal(); };
-  n2.onchange=trasCascadaModal;
+  tipo.onchange=()=>{ [n0,n1,n2,n3].forEach(reset); if(tipo.value){ fillSelect(n0,opcionesInv(inv,{[C.tipo]:tipo.value},C.n0)); n0.disabled=false; } trasCascadaModal(); };
+  n0.onchange=()=>{ [n1,n2,n3].forEach(reset); if(n0.value && (nivel()==='N1'||nivel()==='N2'||nivel()==='N3')){ fillSelect(n1,opcionesInv(inv,{[C.tipo]:tipo.value,[C.n0]:n0.value},C.n1)); n1.disabled=false; } trasCascadaModal(); };
+  n1.onchange=()=>{ [n2,n3].forEach(reset); if(n1.value && (nivel()==='N2'||nivel()==='N3')){ fillSelect(n2,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value},C.n2)); n2.disabled=false; } trasCascadaModal(); };
+  n2.onchange=()=>{ [n3].forEach(reset); if(n2.value && nivel()==='N3'){ fillSelect(n3,opcionesInv(inv,{[C.n0]:n0.value,[C.n1]:n1.value,[C.n2]:n2.value},C.n3)); n3.disabled=false; } trasCascadaModal(); };
+  if(n3) n3.onchange=trasCascadaModal;
 }
 // Reconstruye la cascada del modal hasta el nivel de la ficha, desde la ruta de texto.
 async function reconstruirCascadaModal(ruta, nivel){
   const inv=await loadInventario(); const C=INV_COLS;
   const tipo=document.getElementById('ed_tipo'), n0=document.getElementById('ed_n0'),
-        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2');
+        n1=document.getElementById('ed_n1'), n2=document.getElementById('ed_n2'), n3=document.getElementById('ed_n3');
   const reset=el=>{ if(el){ el.innerHTML='<option value="">Seleccione…</option>'; el.disabled=true; } };
-  [n0,n1,n2].forEach(reset);
+  [n0,n1,n2,n3].forEach(reset);
   if(tipo && tipo.options.length<=1) fillSelect(tipo, opcionesInv(inv,{},C.tipo));
   if(!ruta||ruta==='—'){ trasCascadaModal(); return; }
   const segs=String(ruta).split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
   const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
   const seg=i=>(segs[i]&&!generico.test(segs[i]))?segs[i]:'';
-  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3);
+  const vTipo=seg(0), vN0=seg(1), vN1=seg(2), vN2=seg(3), vN3=seg(4);
   const fijar=(el,val)=>{ if(!el||!val) return false; const ok=[...el.options].some(o=>o.value===val); if(ok){ el.value=val; return true; } return false; };
   if(fijar(tipo,vTipo)){
     fillSelect(n0, opcionesInv(inv,{[C.tipo]:vTipo},C.n0)); n0.disabled=false;
     if(fijar(n0,vN0)){
-      if(nivel==='N1'||nivel==='N2'){
+      if(nivel==='N1'||nivel==='N2'||nivel==='N3'){
         fillSelect(n1, opcionesInv(inv,{[C.tipo]:vTipo,[C.n0]:vN0},C.n1)); n1.disabled=false;
-        if(fijar(n1,vN1) && nivel==='N2'){
+        if(fijar(n1,vN1) && (nivel==='N2'||nivel==='N3')){
           fillSelect(n2, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1},C.n2)); n2.disabled=false;
-          fijar(n2,vN2);
+          if(fijar(n2,vN2) && nivel==='N3'){
+            fillSelect(n3, opcionesInv(inv,{[C.n0]:vN0,[C.n1]:vN1,[C.n2]:vN2},C.n3)); n3.disabled=false;
+            fijar(n3,vN3);
+          }
         }
       }
     }
@@ -3348,6 +3355,7 @@ function valoresCascadaModal(){
   const n=ED_STATE.nivel;
   if(n==='N0') return [g('ed_tipo'), g('ed_n0')];
   if(n==='N1') return [g('ed_tipo'), g('ed_n0'), g('ed_n1')];
+  if(n==='N3') return [g('ed_tipo'), g('ed_n0'), g('ed_n1'), g('ed_n2'), g('ed_n3')];
   return [g('ed_tipo'), g('ed_n0'), g('ed_n1'), g('ed_n2')];
 }
 function trasCascadaModal(){
@@ -3374,7 +3382,7 @@ function detectarSubprocesoModal(){
   const checks=document.getElementById('ed_sipoc_checks');
   const nivelLbl=document.getElementById('ed_sipoc_nivel');
   if(!picker||!checks) return;
-  const det = detectarNivelAnalisis(ED_STATE.nivel, g('ed_tipo'), g('ed_n0'), g('ed_n1'), g('ed_n2'));
+  const det = detectarNivelAnalisis(ED_STATE.nivel, g('ed_tipo'), g('ed_n0'), g('ed_n1'), g('ed_n2'), g('ed_n3'));
   if(!det){ picker.classList.add('hidden'); checks.innerHTML=''; return; }
   picker.classList.remove('hidden');
   nivelLbl.textContent=det.nivelLabel;
