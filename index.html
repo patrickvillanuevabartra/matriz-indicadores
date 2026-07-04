@@ -3195,7 +3195,7 @@ function _pintaDesagregado(naLabel, items){
    ============================================================ */
 let ED_STATE = { nivel:null, id:null, indicadores:[] };
 
-const EDF = n => n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : NIVEL==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
+const EDF = n => n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : n==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
 
 async function editarFicha(nivel, id){
  try{
