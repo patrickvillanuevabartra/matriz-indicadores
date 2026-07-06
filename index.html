@@ -1598,10 +1598,14 @@ let _MAPA_IND_LISTO = false;
 // Caché compartido por ambas vistas: subindicadores de cada ficha (id+nivel).
 //   _SUBIND_POR_FICHA["N2_<id>"] = [{elemento, indicador}, ...]  (en orden del subformulario)
 const _SUBIND_POR_FICHA = {};
+// Índice global de subindicadores por su ID: sid → values. Lo llena construirMapaIndicadores
+// (una sola lectura masiva de la tabla) y lo reutiliza el modal de edición para no releer uno por uno.
+const _IDX_SUBIND = {};
 // Invalida los cachés compartidos de indicadores (tras crear/editar/eliminar fichas o indicadores).
 function invalidarCacheIndicadores(){
   _MAPA_IND = {}; _MAPA_IND_LISTO = false;
   for(const k in _SUBIND_POR_FICHA) delete _SUBIND_POR_FICHA[k];
+  for(const k in _IDX_SUBIND) delete _IDX_SUBIND[k];
   if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
   if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
 }
@@ -1665,14 +1669,30 @@ async function construirMapaIndicadores(){
     }
     fi.subIds=subIds;
   });
-  // ---- FASE 2: aplanar TODAS las lecturas de subindicadores y leerlas con concurrencia limitada ----
+  // ---- FASE 2: leer la tabla de subindicadores COMPLETA de una sola vez (1 llamada) ----
+  // Antes se leía cada subindicador con una llamada individual (cientos de llamadas → lento).
+  // Ahora traemos toda la tabla de golpe y la indexamos por ID. Emparejamos por sid.
+  // Se guarda en el caché GLOBAL _IDX_SUBIND para reutilizarlo también en el modal de edición.
+  const idxSub=_IDX_SUBIND; // sid → values (caché global)
+  try{
+    const dSub = await API.records(CONFIG.ENTITIES.SUBIND_FICHA);
+    (dSub.records||[]).forEach(rec=>{ idxSub[rec.id]=rec.values||{}; });
+  }catch(_){}
   const planas=[]; // {fi, sid}
   fichasInfo.forEach(fi=>{ (fi.subIds||[]).forEach(sid=>planas.push({fi, sid})); });
-  const resultados = await _mapLimitado(planas, LIMITE, async (p)=>{
-    try{
-      const d=await _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+p.sid+'.json');
-      return { fi:p.fi, sid:p.sid, ok:true, vals:d && d.record && d.record.values };
-    }catch(e){ return { fi:p.fi, sid:p.sid, ok:false, vals:null }; }
+  // Resolver cada subindicador desde el índice masivo; si faltara alguno (raro), leerlo individual.
+  const faltantes=planas.filter(p=>idxSub[p.sid]===undefined);
+  let leidosIndiv=[];
+  if(faltantes.length){
+    leidosIndiv = await _mapLimitado(faltantes, LIMITE, async (p)=>{
+      try{ const d=await _fetchConReintento('/apps/'+CONFIG.APP_ID+'/dtypes/'+p.sid+'.json'); return { sid:p.sid, vals:d && d.record && d.record.values }; }
+      catch(e){ return { sid:p.sid, vals:null }; }
+    });
+    leidosIndiv.forEach(x=>{ if(x && x.vals) idxSub[x.sid]=x.vals; });
+  }
+  const resultados = planas.map(p=>{
+    const vals=idxSub[p.sid];
+    return { fi:p.fi, sid:p.sid, ok: vals!==undefined && vals!==null, vals: vals||null };
   });
   // ---- Agrupar resultados por ficha, preservando el orden de subIds ----
   const porFicha={}; // cacheKey → {items:[], huboFallo:bool, fi}
@@ -3215,13 +3235,22 @@ async function editarFicha(nivel, id){
   let r = await pFicha;
   if(!r){ let fichas = await loadFichas(nivel, true); r = fichas.find(x=>x.id===id); }
   if(!r){ mostrarCargaEdit(false); toast('No se encontró la ficha.', true); cerrarModalEdit(); return; }
-  // Con la ficha lista, lanzar YA la lectura de subindicadores en paralelo (no esperar a la cascada)
+  // Con la ficha lista, resolver los subindicadores. Primero desde el caché global
+  // (_IDX_SUBIND, llenado por construirMapaIndicadores en 1 sola lectura masiva).
+  // Solo se leen individualmente los que aún no estén en caché (raro) → apertura mucho más rápida.
   const F0=EDF(nivel);
   const subIds0=getSubIds(r, F0);
-  const pSubs = subIds0.length ? Promise.all(subIds0.map(sid=>
-      API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
-        .then(d=>({sid, vals:d.record && d.record.values})).catch(()=>({sid, vals:null}))
-    )) : Promise.resolve([]);
+  const faltan0 = subIds0.filter(sid=>_IDX_SUBIND[sid]===undefined);
+  const pSubs = (async ()=>{
+    if(faltan0.length){
+      const leidos = await Promise.all(faltan0.map(sid=>
+        API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','GET',{name_value:1})
+          .then(d=>({sid, vals:d.record && d.record.values})).catch(()=>({sid, vals:null}))
+      ));
+      leidos.forEach(x=>{ if(x && x.vals) _IDX_SUBIND[x.sid]=x.vals; });
+    }
+    return subIds0.map(sid=>({ sid, vals:_IDX_SUBIND[sid]||null }));
+  })();
   const F=F0; const v=r.values||{};
   // Visibilidad de niveles en el modal
   document.getElementById('ed_w_n1').classList.toggle('hidden', !(nivel==='N1'||nivel==='N2'||nivel==='N3'));
@@ -3640,10 +3669,14 @@ async function loadMatriz(forzar){
   if(!forzar && STATE.matriz && STATE.matriz.length) return STATE.matriz;
   const data = await API.records(CONFIG.ENTITIES.MATRIZ_IND);
   STATE.matriz = data.records||[];
-  // Precargar TODAS las programaciones de meta para saber, por indicador, cuántas metas hay programadas.
+  // Leer PROG_METAS y SEG_METAS EN PARALELO (ambas dependen solo de STATE.matriz, no una de otra).
+  const [progRes, segRes] = await Promise.allSettled([
+    API.records(CONFIG.ENTITIES.PROG_METAS),
+    API.records(CONFIG.ENTITIES.SEG_METAS)
+  ]);
+  // Programaciones de meta por indicador
   try{
-    const progData = await API.records(CONFIG.ENTITIES.PROG_METAS);
-    const progs = progData.records||[];
+    const progs = (progRes.status==='fulfilled' ? (progRes.value.records||[]) : []);
     STATE.matriz.forEach(m=>{
       const mias = progs.filter(p=>relMencionaMatriz(p, m.id, PM.rel_matriz.id));
       m._progMetas = mias.length;
@@ -3651,8 +3684,7 @@ async function loadMatriz(forzar){
   }catch(e){ STATE.matriz.forEach(m=>{ if(m._progMetas===undefined) m._progMetas=0; }); }
   // Precargar TODOS los seguimientos para calcular, por indicador, el último avance y nº de periodos
   try{
-    const segData = await API.records(CONFIG.ENTITIES.SEG_METAS);
-    const segs = segData.records||[];
+    const segs = (segRes.status==='fulfilled' ? (segRes.value.records||[]) : []);
     const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
     STATE.matriz.forEach(m=>{
       const mios = segs.filter(s=>relMencionaMatriz(s, m.id, SM.rel_matriz.id));
