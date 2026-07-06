@@ -3261,7 +3261,7 @@ async function editarFicha(nivel, id){
   const ruta=rutaFicha(r,nivel);
   await reconstruirCascadaModal(ruta, nivel);
   // Leer los indicadores guardados (ya lanzados en paralelo arriba como pSubs)
-  SIPOC_ED={};
+  SIPOC_ED={}; ED_SIDS_ORIGINALES=[];
   const indicadoresGuardados=[]; // {comp, ind, sid}
   {
     const lecturas = await pSubs;
@@ -3365,6 +3365,7 @@ function trasCascadaModal(){
 }
 let SIPOC_ED = {}; // SIPOC por componente en el modal
 let ED_PENDIENTES = null; // indicadores guardados pendientes de asociar al editar
+let ED_SIDS_ORIGINALES = []; // todos los sids de indicadores que existían al abrir la ficha (para detectar los eliminados)
 let ED_SIPOC_RAW = null; // SIPOC parseado por componente desde los campos de la ficha {comp:{prov,entr,prod,recep}}
 // Parsea un texto con líneas "[Componente] contenido" → { componente: contenido }
 function parsearSipocCampo(texto){
@@ -3389,14 +3390,17 @@ function detectarSubprocesoModal(){
   // Asociar indicadores guardados pendientes a los componentes detectados (coincidencia flexible)
   if(typeof ED_PENDIENTES!=='undefined' && ED_PENDIENTES && ED_PENDIENTES.length){
     const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    ED_SIDS_ORIGINALES = []; // todos los sids que existían al abrir la ficha
     ED_PENDIENTES.forEach(gp=>{
       // Buscar el componente detectado que mejor coincida con el comp guardado
       let comp = det.elementos.find(e=>norm(e)===norm(gp.comp))
               || det.elementos.find(e=>norm(e).includes(norm(gp.comp)) || norm(gp.comp).includes(norm(e)))
               || gp.comp;
-      if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[]};
-      if(gp.ind) SIPOC_ED[comp].indicadores.push(gp.ind);
+      if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[], _sidPorInd:{}};
+      if(!SIPOC_ED[comp]._sidPorInd) SIPOC_ED[comp]._sidPorInd={};
+      if(gp.ind){ SIPOC_ED[comp].indicadores.push(gp.ind); SIPOC_ED[comp]._sidPorInd[gp.ind]=gp.sid; }
       SIPOC_ED[comp]._sids.push(gp.sid);
+      if(gp.sid) ED_SIDS_ORIGINALES.push(gp.sid);
     });
     Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores || !SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
     ED_PENDIENTES=null; // ya asociados
@@ -3485,29 +3489,45 @@ async function guardarEdicion(){
     put(F.producto, join('prod')); put(F.receptor, join('recep'));
   }
   const dueno=g('ed_dueno');
+  // Dueño como TEXTO (robusto): incluirlo en los campos base (una llamada menos)
+  if(dueno && F.dueno_txt){ const selD=document.getElementById('ed_dueno'); const nom=selD&&selD.selectedOptions[0]?selD.selectedOptions[0].text:''; if(nom) campos[F.dueno_txt.id]=nom; }
   const sinInd=comps.filter(n=>{ const inds=(SIPOC_ED[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
   if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', '), true); return; }
   const btn=document.getElementById('ed_guardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(id, campos, entFicha(nivel));
-    if(dueno && F.dueno){ try{ const rd=await API.saveForm(id, { [F.dueno.id]:[dueno] }); console.log('[dueno] guardado:', dueno, '| resp:', JSON.stringify(rd).slice(0,200)); }catch(e){ console.warn('[dueno] error:', e.message); } }
-    // Dueño como TEXTO (robusto)
-    if(dueno && F.dueno_txt){ const selD=document.getElementById('ed_dueno'); const nom=selD&&selD.selectedOptions[0]?selD.selectedOptions[0].text:''; if(nom){ try{ await API.saveForm(id, { [F.dueno_txt.id]: nom }); }catch(_){} } }
-    // Indicadores nuevos: componentes recién añadidos (sin _sids) o nuevos indicadores
-    // en componentes existentes. Para los componentes nuevos creamos todas sus filas.
+    if(dueno && F.dueno){ try{ await API.saveForm(id, { [F.dueno.id]:[dueno] }); }catch(e){ console.warn('[dueno] error:', e.message); } }
+    // Reconstruir el subformulario con los indicadores ACTUALES.
+    // - Si el texto coincide con uno que ya existía (mismo _sid), se reutiliza ese sid → QuintaDB lo ACTUALIZA.
+    // - Si es nuevo, se crea con un id nuevo.
+    // - Los sids originales que ya no aparecen se ELIMINAN después.
     const SUB=F.subform_indicador.id;
     const subforms={}; subforms[SUB]={ entity_id: CONFIG.ENTITIES.SUBIND_FICHA };
-    let hayNuevos=false;
+    const sidsUsados=new Set();
+    let hayFilas=false;
     comps.forEach(n=>{
-      const inds=(SIPOC_ED[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean);
-      const yaExistentes = SIPOC_ED[n]._sids ? SIPOC_ED[n]._sids.length : 0;
-      // Crear filas para indicadores que superan los que ya estaban guardados
-      inds.forEach((ind,idx)=>{
-        if(idx >= yaExistentes){ subforms[SUB][genId22()]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: n+' — '+ind }; hayNuevos=true; }
+      const comp=SIPOC_ED[n];
+      const sidPorInd=comp._sidPorInd||{};
+      const inds=(comp.indicadores||[]).map(x=>(x||'').trim()).filter(Boolean);
+      inds.forEach(ind=>{
+        const texto=n+' — '+ind;
+        // ¿existe un sid original para este indicador exacto (por texto)?
+        let sid = sidPorInd[ind];
+        if(sid && sidsUsados.has(sid)) sid=null; // no reutilizar el mismo sid dos veces
+        const clave = (sid && !sidsUsados.has(sid)) ? sid : genId22();
+        subforms[SUB][clave]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: texto };
+        if(sid) sidsUsados.add(sid);
+        hayFilas=true;
       });
     });
-    if(hayNuevos){ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) }); }
+    // sids originales que ya NO están (indicadores eliminados por el usuario)
+    const sidsAEliminar=(ED_SIDS_ORIGINALES||[]).filter(sid=>sid && !sidsUsados.has(sid));
+    // Ejecutar en PARALELO: reescritura del subformulario + borrado de los eliminados
+    const tareas=[];
+    if(hayFilas){ tareas.push(API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) })); }
+    sidsAEliminar.forEach(sid=>{ tareas.push(API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+sid+'.json','DELETE',{}).catch(()=>{})); });
+    if(tareas.length) await Promise.all(tareas);
     toast('Ficha actualizada.');
     STATE.fichas[nivel]=[];
     invalidarCacheIndicadores();
