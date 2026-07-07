@@ -1042,16 +1042,45 @@ const API = {
     const payload = { path, method, body };
     if(contentType) payload.contentType = contentType;
     if(CONFIG.PROXY_TOKEN) payload.token = CONFIG.PROXY_TOKEN;
-    const ctrl = new AbortController();
-    const t = setTimeout(()=>ctrl.abort(), 30000);
-    let r;
-    try{
-      r = await fetch(CONFIG.PROXY_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload), signal:ctrl.signal });
-    }catch(e){ clearTimeout(t); if(e.name==='AbortError') throw new Error('Sin respuesta del servidor (30s). Revisa tu conexión.'); throw e; }
-    clearTimeout(t);
-    const data = await r.json();
-    if(data.error) throw new Error(data.error);
-    return data;
+
+    const esLectura = (method==='GET');
+    const MAX_INTENTOS = 3;          // 1 intento + 2 reintentos
+    const PAUSAS = [2000, 4000];     // esperas crecientes entre reintentos (ms)
+    const TIMEOUT = 45000;           // margen para arranque en frío de Apps Script
+    const dormir = ms => new Promise(res=>setTimeout(res, ms));
+
+    let ultimoError;
+    for(let intento=1; intento<=MAX_INTENTOS; intento++){
+      const ctrl = new AbortController();
+      const t = setTimeout(()=>ctrl.abort(), TIMEOUT);
+      let r, fueTimeout=false, huboRespuesta=false;
+      try{
+        r = await fetch(CONFIG.PROXY_URL, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload), signal:ctrl.signal });
+        huboRespuesta = true;
+      }catch(e){
+        clearTimeout(t);
+        fueTimeout = (e.name==='AbortError');
+        ultimoError = fueTimeout ? new Error('Sin respuesta del servidor. Revisa tu conexión.') : e;
+        // Fallo de red/timeout: aún NO llegó al servidor, así que reintentar es seguro
+        // incluso para escrituras (no se llegó a crear/modificar nada).
+        if(intento < MAX_INTENTOS){ await dormir(PAUSAS[intento-1]); continue; }
+        throw ultimoError;
+      }
+      clearTimeout(t);
+      // Hubo respuesta del servidor. Parsear.
+      let data;
+      try{ data = await r.json(); }
+      catch(e){
+        // Respuesta no-JSON (p.ej. página de error HTML transitoria de Google).
+        ultimoError = new Error('El servidor respondió de forma inesperada. Intenta de nuevo.');
+        // Solo reintentar lecturas: en escrituras la operación pudo haberse aplicado.
+        if(esLectura && intento < MAX_INTENTOS){ await dormir(PAUSAS[intento-1]); continue; }
+        throw ultimoError;
+      }
+      if(data.error) throw new Error(data.error); // error lógico del servidor: NO reintentar
+      return data; // éxito
+    }
+    throw ultimoError || new Error('Sin respuesta del servidor.');
   },
   records(entityId){
     return this.call(`/apps/${CONFIG.APP_ID}/dtypes/entity/${entityId}.json`,'GET',{ name_value:1, fetch_all:true, per_page:2000 });
