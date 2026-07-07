@@ -8,7 +8,7 @@
 const CONFIG = {
 
   // Mismo Web App de Apps Script que el aplicativo de riesgos (misma base).
-  PROXY_URL: "https://script.google.com/macros/s/AKfycbxPGoHY5fyaBSyZRShw_8i4ax7AV37tFb_Engcb9Gcy14NILgFZ5mi6il5Kn9ksFnbO/exec",
+  PROXY_URL: "https://proxy-quintadb.patrick-villanueva.workers.dev/",
   PROXY_TOKEN: "",
 
   APP_ID: "bxW5nYl8nlkOokW4JcMfb2",
