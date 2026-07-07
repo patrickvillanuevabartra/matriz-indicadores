@@ -1173,19 +1173,18 @@ function entrarApp(){
   aplicarPermisos();
   mostrarBarraSesion();
   STATE.matriz=[];
-  // Precarga proactiva en segundo plano (no bloquea): así la primera edición ya tiene los
-  // catálogos en caché y abre rápido. Se ignoran errores; si falla, se cargará bajo demanda.
-  setTimeout(()=>{
-    try{ loadInventario().catch(()=>{}); }catch(_){}
-    try{ loadMaestra('RESPONSABLES').catch(()=>{}); }catch(_){}
-    try{ if(typeof cargarOficinasOpts==='function') cargarOficinasOpts().catch(()=>{}); }catch(_){}
-    try{ if(typeof cargarMapaRespProceso==='function') cargarMapaRespProceso().catch(()=>{}); }catch(_){}
-    // Mapa de subindicadores (compartido por Fichas registradas y Matriz): precargar en segundo plano
-    try{ if(typeof construirMapaIndicadores==='function') construirMapaIndicadores().catch(()=>{}); }catch(_){}
-  }, 400);
-  // El tablero es la vista inicial: renderizarlo al entrar.
-  try{ if(typeof renderTablero==='function') renderTablero(); }catch(_){}
-  if(typeof renderListado==='function'){ /* la vista activa se renderiza al navegar */ }
+  // El tablero es la vista inicial: renderizarlo primero (es lo que el usuario ve).
+  const pTablero = (typeof renderTablero==='function') ? Promise.resolve(renderTablero()).catch(()=>{}) : Promise.resolve();
+  // Precargas en segundo plano ESCALONADAS: esperan a que el tablero termine y luego van
+  // de una en una, para no saturar el proxy Apps Script (que devuelve 404 si recibe muchas juntas).
+  pTablero.then(async ()=>{
+    const paso = async (fn)=>{ try{ if(typeof fn==='function') await fn(); }catch(_){} };
+    await paso(loadInventario);
+    await paso(()=>loadMaestra('RESPONSABLES'));
+    await paso(typeof construirMapaIndicadores==='function'?construirMapaIndicadores:null);
+    await paso(typeof cargarOficinasOpts==='function'?cargarOficinasOpts:null);
+    await paso(typeof cargarMapaRespProceso==='function'?cargarMapaRespProceso:null);
+  });
 }
 
 // Helpers de permisos
@@ -1683,7 +1682,7 @@ async function _fetchConReintento(path, intentos){
 
 async function construirMapaIndicadores(){
   if(_MAPA_IND_LISTO) return _MAPA_IND;
-  const LIMITE = 6; // máximo de llamadas simultáneas a la API (evita saturación → 404)
+  const LIMITE = 2; // máximo de llamadas simultáneas al proxy (Apps Script se satura con más → 404)
   // ---- FASE 1: reunir, por cada ficha, sus subIds (releyendo individual solo si faltan) ----
   const fichasInfo=[]; // {nivel, fichaId, fichaRuta, fichaOrden, f}
   let _fOrden=0;
@@ -3126,7 +3125,8 @@ async function renderListado(){
     const niveles = LIST_FILTRO==='todos' ? ['N0','N1','N2','N3'] : [LIST_FILTRO];
     const todas=[];
     // Cargar las fichas de todos los niveles EN PARALELO (antes iban en serie, una tras otra).
-    const listas = await Promise.all(niveles.map(n=>loadFichas(n).then(fichas=>({n,fichas})).catch(()=>({n,fichas:[]}))));
+    // Cargar las fichas de todos los niveles de a 2 (no todas juntas: evita saturar el proxy).
+    const listas = await _mapLimitado(niveles, 2, n=>loadFichas(n).then(fichas=>({n,fichas})).catch(()=>({n,fichas:[]})));
     listas.forEach(({n,fichas})=>fichas.forEach(r=>todas.push({r,nivel:n})));
     const filtro=(document.getElementById('listBuscar').value||'').toLowerCase();
     const filas = todas.filter(o=>{
@@ -3974,7 +3974,7 @@ async function renderMatriz(){
     if(!filas.length){ tb.innerHTML='<tr><td colspan="10"><div class="empty"><h3>Sin indicadores</h3><p>Agrega el primero con «+ Agregar indicador desde ficha».</p></div></td></tr>'; setConn(true); return; }
     // Asegurar fichas cargadas (para resolver a qué ficha pertenece cada indicador) y
     // cargar el orden de subformularios SOLO de las fichas presentes, en paralelo.
-    try{ await Promise.all(['N0','N1','N2','N3'].map(n=>loadFichas(n))); }catch(_){}
+    try{ await _mapLimitado(['N0','N1','N2','N3'], 2, n=>loadFichas(n)); }catch(_){}
     try{ await loadInventario(); }catch(_){}
     try{ await construirMapaIndicadores(); }catch(_){}
     // Agrupar por OFICINA de medición (ancla principal, igual que antes y que "Fichas registradas").
