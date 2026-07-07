@@ -209,6 +209,34 @@
     opacity:.75;
     filter:grayscale(0);
   }
+  /* Nivel 2: recuadro grueso para la tarjeta del proceso enfocado y atenuado del resto */
+  #view-mapa .l2-card.mp-foco-l2{
+    outline:4px solid #16a34a;
+    outline-offset:2px;
+    box-shadow:0 0 0 4px rgba(22,163,74,.18), 0 8px 24px rgba(22,163,74,.25);
+    border-radius:12px;
+    position:relative;
+    z-index:2;
+  }
+  #view-mapa .l2-card.mp-foco-l2::before{
+    content:"▸ Detalle de este proceso";
+    position:absolute;
+    top:-26px; left:0;
+    background:#16a34a; color:#fff;
+    font-size:11px; font-weight:700;
+    padding:3px 10px; border-radius:6px;
+    white-space:nowrap;
+    letter-spacing:.2px;
+  }
+  #view-mapa .l2-card.mp-atenuado-l2{
+    opacity:.35;
+    filter:grayscale(.55);
+    transition:all .2s ease;
+  }
+  #view-mapa .l2-card.mp-atenuado-l2:hover{
+    opacity:.8;
+    filter:grayscale(0);
+  }
   #view-mapa .mp-scope{
     --e-dark:#4472A8;--e-mid:#6B93CC;--e-light:#F2F7FD;--e-border:#C2D8F0;--e-header:#E4EFF9;
     --m-dark:#3E8C72;--m-mid:#5AA88E;--m-light:#F2FAF7;--m-border:#A8D8CC;--m-header:#D4EFE8;
@@ -2827,9 +2855,12 @@ function mpRenderNivel(){
   else cuerpo=mpProcedimientos();
   main.innerHTML=`<div class="level-label"><h2>${lbl}</h2><div class="level-label-line"></div>${nota}</div>${cuerpo}`;
   if(MP_STATE.level===3) mpBindProcedimientos();
-  // Al entrar al Nivel 1 desde un proceso, centrar la vista en el proceso resaltado
+  // Al entrar al Nivel 1 o 2 desde un proceso, centrar la vista en el proceso resaltado
   if(MP_STATE.level===1 && MP_STATE.selected){
     setTimeout(()=>{ const foco=main.querySelector('.pbox-l1.mp-foco'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
+  }
+  if(MP_STATE.level===2 && MP_STATE.selected){
+    setTimeout(()=>{ const foco=main.querySelector('.l2-card.mp-foco-l2'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
   }
 }
 
@@ -2931,7 +2962,7 @@ function mpLevel2(){
         else { secciones+=`<div style="padding:6px 16px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin desagregación registrada</div>`; }
         secciones+='</div>';
       });
-      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted':''}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span></div>${secciones}</div>`;
+      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span></div>${secciones}</div>`;
     });
   });
   return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
