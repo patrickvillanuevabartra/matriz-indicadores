@@ -1036,44 +1036,12 @@
 /* ============================================================
    CLIENTE DEL PROXY (idéntico patrón al aplicativo de riesgos)
    ============================================================ */
-// ============================================================================
-//  Control de concurrencia global hacia el proxy Apps Script.
-//  Apps Script devuelve 404 intermitentes cuando recibe muchas llamadas a la vez.
-//  Este "semaforo" limita las llamadas simultaneas y las espacia un poco.
-//  Es la cura de raiz de los 404 de saturacion.
-// ============================================================================
-const _GATE = {
-  MAX: 3,            // llamadas simultaneas maximas al proxy
-  ESPACIADO: 120,    // ms minimos entre lanzamientos consecutivos
-  activos: 0, cola: [], ultimoLanzamiento: 0,
-  async adquirir(){
-    if(this.activos >= this.MAX){ await new Promise(res=>this.cola.push(res)); }
-    else { this.activos++; }
-    const espera = Math.max(0, this.ESPACIADO - (Date.now() - this.ultimoLanzamiento));
-    if(espera) await new Promise(r=>setTimeout(r, espera));
-    this.ultimoLanzamiento = Date.now();
-  },
-  liberar(){
-    const sig = this.cola.shift();
-    if(sig){ sig(); } else { this.activos--; }
-  }
-};
-
 const API = {
   async call(path, method='GET', body={}, contentType){
     if(!CONFIG.PROXY_URL || CONFIG.PROXY_URL.startsWith('PEGA')) throw new Error('Configura PROXY_URL en config.js');
     const payload = { path, method, body };
     if(contentType) payload.contentType = contentType;
     if(CONFIG.PROXY_TOKEN) payload.token = CONFIG.PROXY_TOKEN;
-
-    await _GATE.adquirir(); // esperar turno para no saturar el proxy
-    try{
-      return await this._callInterno(payload, method);
-    }finally{
-      _GATE.liberar();
-    }
-  },
-  async _callInterno(payload, method){
     const esLectura = (method==='GET');
     const MAX_INTENTOS = 3;          // 1 intento + 2 reintentos
     const PAUSAS = [2000, 4000];     // esperas crecientes entre reintentos (ms)
