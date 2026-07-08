@@ -3058,9 +3058,16 @@ function mpBreadcrumb(){
   const pasos=[];
   pasos.push({txt:'Inicio', lvl:0});
   if(sel){
+    // N0 siempre que haya proceso seleccionado
     pasos.push({txt:`${sel.id} ${sel.name}`, lvl:1, sub:'N0'});
-    if(MP_STATE.selectedSub && MP_STATE.level>=2){ pasos.push({txt:MP_STATE.selectedSub.subName, lvl:2, sub:'N1'}); }
+    // N1: subproceso (con su código si lo tenemos), desde el nivel 2 en adelante
+    if(MP_STATE.selectedSub && MP_STATE.level>=2){
+      const c=MP_STATE.selectedSub.subCode?`${MP_STATE.selectedSub.subCode} `:'';
+      pasos.push({txt:`${c}${MP_STATE.selectedSub.subName}`.trim(), lvl:2, sub:'N1'});
+    }
+    // N2: desde el nivel 3 en adelante
     if(MP_STATE.selN2 && MP_STATE.level>=3){ pasos.push({txt:`${MP_STATE.selN2} ${MP_STATE.selN2Name||''}`.trim(), lvl:3, sub:'N2'}); }
+    // N3: desde el nivel 4
     if(MP_STATE.selN3 && MP_STATE.level>=4){ pasos.push({txt:`${MP_STATE.selN3} ${MP_STATE.selN3Name||''}`.trim(), lvl:4, sub:'N3'}); }
   }
   if(pasos.length<=1) return '';
@@ -3091,12 +3098,36 @@ function mpRenderNivel(){
   </div>`;
   main.innerHTML=`${mpStepper()}${banner}${mpBreadcrumb()}${cuerpo}`;
   if(MP_STATE.level===4) mpBindProcedimientos();
-  // Al entrar a un nivel desde un proceso, centrar la vista en el proceso resaltado
-  if(MP_STATE.level===1 && MP_STATE.selected){
-    setTimeout(()=>{ const foco=main.querySelector('.pbox-l1.mp-foco'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
+  // Desplazamiento EXACTO al elemento resaltado (su título queda visible arriba, con un margen).
+  if(MP_STATE.selected && MP_STATE.level>=1){
+    let sel=null;
+    if(MP_STATE.level===1) sel='.pbox-l1.mp-foco';
+    else if(MP_STATE.level===2||MP_STATE.level===3) sel='.l2-card.mp-foco-l2';
+    else if(MP_STATE.level===4) sel='.proc-group.mp-foco-grp';
+    if(sel){ setTimeout(()=>mpScrollExacto(main.querySelector(sel)), 120); }
   }
-  if((MP_STATE.level===2||MP_STATE.level===3) && MP_STATE.selected){
-    setTimeout(()=>{ const foco=main.querySelector('.l2-card.mp-foco-l2'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'start',inline:'center'}); }, 80);
+}
+// Desplaza la vista para que el título del elemento quede justo arriba, con un margen cómodo.
+function mpScrollExacto(el){
+  if(!el) return;
+  const MARGEN=90; // deja espacio arriba para que el título no quede pegado al borde
+  // Detectar el contenedor scrolleable (el que tiene overflow), o usar la ventana.
+  let cont=el.parentElement;
+  while(cont && cont!==document.body){
+    const oy=getComputedStyle(cont).overflowY;
+    if((oy==='auto'||oy==='scroll') && cont.scrollHeight>cont.clientHeight) break;
+    cont=cont.parentElement;
+  }
+  if(cont && cont!==document.body && cont!==document.documentElement){
+    // Scroll dentro del contenedor
+    const cRect=cont.getBoundingClientRect();
+    const eRect=el.getBoundingClientRect();
+    const delta=(eRect.top - cRect.top) - MARGEN + cont.scrollTop;
+    cont.scrollTo({top:delta, behavior:'smooth'});
+  } else {
+    // Scroll de la ventana
+    const y=el.getBoundingClientRect().top + window.pageYOffset - MARGEN;
+    window.scrollTo({top:y, behavior:'smooth'});
   }
 }
 
@@ -3138,7 +3169,7 @@ function mpLevel1(){
       const subs=subsOrd.map(sub=>{
         const hasDetail=(sub.l2&&sub.l2.length)||(sub.procs&&sub.procs.length);
         const isSel=MP_STATE.selectedSub&&MP_STATE.selectedSub.pid===item.id&&MP_STATE.selectedSub.subName===sub.name;
-        return `<div class="sub-chip ${lane} ${hasDetail?'clickable':''} ${isSel?'selected-sub':''}" ${hasDetail?`onclick="mpGoToL2('${MP_ESC(item.id)}','${MP_ESC(sub.name).replace(/'/g,"\\'")}')"`:''}>
+        return `<div class="sub-chip ${lane} ${hasDetail?'clickable':''} ${isSel?'selected-sub':''}" ${hasDetail?`onclick="mpGoToL2('${MP_ESC(item.id)}','${MP_ESC(sub.name).replace(/'/g,"\\'")}','${MP_ESC(sub.code)}')"`:''}>
           <div class="sub-chip-code">${MP_ESC(sub.code)}</div><div>${MP_ESC(sub.name)}</div>
           ${hasDetail?`<div class="sub-drill ${lane}">Ver detalle ›</div>`:''}
         </div>`;
@@ -3153,7 +3184,7 @@ function mpLevel1(){
   }).join('');
   return mpLaneWrap(lanes);
 }
-function mpGoToL2(pid,subName){ MP_STATE.selected=pid; MP_STATE.selectedSub={pid,subName}; mpGoLevel(2); }
+function mpGoToL2(pid,subName,subCode){ MP_STATE.selected=pid; MP_STATE.selectedSub={pid,subName,subCode:subCode||''}; mpGoLevel(2); }
 window.mpGoToL2=mpGoToL2;
 
 function mpProcList(procs,lane){
@@ -3332,7 +3363,7 @@ function mpPintarProcGroups(){
     </div>`;
   }).join('');
   // Centrar la vista en el grupo enfocado al llegar desde Nivel 3
-  if(MP_STATE.selected){ setTimeout(()=>{ const foco=cont.querySelector('.proc-group.mp-foco-grp'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center'}); }, 80); }
+  if(MP_STATE.selected){ setTimeout(()=>{ const foco=cont.querySelector('.proc-group.mp-foco-grp'); if(foco) mpScrollExacto(foco); }, 120); }
 }
 
 
