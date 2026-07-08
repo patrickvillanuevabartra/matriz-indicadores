@@ -190,6 +190,71 @@
   }
   #view-mapa .mp-btn-atras:hover{ background:#16a34a; color:#fff; }
   /* Breadcrumb: ruta completa navegable */
+  /* ===== STEPPER de niveles: indicador visual grande del nivel actual ===== */
+  #view-mapa .mp-stepper{
+    display:flex; align-items:center; justify-content:space-between;
+    background:#fff; border:1px solid var(--mp-border); border-radius:14px;
+    padding:16px 20px; margin-bottom:16px; gap:4px;
+    box-shadow:0 2px 8px rgba(0,0,0,.05);
+  }
+  #view-mapa .mp-step{
+    display:flex; align-items:center; gap:10px; padding:6px 10px; border-radius:10px;
+    transition:all .2s ease; flex-shrink:0;
+  }
+  #view-mapa .mp-step.clickable{ cursor:pointer; }
+  #view-mapa .mp-step.clickable:hover{ background:#F1F5F9; }
+  #view-mapa .mp-step-dot{
+    width:38px; height:38px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:800; font-size:16px; flex-shrink:0;
+    border:2px solid #CBD5E1; background:#fff; color:#94A3B8;
+    transition:all .25s ease;
+  }
+  #view-mapa .mp-step-text{ line-height:1.15; }
+  #view-mapa .mp-step-title{ font-size:13px; font-weight:700; color:#64748B; white-space:nowrap; }
+  #view-mapa .mp-step-desc{ font-size:11px; color:#94A3B8; white-space:nowrap; }
+  #view-mapa .mp-step-line{ flex:1; height:3px; background:#E2E8F0; border-radius:2px; min-width:12px; margin:0 2px; }
+  /* Nivel ya recorrido */
+  #view-mapa .mp-step.hecho .mp-step-dot{ background:#16a34a; border-color:#16a34a; color:#fff; }
+  #view-mapa .mp-step.hecho .mp-step-title{ color:#16a34a; }
+  /* Nivel ACTUAL: grande, con color y pulso */
+  #view-mapa .mp-step.actual .mp-step-dot{
+    background:#16a34a; border-color:#16a34a; color:#fff;
+    width:48px; height:48px; font-size:20px;
+    box-shadow:0 0 0 6px rgba(22,163,74,.20);
+    animation:mpPulse 1.6s ease-in-out infinite;
+  }
+  #view-mapa .mp-step.actual .mp-step-title{ color:#15803d; font-size:15px; font-weight:800; }
+  #view-mapa .mp-step.actual .mp-step-desc{ color:#16a34a; font-weight:600; }
+  @keyframes mpPulse{
+    0%,100%{ box-shadow:0 0 0 6px rgba(22,163,74,.20); }
+    50%{ box-shadow:0 0 0 10px rgba(22,163,74,.08); }
+  }
+  /* ===== Banner del nivel actual ===== */
+  #view-mapa .mp-nivel-banner{
+    display:flex; align-items:center; gap:14px;
+    background:linear-gradient(135deg, var(--nivel-color), color-mix(in srgb, var(--nivel-color) 75%, #000));
+    border-radius:14px; padding:16px 20px; margin-bottom:16px;
+    box-shadow:0 4px 16px color-mix(in srgb, var(--nivel-color) 35%, transparent);
+  }
+  #view-mapa .mp-nivel-badge{
+    width:52px; height:52px; border-radius:12px; flex-shrink:0;
+    background:rgba(255,255,255,.25); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:26px; font-weight:800;
+    border:2px solid rgba(255,255,255,.5);
+  }
+  #view-mapa .mp-nivel-info{ flex:1; }
+  #view-mapa .mp-nivel-titulo{ font-size:18px; font-weight:800; color:#fff; letter-spacing:.02em; }
+  #view-mapa .mp-nivel-sub{ font-size:12px; color:rgba(255,255,255,.85); font-weight:600; margin-top:2px; }
+  #view-mapa .mp-nivel-banner .mp-btn-atras{
+    background:rgba(255,255,255,.9); border-color:#fff; color:var(--nivel-color); margin-right:4px;
+  }
+  #view-mapa .mp-nivel-banner .mp-btn-atras:hover{ background:#fff; }
+  @media(max-width:720px){
+    #view-mapa .mp-step-text{ display:none; }
+    #view-mapa .mp-stepper{ padding:12px; justify-content:space-around; }
+  }
   #view-mapa .mp-breadcrumb{
     display:flex; align-items:center; flex-wrap:wrap; gap:6px;
     background:#F0FDF4; border:1px solid #BBF7D0; border-radius:10px;
@@ -609,7 +674,7 @@
         <th style="min-width:160px">Proceso N1</th>
         <th style="min-width:170px">Proceso N2</th>
         <th style="min-width:150px">Proceso N3</th>
-        <th style="min-width:200px">Nivel 4</th>
+        <th style="min-width:200px">Proceso N4</th>
         <th style="text-align:right;width:120px">Acciones</th>
       </tr></thead>
       <tbody id="tablaInventario"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
@@ -1024,7 +1089,7 @@
           <option value="n1">Proceso nivel 1</option>
           <option value="n2">Proceso nivel 2</option>
           <option value="n3">Proceso nivel 3</option>
-          <option value="proc">Nivel 4</option>
+          <option value="proc">Proceso nivel 4</option>
         </select>
       </div>
       <div id="np_cascada"></div>
@@ -2951,6 +3016,29 @@ function mpAtras(){
 window.mpAtras=mpAtras;
 window.mpGoLevel=mpGoLevel;
 
+function mpStepper(){
+  const niveles=[
+    {n:0, t:'Nivel 0', d:'Macroproceso'},
+    {n:1, t:'Nivel 1', d:'Subproceso'},
+    {n:2, t:'Nivel 2', d:'Detalle'},
+    {n:3, t:'Nivel 3', d:'Proceso operativo'},
+    {n:4, t:'Nivel 4', d:'Actividades'}
+  ];
+  const actual=MP_STATE.level;
+  const pasos=niveles.map(nv=>{
+    let estado='pendiente';
+    if(nv.n<actual) estado='hecho';
+    else if(nv.n===actual) estado='actual';
+    // Solo se puede saltar a un nivel ya recorrido o al actual
+    const clickable = nv.n<=actual;
+    const icono = estado==='hecho' ? '✓' : nv.n;
+    return `<div class="mp-step ${estado} ${clickable?'clickable':''}" ${clickable?`onclick="mpGoLevel(${nv.n})"`:''}>
+      <div class="mp-step-dot">${icono}</div>
+      <div class="mp-step-text"><div class="mp-step-title">${nv.t}</div><div class="mp-step-desc">${nv.d}</div></div>
+    </div>`;
+  }).join('<div class="mp-step-line"></div>');
+  return `<div class="mp-stepper">${pasos}</div>`;
+}
 function mpBreadcrumb(){
   const sel=MP_STATE.selected?mpFindItem(MP_STATE.selected):null;
   const pasos=[];
@@ -2972,7 +3060,7 @@ function mpBreadcrumb(){
 }
 function mpRenderNivel(){
   const main=document.getElementById('mp_main');
-  const lbl={0:'Nivel 0 — Mapa de proceso general',1:'Nivel 1 — Sub-procesos',2:'Nivel 2 — Detalle',3:'Nivel 3 — Procesos operativos',4:'Nivel 4 — Inventario completo'}[MP_STATE.level];
+  const lbl={0:'Nivel 0 — Mapa de proceso general',1:'Nivel 1 — Sub-procesos',2:'Nivel 2 — Detalle',3:'Nivel 3 — Procesos operativos',4:'Nivel 4 — Actividades'}[MP_STATE.level];
   let cuerpo='';
   if(MP_STATE.level===0) cuerpo=mpLevel0();
   else if(MP_STATE.level===1) cuerpo=mpLevel1();
@@ -2980,7 +3068,14 @@ function mpRenderNivel(){
   else if(MP_STATE.level===3) cuerpo=mpLevel3();
   else cuerpo=mpProcedimientos();
   const btnAtras = MP_STATE.level>0 ? `<button class="mp-btn-atras" onclick="mpAtras()">‹ Atrás</button>` : '';
-  main.innerHTML=`<div class="level-label">${btnAtras}<h2>${lbl}</h2></div>${mpBreadcrumb()}${cuerpo}`;
+  const colores={0:'#4472A8',1:'#4472A8',2:'#3E8C72',3:'#16a34a',4:'#B07840'};
+  const cActual=colores[MP_STATE.level]||'#16a34a';
+  const banner=`<div class="mp-nivel-banner" style="--nivel-color:${cActual}">
+    ${btnAtras}
+    <div class="mp-nivel-badge">${MP_STATE.level}</div>
+    <div class="mp-nivel-info"><div class="mp-nivel-titulo">${lbl}</div><div class="mp-nivel-sub">Estás analizando este nivel</div></div>
+  </div>`;
+  main.innerHTML=`${mpStepper()}${banner}${mpBreadcrumb()}${cuerpo}`;
   if(MP_STATE.level===4) mpBindProcedimientos();
   // Al entrar a un nivel desde un proceso, centrar la vista en el proceso resaltado
   if(MP_STATE.level===1 && MP_STATE.selected){
@@ -3003,7 +3098,8 @@ function mpLevel0(){
   const d=MP_STATE.data;
   const lanes=['e','m','s'].map(lane=>{
     const g=d[lane];
-    const boxes=g.items.map(item=>`
+    const itemsOrd=[...g.items].sort((a,b)=> String(a.id||'').localeCompare(String(b.id||''), undefined, {numeric:true, sensitivity:'base'}));
+    const boxes=itemsOrd.map(item=>`
       <div class="pbox pbox-l0 ${lane}" onclick="mpDrillL0('${MP_ESC(item.id)}')">
         <div class="pbox-id ${lane}">${MP_ESC(item.id)}</div>
         <div class="pbox-name">${MP_ESC(item.name)}</div>
@@ -3024,7 +3120,8 @@ function mpLevel1(){
     const boxes=g.items.map(item=>{
       const esFoco = foco && item.id===foco;
       const atenuado = foco && !esFoco; // si hay un N0 elegido, los demás se atenúan
-      const subs=(item.subs||[]).map(sub=>{
+      const subsOrd=[...(item.subs||[])].sort((a,b)=> String(a.code||'').localeCompare(String(b.code||''), undefined, {numeric:true, sensitivity:'base'}));
+      const subs=subsOrd.map(sub=>{
         const hasDetail=(sub.l2&&sub.l2.length)||(sub.procs&&sub.procs.length);
         const isSel=MP_STATE.selectedSub&&MP_STATE.selectedSub.pid===item.id&&MP_STATE.selectedSub.subName===sub.name;
         return `<div class="sub-chip ${lane} ${hasDetail?'clickable':''} ${isSel?'selected-sub':''}" ${hasDetail?`onclick="mpGoToL2('${MP_ESC(item.id)}','${MP_ESC(sub.name).replace(/'/g,"\\'")}')"`:''}>
@@ -3045,7 +3142,8 @@ function mpGoToL2(pid,subName){ MP_STATE.selected=pid; MP_STATE.selectedSub={pid
 window.mpGoToL2=mpGoToL2;
 
 function mpProcList(procs,lane){
-  return `<div class="proc-list">${procs.map(p=>`<div class="proc-item"><span class="proc-code">${MP_ESC(p.code)}</span><span class="proc-name">${MP_ESC(p.name)}</span></div>`).join('')}</div>`;
+  const ordenados=[...procs].sort((a,b)=> String(a.code||'').localeCompare(String(b.code||''), undefined, {numeric:true, sensitivity:'base'}));
+  return `<div class="proc-list">${ordenados.map(p=>`<div class="proc-item"><span class="proc-code">${MP_ESC(p.code)}</span><span class="proc-name">${MP_ESC(p.name)}</span></div>`).join('')}</div>`;
 }
 function mpL2Row(l2,lane,idx){
   const hasContent=(l2.procs&&l2.procs.length)||(l2.l3&&l2.l3.length);
@@ -3077,16 +3175,19 @@ function mpLevel2(){
   const lanes=f==='all'?['e','m','s']:[f];
   const filtros=[['all','Todos'],['e','Estratégicos'],['m','Misionales'],['s','Soporte']].map(([k,l])=>`<button class="filter-btn ${MP_STATE.filtroL2===k?'active '+k:''}" onclick="mpSetFiltroL2('${k}')">${l}</button>`).join('');
   let cards='';
+  const natCmp=(a,b)=>String(a||'').localeCompare(String(b||''), undefined, {numeric:true, sensitivity:'base'});
   lanes.forEach(lane=>{
     d[lane].items.filter(it=>it.subs&&it.subs.length).forEach(item=>{
       const isHL=MP_STATE.selected===item.id;
       let secciones='';
-      item.subs.forEach(sub=>{
+      const subsOrd=[...item.subs].sort((a,b)=>natCmp(a.code,b.code));
+      subsOrd.forEach(sub=>{
         const isActive=isHL&&MP_STATE.selectedSub&&MP_STATE.selectedSub.subName===sub.name;
         secciones+=`<div><div class="sub-section-header ${isActive?'active '+lane:''}">${isActive?'<span style="font-size:12px">▶</span>':''}<span class="sub-section-code">${MP_ESC(sub.code)}</span><span class="sub-section-name">${MP_ESC(sub.name)}</span></div>`;
         if(sub.l2&&sub.l2.length){
-          // Mostrar solo los Nivel 2 (sin desplegar el Nivel 3, que ahora vive en su propia pestaña)
-          secciones+=sub.l2.map(l2=>{
+          // Mostrar solo los Nivel 2 (ordenados ascendentemente), sin desplegar el Nivel 3
+          const l2Ord=[...sub.l2].sort((a,b)=>natCmp(a.code,b.code));
+          secciones+=l2Ord.map(l2=>{
             const tieneN3=(l2.l3&&l2.l3.length);
             return `<div class="l2-item-row"><div class="l2-item-header ${lane}">
               <div class="l2-item-left"><span class="l2-item-code">${MP_ESC(l2.code)}</span><span class="l2-item-name">${MP_ESC(l2.name)}</span></div>
@@ -3125,6 +3226,8 @@ function mpLevel3(){
         });
       });
       if(!bloquesN3.length) return;
+      // Ordenar ascendentemente por código de Nivel 3 (M03.01.01.01 antes que .02, .03…)
+      bloquesN3.sort((a,b)=> String(a.l3.code||'').localeCompare(String(b.l3.code||''), undefined, {numeric:true, sensitivity:'base'}));
       hayN3=true;
       const cuerpo=bloquesN3.map(({sub,l2,l3})=>{
         const tieneN4=(l3.procs&&l3.procs.length);
