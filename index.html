@@ -2994,7 +2994,7 @@ async function renderMapa(){
 window.renderMapa=renderMapa;
 
 function mpRenderTabs(){
-  const tabs=[{n:0,t:'Nivel 0',s:'Vista general'},{n:1,t:'Nivel 1',s:'Sub-procesos'},{n:2,t:'Nivel 2',s:'Detalle'},{n:3,t:'Nivel 3',s:'Procesos operativos'},{n:4,t:'Nivel 4',s:'Actividades'}];
+  const tabs=[{n:0,t:'Nivel 0',s:'Vista general'},{n:1,t:'Nivel 1',s:'Subproceso'},{n:2,t:'Nivel 2',s:'Detalle'},{n:3,t:'Nivel 3',s:'Proceso operativo'},{n:4,t:'Nivel 4',s:'Actividades'}];
   document.getElementById('mp_tabs').innerHTML=tabs.map(x=>`<button class="mp-tab ${MP_STATE.level===x.n?'active':''}" onclick="mpGoLevel(${x.n})">${x.t}<span class="mp-tab-sub">${x.s}</span></button>`).join('');
 }
 function mpGoLevel(n){
@@ -3060,7 +3060,7 @@ function mpBreadcrumb(){
 }
 function mpRenderNivel(){
   const main=document.getElementById('mp_main');
-  const lbl={0:'Nivel 0 — Mapa de proceso general',1:'Nivel 1 — Sub-procesos',2:'Nivel 2 — Detalle',3:'Nivel 3 — Procesos operativos',4:'Nivel 4 — Actividades'}[MP_STATE.level];
+  const lbl={0:'Nivel 0 — Mapa de proceso general',1:'Nivel 1 — Subproceso',2:'Nivel 2 — Detalle',3:'Nivel 3 — Proceso operativo',4:'Nivel 4 — Actividades'}[MP_STATE.level];
   let cuerpo='';
   if(MP_STATE.level===0) cuerpo=mpLevel0();
   else if(MP_STATE.level===1) cuerpo=mpLevel1();
