@@ -2994,7 +2994,7 @@ async function renderMapa(){
 window.renderMapa=renderMapa;
 
 function mpRenderTabs(){
-  const tabs=[{n:0,t:'Nivel 0',s:'Vista general'},{n:1,t:'Nivel 1',s:'Sub-procesos'},{n:2,t:'Nivel 2',s:'Detalle'},{n:3,t:'Nivel 3',s:'Procesos operativos'},{n:4,t:'Nivel 4',s:'Inventario'}];
+  const tabs=[{n:0,t:'Nivel 0',s:'Vista general'},{n:1,t:'Nivel 1',s:'Sub-procesos'},{n:2,t:'Nivel 2',s:'Detalle'},{n:3,t:'Nivel 3',s:'Procesos operativos'},{n:4,t:'Nivel 4',s:'Actividades'}];
   document.getElementById('mp_tabs').innerHTML=tabs.map(x=>`<button class="mp-tab ${MP_STATE.level===x.n?'active':''}" onclick="mpGoLevel(${x.n})">${x.t}<span class="mp-tab-sub">${x.s}</span></button>`).join('');
 }
 function mpGoLevel(n){
