@@ -179,6 +179,16 @@
 </style>
 <!-- ===================== ESTILOS DEL MAPA DE PROCESOS ===================== -->
 <style id="mapa-procesos-css">
+  #view-mapa .mp-btn-atras{
+    display:inline-flex; align-items:center; gap:4px;
+    background:#fff; color:#16a34a;
+    border:2px solid #16a34a; border-radius:8px;
+    font-size:13px; font-weight:700;
+    padding:6px 14px; margin-right:14px;
+    cursor:pointer; transition:all .15s ease;
+    vertical-align:middle;
+  }
+  #view-mapa .mp-btn-atras:hover{ background:#16a34a; color:#fff; }
   /* Resaltado del proceso seleccionado y sus subprocesos (al entrar desde un N0) */
   #view-mapa .pbox-l1.mp-foco{
     outline:4px solid #16a34a;
@@ -2824,6 +2834,28 @@ function mpConstruirData(inv){
       if(sub.l2) sub.l2.forEach(l2=>{ if(l2.l3 && !l2.l3.length) delete l2.l3; if(l2.procs && !l2.procs.length) delete l2.procs; });
     });
   }));
+  // Ordenar TODO ascendentemente por código (ej: M03.01.01.01 antes que M03.01.01.02).
+  // Se usa orden "natural" para que los números se comparen como números, no como texto.
+  const porCodigo = (a,b)=> String(a.code||'').localeCompare(String(b.code||''), undefined, {numeric:true, sensitivity:'base'});
+  Object.values(data).forEach(g=>{
+    g.items.sort((a,b)=> String(a.id||'').localeCompare(String(b.id||''), undefined, {numeric:true, sensitivity:'base'}));
+    g.items.forEach(it=>{
+      (it.subs||[]).sort(porCodigo);
+      (it.subs||[]).forEach(sub=>{
+        if(sub.procs) sub.procs.sort(porCodigo);
+        if(sub.l2){
+          sub.l2.sort(porCodigo);
+          sub.l2.forEach(l2=>{
+            if(l2.procs) l2.procs.sort(porCodigo);
+            if(l2.l3){
+              l2.l3.sort(porCodigo);
+              l2.l3.forEach(l3=>{ if(l3.procs) l3.procs.sort(porCodigo); });
+            }
+          });
+        }
+      });
+    });
+  });
   return data;
 }
 
@@ -2840,10 +2872,27 @@ function mpGetAllProcs(){
   for(const lane of ['e','m','s']){
     for(const item of d[lane].items){
       if(!item.subs) continue;
+      // item = N0 (id/name) ; sub = N1 (code/name) ; l2 = N2 ; l3 = N3
       for(const sub of item.subs){
-        const add=(procs,l2name,l3name)=>{ if(!procs)return; for(const p of procs) res.push({lane,pid:item.id,pname:item.name,l1code:sub.code,l1name:sub.name,l2name,l3name,pcode:p.code,proc:p.name}); };
-        if(sub.procs) add(sub.procs,null,null);
-        if(sub.l2) for(const l2 of sub.l2){ if(l2.procs) add(l2.procs,l2.name,null); if(l2.l3) for(const l3 of l2.l3) add(l3.procs,l2.name,l3.name); }
+        const add=(procs, n2code,n2name, n3code,n3name)=>{
+          if(!procs) return;
+          for(const p of procs) res.push({
+            lane,
+            n0code:item.id,   n0name:item.name,
+            n1code:sub.code,  n1name:sub.name,
+            n2code:n2code||'',n2name:n2name||'',
+            n3code:n3code||'',n3name:n3name||'',
+            pcode:p.code,     proc:p.name,
+            // clave de agrupación: el proceso operativo más específico (N3 si existe, si no N2, si no N1)
+            grpCode: n3code||n2code||sub.code,
+            grpName: n3name||n2name||sub.name
+          });
+        };
+        if(sub.procs) add(sub.procs, null,null, null,null);
+        if(sub.l2) for(const l2 of sub.l2){
+          if(l2.procs) add(l2.procs, l2.code,l2.name, null,null);
+          if(l2.l3) for(const l3 of l2.l3) add(l3.procs, l2.code,l2.name, l3.code,l3.name);
+        }
       }
     }
   }
@@ -2870,6 +2919,15 @@ function mpRenderTabs(){
   document.getElementById('mp_tabs').innerHTML=tabs.map(x=>`<button class="mp-tab ${MP_STATE.level===x.n?'active':''}" onclick="mpGoLevel(${x.n})">${x.t}<span class="mp-tab-sub">${x.s}</span></button>`).join('');
 }
 function mpGoLevel(n){ MP_STATE.level=n; if(n<1){MP_STATE.selected=null;MP_STATE.selectedSub=null;} if(n<2)MP_STATE.selectedSub=null; mpRenderTabs(); mpRenderNivel(); }
+// Volver al nivel inmediatamente anterior (conservando la selección para no perder el contexto).
+function mpAtras(){
+  const nuevo = Math.max(0, MP_STATE.level - 1);
+  MP_STATE.level = nuevo;
+  if(nuevo<1){ MP_STATE.selected=null; MP_STATE.selectedSub=null; }
+  else if(nuevo<2){ MP_STATE.selectedSub=null; }
+  mpRenderTabs(); mpRenderNivel();
+}
+window.mpAtras=mpAtras;
 window.mpGoLevel=mpGoLevel;
 
 function mpRenderNivel(){
@@ -2884,7 +2942,8 @@ function mpRenderNivel(){
   else if(MP_STATE.level===2) cuerpo=mpLevel2();
   else if(MP_STATE.level===3) cuerpo=mpLevel3();
   else cuerpo=mpProcedimientos();
-  main.innerHTML=`<div class="level-label"><h2>${lbl}</h2><div class="level-label-line"></div>${nota}</div>${cuerpo}`;
+  const btnAtras = MP_STATE.level>0 ? `<button class="mp-btn-atras" onclick="mpAtras()">‹ Atrás</button>` : '';
+  main.innerHTML=`<div class="level-label">${btnAtras}<h2>${lbl}</h2><div class="level-label-line"></div>${nota}</div>${cuerpo}`;
   if(MP_STATE.level===4) mpBindProcedimientos();
   // Al entrar a un nivel desde un proceso, centrar la vista en el proceso resaltado
   if(MP_STATE.level===1 && MP_STATE.selected){
@@ -3067,21 +3126,41 @@ function mpBindProcedimientos(){
 function mpPintarProcGroups(){
   const cont=document.getElementById('mp_proc_groups'); if(!cont) return;
   const q=(MP_STATE.buscarProc||'').toLowerCase();
+  const natCmp=(a,b)=>String(a||'').localeCompare(String(b||''), undefined, {numeric:true, sensitivity:'base'});
   const all=mpGetAllProcs().filter(p=>{
     if(MP_STATE.filtroProc!=='all'&&p.lane!==MP_STATE.filtroProc) return false;
-    if(q&&!(String(p.proc).toLowerCase().includes(q)||String(p.pcode).toLowerCase().includes(q)||String(p.l1name).toLowerCase().includes(q)||String(p.pname).toLowerCase().includes(q))) return false;
+    if(q&&!(String(p.proc).toLowerCase().includes(q)||String(p.pcode).toLowerCase().includes(q)||String(p.grpName).toLowerCase().includes(q)||String(p.n0name).toLowerCase().includes(q))) return false;
     return true;
   });
-  const cnt=document.getElementById('mp_proc_count'); if(cnt) cnt.textContent=all.length+' procedimientos';
+  const cnt=document.getElementById('mp_proc_count'); if(cnt) cnt.textContent=all.length+' de Nivel 4';
+  // Agrupar por el proceso operativo más específico (N3 si existe, si no N2, si no N1)
   const map={};
-  all.forEach(p=>{ if(!map[p.pid])map[p.pid]={lane:p.lane,pid:p.pid,pname:p.pname,entries:[]}; map[p.pid].entries.push(p); });
-  const groups=Object.values(map);
-  if(!groups.length){ cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--mp-text-soft);font-size:14px">No se encontraron procedimientos.</div>'; return; }
+  all.forEach(p=>{
+    const key=p.grpCode||p.n1code;
+    if(!map[key]) map[key]={ lane:p.lane, code:key, name:p.grpName, n0code:p.n0code, n0name:p.n0name, entries:[] };
+    map[key].entries.push(p);
+  });
+  // Ordenar los grupos por su código ascendente, y dentro de cada grupo los procedimientos por código
+  const groups=Object.values(map).sort((a,b)=>natCmp(a.code,b.code));
+  groups.forEach(g=> g.entries.sort((a,b)=>natCmp(a.pcode,b.pcode)) );
+  if(!groups.length){ cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--mp-text-soft);font-size:14px">No se encontró Nivel 4.</div>'; return; }
   cont.innerHTML=groups.map(grp=>{
-    const esFoco = MP_STATE.selected && grp.pid===MP_STATE.selected;
+    const esFoco = MP_STATE.selected && grp.n0code===MP_STATE.selected;
     const atenuado = MP_STATE.selected && !esFoco;
-    return `<div class="proc-group ${esFoco?'mp-foco-grp':''} ${atenuado?'mp-atenuado-grp':''}"><div class="proc-group-header ${grp.lane}"><span style="font-size:12px;opacity:.85">${MP_ESC(grp.pid)}</span><span>${MP_ESC(grp.pname)}</span><span style="margin-left:auto;font-size:11px;opacity:.7">${grp.entries.length} de Nivel 4</span></div>
-    <div class="proc-group-body">${grp.entries.map(e=>`<div class="proc-entry"><div class="proc-path-col"><span class="proc-path-seg ${grp.lane}">${MP_ESC(e.l1code)}</span>${e.l2name?`<span class="proc-path-sub">${MP_ESC(e.l2name)}</span>`:''}${e.l3name?`<span class="proc-path-sub" style="padding-left:8px">↳ ${MP_ESC(e.l3name)}</span>`:''}</div><span class="proc-entry-code">${MP_ESC(e.pcode)}</span><span class="proc-entry-name">${MP_ESC(e.proc)}</span></div>`).join('')}</div></div>`;
+    // Encabezado del grupo: código y nombre del proceso operativo, con su macroproceso (N0) como contexto
+    return `<div class="proc-group ${esFoco?'mp-foco-grp':''} ${atenuado?'mp-atenuado-grp':''}">
+      <div class="proc-group-header ${grp.lane}">
+        <span style="font-size:12px;font-weight:700;opacity:.9">${MP_ESC(grp.code)}</span>
+        <span>${MP_ESC(grp.name)}</span>
+        <span style="margin-left:auto;font-size:11px;opacity:.7">${grp.entries.length} de Nivel 4</span>
+      </div>
+      <div style="font-size:11px;color:var(--mp-text-xsoft);padding:4px 14px 0">${MP_ESC(grp.n0code)} · ${MP_ESC(grp.n0name)}</div>
+      <div class="proc-group-body">${grp.entries.map(e=>`
+        <div class="proc-entry">
+          <span class="proc-entry-code">${MP_ESC(e.pcode)}</span>
+          <span class="proc-entry-name">${MP_ESC(e.proc)}</span>
+        </div>`).join('')}</div>
+    </div>`;
   }).join('');
   // Centrar la vista en el grupo enfocado al llegar desde Nivel 3
   if(MP_STATE.selected){ setTimeout(()=>{ const foco=cont.querySelector('.proc-group.mp-foco-grp'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center'}); }, 80); }
