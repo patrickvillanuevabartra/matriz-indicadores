@@ -3113,28 +3113,29 @@ function mpRenderNivel(){
     if(sel){ setTimeout(()=>mpScrollExacto(main.querySelector(sel)), 120); }
   }
 }
-// Desplaza la vista para que el título del elemento quede justo arriba, con un margen cómodo.
+// Desplaza la vista para que el TÍTULO del elemento quede justo arriba, exacto.
 function mpScrollExacto(el){
   if(!el) return;
-  const MARGEN=90; // deja espacio arriba para que el título no quede pegado al borde
-  // Detectar el contenedor scrolleable (el que tiene overflow), o usar la ventana.
+  const MARGEN=16; // pequeño respiro sobre el borde superior del área visible
+  // Detectar el contenedor scrolleable real (el que tiene overflow), o la ventana.
   let cont=el.parentElement;
   while(cont && cont!==document.body){
     const oy=getComputedStyle(cont).overflowY;
-    if((oy==='auto'||oy==='scroll') && cont.scrollHeight>cont.clientHeight) break;
+    if((oy==='auto'||oy==='scroll') && cont.scrollHeight>cont.clientHeight+2) break;
     cont=cont.parentElement;
   }
-  if(cont && cont!==document.body && cont!==document.documentElement){
-    // Scroll dentro del contenedor
-    const cRect=cont.getBoundingClientRect();
-    const eRect=el.getBoundingClientRect();
-    const delta=(eRect.top - cRect.top) - MARGEN + cont.scrollTop;
-    cont.scrollTo({top:delta, behavior:'smooth'});
-  } else {
-    // Scroll de la ventana
-    const y=el.getBoundingClientRect().top + window.pageYOffset - MARGEN;
-    window.scrollTo({top:y, behavior:'smooth'});
-  }
+  // Esperar a que el layout esté 100% estable (dos frames) antes de medir.
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    if(cont && cont!==document.body && cont!==document.documentElement){
+      const cRect=cont.getBoundingClientRect();
+      const eRect=el.getBoundingClientRect();
+      const destino = cont.scrollTop + (eRect.top - cRect.top) - MARGEN;
+      cont.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
+    } else {
+      const destino = window.pageYOffset + el.getBoundingClientRect().top - MARGEN;
+      window.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
+    }
+  }));
 }
 
 function mpLaneWrap(inner){
@@ -3181,8 +3182,8 @@ function mpLevel1(){
         </div>`;
       }).join('');
       return `<div class="pbox pbox-l1 ${lane} ${esFoco?'mp-foco':''} ${atenuado?'mp-atenuado':''}" data-pid="${MP_ESC(item.id)}" style="min-width:165px">
-        <span class="mp-nivel-tag ${lane}">Nivel 1</span>
         <div class="pbox-l1-header ${lane}"><div class="pbox-id ${lane}">${MP_ESC(item.id)}</div><div class="pbox-l1-name">${MP_ESC(item.name)}</div></div>
+        <div class="mp-nota-despliegue">Proceso de Nivel 0 <strong>${MP_ESC(item.id)}</strong> — abajo se despliegan sus <strong>procesos de Nivel 1</strong></div>
         <div class="pbox-l1-subs">${subs||'<div style="padding:8px;color:var(--mp-text-soft);font-style:italic;font-size:13px">Sin sub-procesos</div>'}</div>
       </div>`;
     }).join('');
@@ -3251,7 +3252,7 @@ function mpLevel2(){
         else { secciones+=`<div style="padding:6px 16px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin desagregación registrada</div>`; }
         secciones+='</div>';
       });
-      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span><span class="mp-nivel-tag ${lane}">Nivel 2</span></div><div class="mp-nota-despliegue">Macroproceso <strong>${MP_ESC(item.id)}</strong> — abajo se despliega su <strong>detalle de Nivel 2</strong></div>${secciones}</div>`;
+      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span></div><div class="mp-nota-despliegue">Proceso de Nivel 0 <strong>${MP_ESC(item.id)}</strong> — abajo se despliegan sus <strong>procesos de Nivel 2</strong></div>${secciones}</div>`;
     });
   });
   return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
@@ -3289,11 +3290,10 @@ function mpLevel3(){
             <span class="l3-code">${MP_ESC(l3.code)}</span><span style="flex:1">${MP_ESC(l3.name)}</span>
             ${tieneN4?`<button class="expand-btn ${lane}" style="margin-left:auto" onclick="mpVerNivel4('${MP_ESC(item.id)}','${MP_ESC(l3.code)}','${MP_ESC(l3.name).replace(/'/g,"\\'")}')">Ver Nivel 4 \u203a</button>`:''}
           </div>
-          <div style="font-size:11px;color:var(--mp-text-xsoft);padding:2px 12px 4px">Ruta: ${MP_ESC(item.id)} \u203a ${MP_ESC(sub.code)} \u203a ${MP_ESC(l2.code)} \u203a <strong>${MP_ESC(l3.code)}</strong></div>
           ${procs}</div>`;
       }).join('');
       cards+=`<div class="l2-card ${lane} highlighted mp-foco-l2" data-l2pid="${MP_ESC(item.id)}">
-        <div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(MP_STATE.selN2||item.id)}</span><span class="l2-card-title">${MP_ESC(MP_STATE.selN2Name||item.name)}</span><span class="mp-nivel-tag ${lane}">Nivel 3</span></div>
+        <div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(MP_STATE.selN2||item.id)}</span><span class="l2-card-title">${MP_ESC(MP_STATE.selN2Name||item.name)}</span></div>
         <div class="mp-nota-despliegue">Proceso de Nivel 2 <strong>${MP_ESC(MP_STATE.selN2||'')}</strong> — abajo se despliegan sus <strong>procesos de Nivel 3</strong></div>
         ${cuerpo}</div>`;
     });
@@ -3352,16 +3352,9 @@ function mpPintarProcGroups(){
       <div class="proc-group-header ${grp.lane}">
         <span style="font-size:12px;font-weight:700;opacity:.9">${MP_ESC(grp.code)}</span>
         <span>${MP_ESC(grp.name)}</span>
-        <span class="mp-nivel-tag" style="background:rgba(255,255,255,.25);margin-left:auto">Nivel 4</span>
-        <span style="font-size:11px;opacity:.7">${grp.entries.length} de Nivel 4</span>
+        <span style="margin-left:auto;font-size:11px;opacity:.7">${grp.entries.length} de Nivel 4</span>
       </div>
-      <div style="font-size:11px;color:var(--mp-text-xsoft);padding:5px 14px 0;line-height:1.5">
-        <strong style="color:var(--mp-text-soft)">Ruta:</strong>
-        ${MP_ESC(grp.n0code)} ${MP_ESC(grp.n0name)}
-        ${grp.n1code?` › ${MP_ESC(grp.n1code)} ${MP_ESC(grp.n1name)}`:''}
-        ${grp.n2code?` › ${MP_ESC(grp.n2code)} ${MP_ESC(grp.n2name)}`:''}
-        ${grp.n3code?` › <strong style="color:var(--mp-text)">${MP_ESC(grp.n3code)} ${MP_ESC(grp.n3name)}</strong>`:''}
-      </div>
+      <div class="mp-nota-despliegue">Proceso de Nivel 3 <strong>${MP_ESC(grp.n3code||grp.code)}</strong> — abajo se despliegan sus <strong>procesos de Nivel 4</strong></div>
       <div class="proc-group-body">${grp.entries.map(e=>`
         <div class="proc-entry">
           <span class="proc-entry-code">${MP_ESC(e.pcode)}</span>
