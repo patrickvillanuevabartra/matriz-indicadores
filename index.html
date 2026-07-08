@@ -3287,7 +3287,7 @@ function mpLevel3(){
           ${procs}</div>`;
       }).join('');
       cards+=`<div class="l2-card ${lane} highlighted mp-foco-l2" data-l2pid="${MP_ESC(item.id)}">
-        <div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span><span class="mp-nivel-tag ${lane}">Nivel 3</span></div>
+        <div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(MP_STATE.selN2||item.id)}</span><span class="l2-card-title">${MP_ESC(MP_STATE.selN2Name||item.name)}</span><span class="mp-nivel-tag ${lane}">Nivel 3</span></div>
         ${cuerpo}</div>`;
     });
   });
