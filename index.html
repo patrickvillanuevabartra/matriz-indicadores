@@ -189,6 +189,20 @@
     vertical-align:middle;
   }
   #view-mapa .mp-btn-atras:hover{ background:#16a34a; color:#fff; }
+  /* Breadcrumb: ruta completa navegable */
+  #view-mapa .mp-breadcrumb{
+    display:flex; align-items:center; flex-wrap:wrap; gap:6px;
+    background:#F0FDF4; border:1px solid #BBF7D0; border-radius:10px;
+    padding:9px 14px; margin-bottom:16px; font-size:13px;
+  }
+  #view-mapa .bc-label{ font-weight:700; color:#15803d; margin-right:2px; }
+  #view-mapa .bc-item{ display:inline-flex; align-items:center; gap:5px; padding:3px 9px; border-radius:7px; }
+  #view-mapa .bc-link{ color:#166534; cursor:pointer; background:#fff; border:1px solid #BBF7D0; transition:all .15s ease; }
+  #view-mapa .bc-link:hover{ background:#16a34a; color:#fff; border-color:#16a34a; }
+  #view-mapa .bc-actual{ background:#16a34a; color:#fff; font-weight:700; }
+  #view-mapa .bc-sep{ color:#9CA3AF; font-weight:700; }
+  #view-mapa .bc-tag{ font-size:10px; font-weight:800; opacity:.7; letter-spacing:.3px; }
+  #view-mapa .bc-actual .bc-tag{ opacity:.9; }
   /* Resaltado del proceso seleccionado y sus subprocesos (al entrar desde un N0) */
   #view-mapa .pbox-l1.mp-foco{
     outline:4px solid #16a34a;
@@ -2779,7 +2793,7 @@ async function renderInventario(){
 window.renderInventario=renderInventario;
 
 // ===================== MAPA DE PROCESOS (portado a JS puro, data desde inventario) =====================
-const MP_STATE = { level:0, selected:null, selectedSub:null, data:null, filtroL2:'all', filtroProc:'all', buscarProc:'' };
+const MP_STATE = { level:0, selected:null, selectedSub:null, selN2:null, selN2Name:null, selN3:null, selN3Name:null, data:null, filtroL2:'all', filtroProc:'all', buscarProc:'' };
 
 // Construye el objeto DATA jerárquico (e/m/s) a partir del inventario de QuintaDB.
 function mpConstruirData(inv){
@@ -2918,7 +2932,14 @@ function mpRenderTabs(){
   const tabs=[{n:0,t:'Nivel 0',s:'Vista general'},{n:1,t:'Nivel 1',s:'Sub-procesos'},{n:2,t:'Nivel 2',s:'Detalle'},{n:3,t:'Nivel 3',s:'Procesos operativos'},{n:4,t:'Nivel 4',s:'Inventario'}];
   document.getElementById('mp_tabs').innerHTML=tabs.map(x=>`<button class="mp-tab ${MP_STATE.level===x.n?'active':''}" onclick="mpGoLevel(${x.n})">${x.t}<span class="mp-tab-sub">${x.s}</span></button>`).join('');
 }
-function mpGoLevel(n){ MP_STATE.level=n; if(n<1){MP_STATE.selected=null;MP_STATE.selectedSub=null;} if(n<2)MP_STATE.selectedSub=null; mpRenderTabs(); mpRenderNivel(); }
+function mpGoLevel(n){
+  MP_STATE.level=n;
+  if(n<1){ MP_STATE.selected=null; MP_STATE.selectedSub=null; MP_STATE.selN2=null; MP_STATE.selN2Name=null; MP_STATE.selN3=null; MP_STATE.selN3Name=null; }
+  else if(n<2){ MP_STATE.selectedSub=null; MP_STATE.selN2=null; MP_STATE.selN2Name=null; MP_STATE.selN3=null; MP_STATE.selN3Name=null; }
+  else if(n<3){ MP_STATE.selN2=null; MP_STATE.selN2Name=null; MP_STATE.selN3=null; MP_STATE.selN3Name=null; }
+  else if(n<4){ MP_STATE.selN3=null; MP_STATE.selN3Name=null; }
+  mpRenderTabs(); mpRenderNivel();
+}
 // Volver al nivel inmediatamente anterior (conservando la selección para no perder el contexto).
 function mpAtras(){
   const nuevo = Math.max(0, MP_STATE.level - 1);
@@ -2930,12 +2951,28 @@ function mpAtras(){
 window.mpAtras=mpAtras;
 window.mpGoLevel=mpGoLevel;
 
+function mpBreadcrumb(){
+  const sel=MP_STATE.selected?mpFindItem(MP_STATE.selected):null;
+  const pasos=[];
+  pasos.push({txt:'Inicio', lvl:0});
+  if(sel){
+    pasos.push({txt:`${sel.id} ${sel.name}`, lvl:1, sub:'N0'});
+    if(MP_STATE.selectedSub && MP_STATE.level>=2){ pasos.push({txt:MP_STATE.selectedSub.subName, lvl:2, sub:'N1'}); }
+    if(MP_STATE.selN2 && MP_STATE.level>=3){ pasos.push({txt:`${MP_STATE.selN2} ${MP_STATE.selN2Name||''}`.trim(), lvl:3, sub:'N2'}); }
+    if(MP_STATE.selN3 && MP_STATE.level>=4){ pasos.push({txt:`${MP_STATE.selN3} ${MP_STATE.selN3Name||''}`.trim(), lvl:4, sub:'N3'}); }
+  }
+  if(pasos.length<=1) return '';
+  const items=pasos.map((p,i)=>{
+    const ultimo=i===pasos.length-1;
+    const etiqueta=p.sub?`<span class="bc-tag">${p.sub}</span>`:'';
+    if(ultimo) return `<span class="bc-item bc-actual">${etiqueta}${MP_ESC(p.txt)}</span>`;
+    return `<span class="bc-item bc-link" onclick="mpGoLevel(${p.lvl})">${etiqueta}${MP_ESC(p.txt)}</span>`;
+  }).join('<span class="bc-sep">›</span>');
+  return `<div class="mp-breadcrumb"><span class="bc-label">Ruta:</span>${items}</div>`;
+}
 function mpRenderNivel(){
   const main=document.getElementById('mp_main');
   const lbl={0:'Nivel 0 — Mapa de proceso general',1:'Nivel 1 — Sub-procesos',2:'Nivel 2 — Detalle',3:'Nivel 3 — Procesos operativos',4:'Nivel 4 — Inventario completo'}[MP_STATE.level];
-  const sel=MP_STATE.selected?mpFindItem(MP_STATE.selected):null;
-  let nota='';
-  if(sel && MP_STATE.level>0 && MP_STATE.level<4){ nota=`<div class="level-label-note"><strong>${MP_ESC(sel.id)} — ${MP_ESC(sel.name)}</strong>${MP_STATE.selectedSub&&(MP_STATE.level===2||MP_STATE.level===3)?` › <strong>${MP_ESC(MP_STATE.selectedSub.subName)}</strong>`:''}</div>`; }
   let cuerpo='';
   if(MP_STATE.level===0) cuerpo=mpLevel0();
   else if(MP_STATE.level===1) cuerpo=mpLevel1();
@@ -2943,17 +2980,14 @@ function mpRenderNivel(){
   else if(MP_STATE.level===3) cuerpo=mpLevel3();
   else cuerpo=mpProcedimientos();
   const btnAtras = MP_STATE.level>0 ? `<button class="mp-btn-atras" onclick="mpAtras()">‹ Atrás</button>` : '';
-  main.innerHTML=`<div class="level-label">${btnAtras}<h2>${lbl}</h2><div class="level-label-line"></div>${nota}</div>${cuerpo}`;
+  main.innerHTML=`<div class="level-label">${btnAtras}<h2>${lbl}</h2></div>${mpBreadcrumb()}${cuerpo}`;
   if(MP_STATE.level===4) mpBindProcedimientos();
   // Al entrar a un nivel desde un proceso, centrar la vista en el proceso resaltado
   if(MP_STATE.level===1 && MP_STATE.selected){
     setTimeout(()=>{ const foco=main.querySelector('.pbox-l1.mp-foco'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
   }
-  if(MP_STATE.level===2 && MP_STATE.selected){
-    setTimeout(()=>{ const foco=main.querySelector('.l2-card.mp-foco-l2'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
-  }
-  if(MP_STATE.level===3 && MP_STATE.selected){
-    setTimeout(()=>{ const foco=main.querySelector('.l2-card.mp-foco-l2'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
+  if((MP_STATE.level===2||MP_STATE.level===3) && MP_STATE.selected){
+    setTimeout(()=>{ const foco=main.querySelector('.l2-card.mp-foco-l2'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'start',inline:'center'}); }, 80);
   }
 }
 
@@ -3056,7 +3090,7 @@ function mpLevel2(){
             const tieneN3=(l2.l3&&l2.l3.length);
             return `<div class="l2-item-row"><div class="l2-item-header ${lane}">
               <div class="l2-item-left"><span class="l2-item-code">${MP_ESC(l2.code)}</span><span class="l2-item-name">${MP_ESC(l2.name)}</span></div>
-              ${tieneN3?`<button class="expand-btn ${lane}" onclick="mpVerNivel3('${MP_ESC(item.id)}','${MP_ESC(sub.name).replace(/'/g,"\\'")}')">Ver Nivel 3 ›</button>`:''}
+              ${tieneN3?`<button class="expand-btn ${lane}" onclick="mpVerNivel3('${MP_ESC(item.id)}','${MP_ESC(sub.name).replace(/'/g,"\\'")}','${MP_ESC(l2.code)}','${MP_ESC(l2.name).replace(/'/g,"\\'")}')">Ver Nivel 3 ›</button>`:''}
             </div></div>`;
           }).join('');
         }
@@ -3069,7 +3103,7 @@ function mpLevel2(){
   });
   return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
 }
-function mpVerNivel3(pid,subName){ MP_STATE.selected=pid; MP_STATE.selectedSub={pid,subName}; mpGoLevel(3); }
+function mpVerNivel3(pid,subName,n2code,n2name){ MP_STATE.selected=pid; MP_STATE.selectedSub={pid,subName}; MP_STATE.selN2=n2code||null; MP_STATE.selN2Name=n2name||null; MP_STATE.selN3=null; MP_STATE.selN3Name=null; mpGoLevel(3); }
 window.mpVerNivel3=mpVerNivel3;
 
 // ---- NIVEL 3: procesos operativos (con su Nivel 4 dentro) ----
@@ -3077,37 +3111,43 @@ function mpLevel3(){
   const d=MP_STATE.data;
   const f=MP_STATE.filtroL2;
   const lanes=f==='all'?['e','m','s']:[f];
-  const filtros=[['all','Todos'],['e','Estratégicos'],['m','Misionales'],['s','Soporte']].map(([k,l])=>`<button class="filter-btn ${MP_STATE.filtroL2===k?'active '+k:''}" onclick="mpSetFiltroL2('${k}')">${l}</button>`).join('');
+  const filtros=[['all','Todos'],['e','Estrat\u00e9gicos'],['m','Misionales'],['s','Soporte']].map(([k,l])=>`<button class="filter-btn ${MP_STATE.filtroL2===k?'active '+k:''}" onclick="mpSetFiltroL2('${k}')">${l}</button>`).join('');
   let cards='';
   let hayN3=false;
   lanes.forEach(lane=>{
     d[lane].items.forEach(item=>{
-      // Reunir todos los Nivel 3 de este proceso (a través de sus subs y sus l2)
+      if(MP_STATE.selected && item.id!==MP_STATE.selected) return;
       const bloquesN3=[];
       (item.subs||[]).forEach(sub=>{
         (sub.l2||[]).forEach(l2=>{
-          if(l2.l3&&l2.l3.length){
-            l2.l3.forEach(l3=>bloquesN3.push({sub,l2,l3}));
-          }
+          if(MP_STATE.selN2 && l2.code!==MP_STATE.selN2) return;
+          if(l2.l3&&l2.l3.length){ l2.l3.forEach(l3=>bloquesN3.push({sub,l2,l3})); }
         });
       });
       if(!bloquesN3.length) return;
       hayN3=true;
-      const isHL=MP_STATE.selected===item.id;
       const cuerpo=bloquesN3.map(({sub,l2,l3})=>{
-        const procs=(l3.procs&&l3.procs.length)?`<div style="padding:4px 8px 8px"><div class="detail-label">Nivel 4</div>${mpProcList(l3.procs,lane)}</div>`:'<div style="padding:6px 12px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin Nivel 4 registrado</div>';
-        return `<div class="l3-block"><div class="l3-header ${lane}"><span class="l3-code">${MP_ESC(l3.code)}</span><span>${MP_ESC(l3.name)}</span></div>
-          <div style="font-size:11px;color:var(--mp-text-xsoft);padding:2px 12px 4px">${MP_ESC(l2.code)} · ${MP_ESC(l2.name)}</div>
+        const tieneN4=(l3.procs&&l3.procs.length);
+        const procs=tieneN4?`<div style="padding:4px 8px 8px"><div class="detail-label">Nivel 4</div>${mpProcList(l3.procs,lane)}</div>`:'<div style="padding:6px 12px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin Nivel 4 registrado</div>';
+        return `<div class="l3-block mp-n3-block">
+          <div class="l3-header ${lane}">
+            <span class="l3-code">${MP_ESC(l3.code)}</span><span style="flex:1">${MP_ESC(l3.name)}</span>
+            ${tieneN4?`<button class="expand-btn ${lane}" style="margin-left:auto" onclick="mpVerNivel4('${MP_ESC(item.id)}','${MP_ESC(l3.code)}','${MP_ESC(l3.name).replace(/'/g,"\\'")}')">Ver Nivel 4 \u203a</button>`:''}
+          </div>
+          <div style="font-size:11px;color:var(--mp-text-xsoft);padding:2px 12px 4px">Ruta: ${MP_ESC(item.id)} \u203a ${MP_ESC(sub.code)} \u203a ${MP_ESC(l2.code)} \u203a <strong>${MP_ESC(l3.code)}</strong></div>
           ${procs}</div>`;
       }).join('');
-      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}">
+      cards+=`<div class="l2-card ${lane} highlighted mp-foco-l2" data-l2pid="${MP_ESC(item.id)}">
         <div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span></div>
         ${cuerpo}</div>`;
     });
   });
-  if(!hayN3) cards='<div class="empty" style="padding:30px"><h3>Sin procesos de Nivel 3</h3><p>No hay procesos de Nivel 3 registrados en el inventario para este filtro.</p></div>';
+  if(!hayN3) cards='<div class="empty" style="padding:30px"><h3>Sin procesos de Nivel 3</h3><p>No hay procesos de Nivel 3 registrados para esta ruta.</p></div>';
   return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
 }
+function mpVerNivel4(pid,n3code,n3name){ MP_STATE.selected=pid; MP_STATE.selN3=n3code||null; MP_STATE.selN3Name=n3name||null; mpGoLevel(4); }
+window.mpVerNivel4=mpVerNivel4;
+
 function mpSetFiltroL2(f){ MP_STATE.filtroL2=f; mpRenderNivel(); }
 window.mpSetFiltroL2=mpSetFiltroL2;
 
@@ -3129,6 +3169,9 @@ function mpPintarProcGroups(){
   const natCmp=(a,b)=>String(a||'').localeCompare(String(b||''), undefined, {numeric:true, sensitivity:'base'});
   const all=mpGetAllProcs().filter(p=>{
     if(MP_STATE.filtroProc!=='all'&&p.lane!==MP_STATE.filtroProc) return false;
+    // Si venimos de un Nivel 3 específico, mostrar SOLO su Nivel 4 (posicionamiento exacto)
+    if(MP_STATE.selN3 && p.n3code!==MP_STATE.selN3) return false;
+    if(MP_STATE.selN3 && MP_STATE.selected && p.n0code!==MP_STATE.selected) return false;
     if(q&&!(String(p.proc).toLowerCase().includes(q)||String(p.pcode).toLowerCase().includes(q)||String(p.grpName).toLowerCase().includes(q)||String(p.n0name).toLowerCase().includes(q))) return false;
     return true;
   });
