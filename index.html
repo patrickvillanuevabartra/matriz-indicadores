@@ -425,6 +425,12 @@
   #view-mapa .mp-nivel-tag.e{ background:var(--e-dark); }
   #view-mapa .mp-nivel-tag.m{ background:var(--m-dark); }
   #view-mapa .mp-nivel-tag.s{ background:var(--s-dark); }
+  #view-mapa .mp-nota-despliegue{
+    font-size:11px; color:#475569; background:#F8FAFC;
+    padding:7px 14px; border-bottom:1px solid var(--mp-border);
+    border-left:3px solid #16a34a;
+  }
+  #view-mapa .mp-nota-despliegue strong{ color:#16a34a; }
   #view-mapa .l2-card-pid{font-size:11px;font-weight:700;letter-spacing:.05em;padding:3px 8px;border-radius:4px;color:#fff;flex-shrink:0}
   #view-mapa .l2-card-pid.e{background:var(--e-dark)}#view-mapa .l2-card-pid.m{background:var(--m-dark)}#view-mapa .l2-card-pid.s{background:var(--s-dark)}
   #view-mapa .l2-card-title{font-size:17px;font-weight:600;color:var(--mp-text);line-height:1.4}
@@ -3245,7 +3251,7 @@ function mpLevel2(){
         else { secciones+=`<div style="padding:6px 16px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin desagregación registrada</div>`; }
         secciones+='</div>';
       });
-      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span><span class="mp-nivel-tag ${lane}">Nivel 2</span></div>${secciones}</div>`;
+      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span><span class="mp-nivel-tag ${lane}">Nivel 2</span></div><div class="mp-nota-despliegue">Macroproceso <strong>${MP_ESC(item.id)}</strong> — abajo se despliega su <strong>detalle de Nivel 2</strong></div>${secciones}</div>`;
     });
   });
   return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
@@ -3288,6 +3294,7 @@ function mpLevel3(){
       }).join('');
       cards+=`<div class="l2-card ${lane} highlighted mp-foco-l2" data-l2pid="${MP_ESC(item.id)}">
         <div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(MP_STATE.selN2||item.id)}</span><span class="l2-card-title">${MP_ESC(MP_STATE.selN2Name||item.name)}</span><span class="mp-nivel-tag ${lane}">Nivel 3</span></div>
+        <div class="mp-nota-despliegue">Proceso de Nivel 2 <strong>${MP_ESC(MP_STATE.selN2||'')}</strong> — abajo se despliegan sus <strong>procesos de Nivel 3</strong></div>
         ${cuerpo}</div>`;
     });
   });
