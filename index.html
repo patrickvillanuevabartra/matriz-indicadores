@@ -265,6 +265,7 @@
   #view-mapa .bc-link{ color:#166534; cursor:pointer; background:#fff; border:1px solid #BBF7D0; transition:all .15s ease; }
   #view-mapa .bc-link:hover{ background:#16a34a; color:#fff; border-color:#16a34a; }
   #view-mapa .bc-actual{ background:#16a34a; color:#fff; font-weight:700; }
+  #view-mapa .bc-analizando{ font-size:10px; font-weight:800; opacity:.9; margin-left:7px; letter-spacing:.3px; text-transform:uppercase; background:rgba(255,255,255,.25); padding:2px 6px; border-radius:5px; }
   #view-mapa .bc-sep{ color:#9CA3AF; font-weight:700; }
   #view-mapa .bc-tag{ font-size:10px; font-weight:800; opacity:.7; letter-spacing:.3px; }
   #view-mapa .bc-actual .bc-tag{ opacity:.9; }
@@ -3066,7 +3067,7 @@ function mpBreadcrumb(){
   const items=pasos.map((p,i)=>{
     const ultimo=i===pasos.length-1;
     const etiqueta=p.sub?`<span class="bc-tag">${p.sub}</span>`:'';
-    if(ultimo) return `<span class="bc-item bc-actual">${etiqueta}${MP_ESC(p.txt)}</span>`;
+    if(ultimo) return `<span class="bc-item bc-actual">${etiqueta}${MP_ESC(p.txt)}<span class="bc-analizando">◀ estás aquí</span></span>`;
     return `<span class="bc-item bc-link" onclick="mpGoLevel(${p.lvl})">${etiqueta}${MP_ESC(p.txt)}</span>`;
   }).join('<span class="bc-sep">›</span>');
   return `<div class="mp-breadcrumb"><span class="bc-label">Ruta:</span>${items}</div>`;
@@ -3297,7 +3298,8 @@ function mpPintarProcGroups(){
   const map={};
   all.forEach(p=>{
     const key=p.grpCode||p.n1code;
-    if(!map[key]) map[key]={ lane:p.lane, code:key, name:p.grpName, n0code:p.n0code, n0name:p.n0name, entries:[] };
+    if(!map[key]) map[key]={ lane:p.lane, code:key, name:p.grpName, n0code:p.n0code, n0name:p.n0name,
+      n1code:p.n1code, n1name:p.n1name, n2code:p.n2code, n2name:p.n2name, n3code:p.n3code, n3name:p.n3name, entries:[] };
     map[key].entries.push(p);
   });
   // Ordenar los grupos por su código ascendente, y dentro de cada grupo los procedimientos por código
@@ -3315,7 +3317,13 @@ function mpPintarProcGroups(){
         <span class="mp-nivel-tag" style="background:rgba(255,255,255,.25);margin-left:auto">Nivel 4</span>
         <span style="font-size:11px;opacity:.7">${grp.entries.length} de Nivel 4</span>
       </div>
-      <div style="font-size:11px;color:var(--mp-text-xsoft);padding:4px 14px 0">${MP_ESC(grp.n0code)} · ${MP_ESC(grp.n0name)}</div>
+      <div style="font-size:11px;color:var(--mp-text-xsoft);padding:5px 14px 0;line-height:1.5">
+        <strong style="color:var(--mp-text-soft)">Ruta:</strong>
+        ${MP_ESC(grp.n0code)} ${MP_ESC(grp.n0name)}
+        ${grp.n1code?` › ${MP_ESC(grp.n1code)} ${MP_ESC(grp.n1name)}`:''}
+        ${grp.n2code?` › ${MP_ESC(grp.n2code)} ${MP_ESC(grp.n2name)}`:''}
+        ${grp.n3code?` › <strong style="color:var(--mp-text)">${MP_ESC(grp.n3code)} ${MP_ESC(grp.n3name)}</strong>`:''}
+      </div>
       <div class="proc-group-body">${grp.entries.map(e=>`
         <div class="proc-entry">
           <span class="proc-entry-code">${MP_ESC(e.pcode)}</span>
