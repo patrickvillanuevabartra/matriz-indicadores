@@ -209,32 +209,62 @@
     opacity:.75;
     filter:grayscale(0);
   }
-  /* Nivel 2: recuadro grueso para la tarjeta del proceso enfocado y atenuado del resto */
+  /* Recuadro grueso y MUY visible para la tarjeta del proceso enfocado (Niveles 2, 3 y 4) */
   #view-mapa .l2-card.mp-foco-l2{
-    outline:4px solid #16a34a;
-    outline-offset:2px;
-    box-shadow:0 0 0 4px rgba(22,163,74,.18), 0 8px 24px rgba(22,163,74,.25);
+    border:4px solid #16a34a !important;
+    box-shadow:0 0 0 4px rgba(22,163,74,.20), 0 10px 28px rgba(22,163,74,.30) !important;
     border-radius:12px;
     position:relative;
-    z-index:2;
+    z-index:3;
+    margin-top:30px;
   }
   #view-mapa .l2-card.mp-foco-l2::before{
-    content:"▸ Detalle de este proceso";
+    content:"▸ Este es el proceso seleccionado";
     position:absolute;
-    top:-26px; left:0;
+    top:-28px; left:-2px;
     background:#16a34a; color:#fff;
-    font-size:11px; font-weight:700;
-    padding:3px 10px; border-radius:6px;
+    font-size:12px; font-weight:700;
+    padding:4px 12px; border-radius:7px 7px 0 0;
     white-space:nowrap;
     letter-spacing:.2px;
+    box-shadow:0 -2px 8px rgba(22,163,74,.25);
   }
   #view-mapa .l2-card.mp-atenuado-l2{
-    opacity:.35;
-    filter:grayscale(.55);
+    opacity:.3;
+    filter:grayscale(.6);
     transition:all .2s ease;
   }
   #view-mapa .l2-card.mp-atenuado-l2:hover{
-    opacity:.8;
+    opacity:.85;
+    filter:grayscale(0);
+  }
+  /* Nivel 4: recuadro grueso para el grupo del proceso enfocado y atenuado del resto */
+  #view-mapa .proc-group.mp-foco-grp{
+    border:4px solid #16a34a !important;
+    box-shadow:0 0 0 4px rgba(22,163,74,.20), 0 10px 28px rgba(22,163,74,.30) !important;
+    border-radius:12px;
+    position:relative;
+    z-index:3;
+    margin-top:30px;
+  }
+  #view-mapa .proc-group.mp-foco-grp::before{
+    content:"▸ Nivel 4 del proceso seleccionado";
+    position:absolute;
+    top:-28px; left:-2px;
+    background:#16a34a; color:#fff;
+    font-size:12px; font-weight:700;
+    padding:4px 12px; border-radius:7px 7px 0 0;
+    white-space:nowrap;
+    letter-spacing:.2px;
+    box-shadow:0 -2px 8px rgba(22,163,74,.25);
+  }
+  #view-mapa .proc-group.mp-atenuado-grp{
+    opacity:.3;
+    filter:grayscale(.6);
+    transition:all .2s ease;
+  }
+  #view-mapa .proc-group.mp-atenuado-grp:hover{
+    opacity:.85;
     filter:grayscale(0);
   }
   #view-mapa .mp-scope{
@@ -288,7 +318,7 @@
   #view-mapa .sub-drill{display:none;font-size:13px;font-weight:600;margin-top:5px;padding-top:4px;border-top:1px dashed}
   #view-mapa .sub-drill.e{color:var(--e-dark);border-color:var(--e-border)}#view-mapa .sub-drill.m{color:var(--m-dark);border-color:var(--m-border)}#view-mapa .sub-drill.s{color:var(--s-dark);border-color:var(--s-border)}
   #view-mapa .sub-chip.clickable:hover .sub-drill{display:block}
-  #view-mapa .l2-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+  #view-mapa .l2-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:36px 16px;overflow:visible}
   #view-mapa .l2-card{background:var(--mp-surface);border-radius:var(--mp-radius);border:1.5px solid var(--mp-border);box-shadow:var(--mp-shadow);overflow:hidden}
   #view-mapa .l2-card.e{border-top:4px solid var(--e-dark)}#view-mapa .l2-card.m{border-top:4px solid var(--m-dark)}#view-mapa .l2-card.s{border-top:4px solid var(--s-dark)}
   #view-mapa .l2-card-header{padding:12px 16px;display:flex;align-items:flex-start;gap:10px;border-bottom:1px solid var(--mp-border)}
@@ -3047,8 +3077,14 @@ function mpPintarProcGroups(){
   all.forEach(p=>{ if(!map[p.pid])map[p.pid]={lane:p.lane,pid:p.pid,pname:p.pname,entries:[]}; map[p.pid].entries.push(p); });
   const groups=Object.values(map);
   if(!groups.length){ cont.innerHTML='<div style="text-align:center;padding:40px;color:var(--mp-text-soft);font-size:14px">No se encontraron procedimientos.</div>'; return; }
-  cont.innerHTML=groups.map(grp=>`<div class="proc-group"><div class="proc-group-header ${grp.lane}"><span style="font-size:12px;opacity:.85">${MP_ESC(grp.pid)}</span><span>${MP_ESC(grp.pname)}</span><span style="margin-left:auto;font-size:11px;opacity:.7">${grp.entries.length} procedimientos</span></div>
-    <div class="proc-group-body">${grp.entries.map(e=>`<div class="proc-entry"><div class="proc-path-col"><span class="proc-path-seg ${grp.lane}">${MP_ESC(e.l1code)}</span>${e.l2name?`<span class="proc-path-sub">${MP_ESC(e.l2name)}</span>`:''}${e.l3name?`<span class="proc-path-sub" style="padding-left:8px">↳ ${MP_ESC(e.l3name)}</span>`:''}</div><span class="proc-entry-code">${MP_ESC(e.pcode)}</span><span class="proc-entry-name">${MP_ESC(e.proc)}</span></div>`).join('')}</div></div>`).join('');
+  cont.innerHTML=groups.map(grp=>{
+    const esFoco = MP_STATE.selected && grp.pid===MP_STATE.selected;
+    const atenuado = MP_STATE.selected && !esFoco;
+    return `<div class="proc-group ${esFoco?'mp-foco-grp':''} ${atenuado?'mp-atenuado-grp':''}"><div class="proc-group-header ${grp.lane}"><span style="font-size:12px;opacity:.85">${MP_ESC(grp.pid)}</span><span>${MP_ESC(grp.pname)}</span><span style="margin-left:auto;font-size:11px;opacity:.7">${grp.entries.length} de Nivel 4</span></div>
+    <div class="proc-group-body">${grp.entries.map(e=>`<div class="proc-entry"><div class="proc-path-col"><span class="proc-path-seg ${grp.lane}">${MP_ESC(e.l1code)}</span>${e.l2name?`<span class="proc-path-sub">${MP_ESC(e.l2name)}</span>`:''}${e.l3name?`<span class="proc-path-sub" style="padding-left:8px">↳ ${MP_ESC(e.l3name)}</span>`:''}</div><span class="proc-entry-code">${MP_ESC(e.pcode)}</span><span class="proc-entry-name">${MP_ESC(e.proc)}</span></div>`).join('')}</div></div>`;
+  }).join('');
+  // Centrar la vista en el grupo enfocado al llegar desde Nivel 3
+  if(MP_STATE.selected){ setTimeout(()=>{ const foco=cont.querySelector('.proc-group.mp-foco-grp'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center'}); }, 80); }
 }
 
 
