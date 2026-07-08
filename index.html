@@ -559,17 +559,17 @@
       <div class="nivel-tab n1" data-nivel="N1" onclick="setNivel('N1')">
         <span class="nt-mark">NIVEL 1</span>
         <div class="nt-title">Proceso</div>
-        <div class="nt-desc">Hasta N1, con N2/N3, procedimiento</div>
+        <div class="nt-desc">Hasta N1, con N2/N3, actividad</div>
       </div>
       <div class="nivel-tab n2" data-nivel="N2" onclick="setNivel('N2')">
         <span class="nt-mark">NIVEL 2</span>
         <div class="nt-title">Subproceso</div>
-        <div class="nt-desc">Hasta N2, con N3, procedimiento</div>
+        <div class="nt-desc">Hasta N2, con N3, actividad</div>
       </div>
       <div class="nivel-tab n3" data-nivel="N3" onclick="setNivel('N3')">
         <span class="nt-mark">NIVEL 3</span>
         <div class="nt-title">Proceso operativo</div>
-        <div class="nt-desc">Hasta N3, con su procedimiento (N4)</div>
+        <div class="nt-desc">Hasta N3, con su actividad (N4)</div>
       </div>
     </div>
 
@@ -674,15 +674,15 @@
     <div class="page-head">
       <div class="eyebrow">Estructura organizacional</div>
       <h1>Inventario de procesos</h1>
-      <p>Árbol de procesos y procedimientos en los distintos niveles. Busca, filtra, edita, archiva o elimina.</p>
+      <p>Árbol de procesos y actividades en los distintos niveles. Busca, filtra, edita, archiva o elimina.</p>
       <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="inv_total">0</span> elemento(s)</p>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:200px">
-        <input id="invBuscar" placeholder="Buscar por proceso, procedimiento o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
+        <input id="invBuscar" placeholder="Buscar por proceso, actividad o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
       </div>
-      <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Vista completa (con procedimiento)</option><option value="Proceso nivel 0">Agrupar por Nivel 0</option><option value="Proceso nivel 1">Agrupar por Nivel 1</option><option value="Proceso nivel 2">Agrupar por Nivel 2</option><option value="Proceso nivel 3">Agrupar por Nivel 3</option></select>
+      <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Vista completa (con actividad)</option><option value="Proceso nivel 0">Agrupar por Nivel 0</option><option value="Proceso nivel 1">Agrupar por Nivel 1</option><option value="Proceso nivel 2">Agrupar por Nivel 2</option><option value="Proceso nivel 3">Agrupar por Nivel 3</option></select>
       <select id="invFiltroTipo" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los tipos</option></select>
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
@@ -1078,7 +1078,7 @@
 <div class="modal-bg" id="modalEditInv">
   <div class="modal" id="modalEditInvBox" style="max-width:640px">
     <div class="modal-head" id="eiDragHandle" style="cursor:move" title="Arrastra para mover">
-      <div><div class="eyebrow">Inventario · <span style="font-weight:400">arrastra para mover</span></div><h2 style="font-size:18px">Editar proceso / procedimiento</h2></div>
+      <div><div class="eyebrow">Inventario · <span style="font-weight:400">arrastra para mover</span></div><h2 style="font-size:18px">Editar proceso / actividad</h2></div>
       <button class="modal-close" onclick="cerrarModal('modalEditInv')">×</button>
     </div>
     <div class="modal-body">
@@ -1791,15 +1791,17 @@ async function loadInventario(){
       if(!ruta || generico.test(String(ruta).trim())) ruta = v[FID_RUTA];
       if(!ruta || generico.test(String(ruta).trim())) return; // sin ruta usable
       const segs=String(ruta).split(/\s*›\s*/).map(s=>s.trim()).filter(Boolean);
-      if(segs.length>=6){
-        // Sobrescribir los valores de nivel con los de la ruta (texto fiable)
-        v[INV_COLS.tipo]=segs[0];
-        v[INV_COLS.n0]=segs[1];
-        v[INV_COLS.n1]=segs[2];
-        v[INV_COLS.n2]=segs[3];
-        v[INV_COLS.n3]=segs[4];
-        v[INV_COLS.proc]=segs[5];
+      // Aceptar rutas de 2 a 6 segmentos (procesos que aún no llegan al Nivel 4).
+      // Posición: 0=Tipo, 1=N0, 2=N1, 3=N2, 4=N3, 5=N4/Procedimiento.
+      if(segs.length>=2){
+        v[INV_COLS.tipo]=segs[0]||'';
+        v[INV_COLS.n0]=segs[1]||'';
+        v[INV_COLS.n1]=segs[2]||'';
+        v[INV_COLS.n2]=segs[3]||'';
+        v[INV_COLS.n3]=segs[4]||'';
+        v[INV_COLS.proc]=segs[5]||'';
         r._rutaTexto=ruta;
+        r._profundidad=segs.length; // hasta qué nivel llega este registro
       }
     });
     STATE.inventario = regs;
@@ -2542,10 +2544,23 @@ function _npSiguienteCodigo(nivel, prefijo, opciones){
     const COLCOD={ n0:'Código "Nivel 0"', n1:'Código "Nivel 1"', n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
     (STATE.inventario||[]).forEach(r=>{ const v=r.values||{}; const c=v[COLCOD[nivel]]; if(c) usados.add(String(c).trim()); });
   }catch(_){}
-  // Candidatos del catálogo que cuelgan del prefijo y aún no se usaron
-  const libres=opciones.filter(c=>c!==prefijo && c.startsWith(prefijo) && !usados.has(c));
-  if(libres.length) return libres.sort()[0];
-  return '';
+  // 1) Candidatos del catálogo que cuelgan del prefijo y aún no se usaron
+  const libres=(opciones||[]).filter(c=>c!==prefijo && c.startsWith(prefijo) && !usados.has(c));
+  if(libres.length) return libres.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))[0];
+  // 2) Si no hay libres en el catálogo, GENERAR el siguiente correlativo.
+  //    Para N0 el prefijo es una letra (E/M/S) → siguiente sería E07, M07, etc.
+  //    Para los demás, el prefijo es el código del padre (ej. M01) → siguiente hijo M01.07.
+  const esN0 = (nivel==='n0');
+  const patron = esN0
+    ? new RegExp('^'+prefijo+'(\\d+)$')                 // E06, M03…
+    : new RegExp('^'+prefijo.replace(/[.]/g,'\\.')+'\\.(\\d+)$'); // M01.06, M01.07…
+  let maxN=0;
+  usados.forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
+  // También mirar el catálogo por si define un tope mayor
+  (opciones||[]).forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
+  const sig=maxN+1;
+  const num = String(sig).padStart(2,'0');
+  return esN0 ? (prefijo+num) : (prefijo+'.'+num);
 }
 // Repinta el desplegable de código filtrado por el prefijo del padre, y preselecciona el sugerido.
 function npActualizarCodigos(){
@@ -2559,9 +2574,24 @@ function npActualizarCodigos(){
   // Filtrar por prefijo del padre (si hay)
   let filtradas = prefijo ? opc.filter(c=>c.startsWith(prefijo)) : opc.slice();
   if(prefijo && !filtradas.length) filtradas=opc.slice(); // si el filtro deja vacío, mostrar todo como respaldo
+  // Códigos YA USADOS en el inventario (para marcarlos y no ofrecerlos como nuevos)
+  const usados=new Set();
+  try{
+    const COLCOD={ n0:'Código "Nivel 0"', n1:'Código "Nivel 1"', n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
+    (STATE.inventario||[]).forEach(r=>{ const v=r.values||{}; const c=v[COLCOD[nivel]]; if(c) usados.add(String(c).trim()); });
+  }catch(_){}
   const sugerido=_npSiguienteCodigo(nivel, prefijo, opc);
-  selCod.innerHTML='<option value="">— elige código —</option>'+
-    filtradas.map(c=>`<option value="${c.replace(/"/g,'&quot;')}" ${c===sugerido?'selected':''}>${c}${c===sugerido?'  (sugerido)':''}</option>`).join('')+
+  // Opciones: las libres primero (seleccionables), las usadas al final (deshabilitadas y marcadas)
+  let libres = filtradas.filter(c=>!usados.has(c));
+  // Si el sugerido fue generado (no está en el catálogo), añadirlo al frente de las libres
+  if(sugerido && !libres.includes(sugerido) && !usados.has(sugerido)) libres.unshift(sugerido);
+  libres.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const ocupadas = filtradas.filter(c=>usados.has(c));
+  const optLibres = libres.map(c=>`<option value="${c.replace(/"/g,'&quot;')}" ${c===sugerido?'selected':''}>${c}${c===sugerido?'  (sugerido ✓)':''}</option>`).join('');
+  const optOcupadas = ocupadas.length
+    ? `<optgroup label="Ya existen (no disponibles)">`+ocupadas.map(c=>`<option value="${c.replace(/"/g,'&quot;')}" disabled>${c} — ya existe</option>`).join('')+`</optgroup>`
+    : '';
+  selCod.innerHTML='<option value="">— elige código —</option>'+optLibres+optOcupadas+
     '<option value="__otro__">✏️ Otro código (escribir)…</option>';
   selCod.onchange=function(){
     const w=document.getElementById('np_codigo_otro_wrap');
@@ -2708,15 +2738,53 @@ async function guardarNuevoProceso(){
     if(!nom){ throw new Error('Escribe el nombre.'); }
     if(def.codigoField && !cod){ throw new Error('Elige el código.'); }
     await _npInsertar(def, idsPadres, cod, nom);
+    // 3) Crear la fila en PROCEDIMIENTO con la RUTA CORTA real (de aquí lee el mapa/inventario).
+    //    La ruta se arma con los TEXTOS de cada nivel, hasta el nivel recién creado.
+    try{ await _npCrearRuta(nivel, cod, nom); }catch(e){ console.warn('[ruta] no se pudo crear la fila de ruta:', e.message); }
     toast('Proceso creado correctamente.');
     cerrarModal('modalNuevoProceso');
     // refrescar inventario y caches
     STATE.inventario=[]; _NP_CACHE_REG={};
     if(typeof renderInventario==='function') renderInventario();
+    // Invalidar los datos del mapa para que se reconstruyan con el nuevo proceso
+    if(typeof MP_STATE!=='undefined'){ MP_STATE.data=null; }
   }catch(e){ toast(e.message||'Error al crear.', true); }
   finally{ btn.disabled=false; btn.textContent='Crear'; }
 }
 window.guardarNuevoProceso=guardarNuevoProceso;
+
+// Arma la "Ruta completa" (texto plano) con los nombres de cada nivel hasta el creado,
+// y crea la fila correspondiente en la tabla PROCEDIMIENTO (de donde lee el mapa/inventario).
+// Formato: "Tipo › N0 › N1 › N2 › N3 › N4" (solo hasta donde llegue el proceso creado).
+async function _npCrearRuta(nivel, codObjetivo, nomObjetivo){
+  const FID_RUTA='cIWOeqW6vkuildQSkfW4WT';
+  // Texto de un nivel a partir de su selector de padre (usa el nombre visible, que ya trae "CÓD Nombre")
+  const textoPadre=(key)=>{
+    const sel=document.getElementById('np_padre_'+key);
+    if(!sel) return '';
+    if(sel.value==='__nuevo__'){
+      const nom=(document.getElementById('np_inlinenom_'+key)||{}).value||'';
+      const cod=(document.getElementById('np_inlinecod_'+key)||{}).value||'';
+      return (cod?cod+' ':'')+nom.trim();
+    }
+    const opt=sel.selectedOptions[0];
+    return opt ? (opt.dataset.nombre || opt.textContent || '').trim() : '';
+  };
+  // Orden de niveles y qué keys son padres de cada uno
+  const cadena=['tipo','n0','n1','n2','n3','proc'];
+  const idx=cadena.indexOf(nivel);
+  const segs=[];
+  for(let i=0;i<idx;i++){ const t=textoPadre(cadena[i]); if(t) segs.push(t); }
+  // El propio elemento creado
+  segs.push(codObjetivo ? (codObjetivo+' '+nomObjetivo) : nomObjetivo);
+  const ruta=segs.filter(Boolean).join(' › ');
+  if(!ruta) return;
+  // Crear la fila en PROCEDIMIENTO solo con el campo de texto Ruta completa (+ estado activo)
+  const campos={}; campos[FID_RUTA]=ruta;
+  const procDef=_nivelDef('proc');
+  if(procDef && procDef.estadoField) campos[procDef.estadoField]='Activo';
+  await API.saveForm(null, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
+}
 
 // Inserta un registro en la tabla de un nivel, enlazando los rel a los padres (idsPadres por key).
 // El nombre se guarda como "CÓDIGO Nombre" (código como prefijo) cuando hay código.
@@ -2898,7 +2966,7 @@ function mpConstruirData(inv){
     const k0=lane+'|'+c0;
     if(!idxN0[k0]){ const it={id:c0,name:nm0,managed:'fi',subs:[]}; data[lane].items.push(it); idxN0[k0]={it,subsIdx:{}}; }
     const ref0=idxN0[k0];
-    const n1=limpio(v[C.n1]); if(!n1) return;
+    const n1=limpio(v[C.n1]); if(!n1) return; // sin N1: el N0 ya quedó registrado arriba, no hay más que anidar
     const c1=codigoDe(n1), nm1=n1.replace(/^[A-Za-z]\d+(?:\.\d+)*\s+/,'');
     const k1=k0+'|'+c1;
     if(!ref0.subsIdx[c1]){ const sub={code:c1,name:nm1,l2:[],procs:[]}; ref0.it.subs.push(sub); ref0.subsIdx[c1]={sub,l2Idx:{}}; }
