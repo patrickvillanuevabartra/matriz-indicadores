@@ -3231,14 +3231,27 @@ function mpLevel2(){
   const natCmp=(a,b)=>String(a||'').localeCompare(String(b||''), undefined, {numeric:true, sensitivity:'base'});
   lanes.forEach(lane=>{
     d[lane].items.filter(it=>it.subs&&it.subs.length).forEach(item=>{
+      // Si venimos de un proceso concreto, mostrar SOLO ese (posicionamiento exacto)
+      if(MP_STATE.selected && item.id!==MP_STATE.selected) return;
       const isHL=MP_STATE.selected===item.id;
+      // Filtrar los subprocesos: si venimos de uno concreto, solo ese
+      let subsMostrar=[...item.subs].sort((a,b)=>natCmp(a.code,b.code));
+      if(MP_STATE.selectedSub && MP_STATE.selectedSub.subName){
+        const soloEse=subsMostrar.filter(s=>s.name===MP_STATE.selectedSub.subName);
+        if(soloEse.length) subsMostrar=soloEse;
+      }
+      // Datos del subproceso N1 en foco (para la nota)
+      const subFoco = subsMostrar.length===1 ? subsMostrar[0] : null;
       let secciones='';
-      const subsOrd=[...item.subs].sort((a,b)=>natCmp(a.code,b.code));
-      subsOrd.forEach(sub=>{
+      subsMostrar.forEach(sub=>{
         const isActive=isHL&&MP_STATE.selectedSub&&MP_STATE.selectedSub.subName===sub.name;
-        secciones+=`<div><div class="sub-section-header ${isActive?'active '+lane:''}">${isActive?'<span style="font-size:12px">▶</span>':''}<span class="sub-section-code">${MP_ESC(sub.code)}</span><span class="sub-section-name">${MP_ESC(sub.name)}</span></div>`;
+        // Si solo hay un subproceso en foco, su nombre ya está en el título de la tarjeta: no repetir el header
+        if(!subFoco){
+          secciones+=`<div><div class="sub-section-header ${isActive?'active '+lane:''}">${isActive?'<span style="font-size:12px">▶</span>':''}<span class="sub-section-code">${MP_ESC(sub.code)}</span><span class="sub-section-name">${MP_ESC(sub.name)}</span></div>`;
+        } else {
+          secciones+=`<div>`;
+        }
         if(sub.l2&&sub.l2.length){
-          // Mostrar solo los Nivel 2 (ordenados ascendentemente), sin desplegar el Nivel 3
           const l2Ord=[...sub.l2].sort((a,b)=>natCmp(a.code,b.code));
           secciones+=l2Ord.map(l2=>{
             const tieneN3=(l2.l3&&l2.l3.length);
@@ -3252,7 +3265,14 @@ function mpLevel2(){
         else { secciones+=`<div style="padding:6px 16px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin desagregación registrada</div>`; }
         secciones+='</div>';
       });
-      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span></div><div class="mp-nota-despliegue">Proceso de Nivel 0 <strong>${MP_ESC(item.id)}</strong> — abajo se despliegan sus <strong>procesos de Nivel 2</strong></div>${secciones}</div>`;
+      // Nota: si estamos enfocados en un subproceso N1, la nota lo refleja; si no, el macroproceso
+      const nota = subFoco
+        ? `Proceso de Nivel 1 <strong>${MP_ESC(subFoco.code)}</strong> — abajo se despliegan sus <strong>procesos de Nivel 2</strong>`
+        : `Macroproceso <strong>${MP_ESC(item.id)}</strong> — abajo se despliegan sus <strong>procesos de Nivel 2</strong>`;
+      // Título de la tarjeta: el subproceso N1 en foco, o el macroproceso
+      const tituloCode = subFoco ? subFoco.code : item.id;
+      const tituloName = subFoco ? subFoco.name : item.name;
+      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}"><div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(tituloCode)}</span><span class="l2-card-title">${MP_ESC(tituloName)}</span></div><div class="mp-nota-despliegue">${nota}</div>${secciones}</div>`;
     });
   });
   return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
