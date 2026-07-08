@@ -2836,7 +2836,7 @@ async function renderMapa(){
 window.renderMapa=renderMapa;
 
 function mpRenderTabs(){
-  const tabs=[{n:0,t:'Nivel 0',s:'Vista general'},{n:1,t:'Nivel 1',s:'Sub-procesos'},{n:2,t:'Nivel 2',s:'Detalle + Nivel 3'},{n:3,t:'Procedimientos',s:'Inventario'}];
+  const tabs=[{n:0,t:'Nivel 0',s:'Vista general'},{n:1,t:'Nivel 1',s:'Sub-procesos'},{n:2,t:'Nivel 2',s:'Detalle'},{n:3,t:'Nivel 3',s:'Procesos operativos'},{n:4,t:'Nivel 4',s:'Inventario'}];
   document.getElementById('mp_tabs').innerHTML=tabs.map(x=>`<button class="mp-tab ${MP_STATE.level===x.n?'active':''}" onclick="mpGoLevel(${x.n})">${x.t}<span class="mp-tab-sub">${x.s}</span></button>`).join('');
 }
 function mpGoLevel(n){ MP_STATE.level=n; if(n<1){MP_STATE.selected=null;MP_STATE.selectedSub=null;} if(n<2)MP_STATE.selectedSub=null; mpRenderTabs(); mpRenderNivel(); }
@@ -2844,22 +2844,26 @@ window.mpGoLevel=mpGoLevel;
 
 function mpRenderNivel(){
   const main=document.getElementById('mp_main');
-  const lbl={0:'Nivel 0 — Mapa de proceso general',1:'Nivel 1 — Sub-procesos',2:'Nivel 2 — Detalle completo con Nivel 3',3:'Procedimientos — Inventario completo'}[MP_STATE.level];
+  const lbl={0:'Nivel 0 — Mapa de proceso general',1:'Nivel 1 — Sub-procesos',2:'Nivel 2 — Detalle',3:'Nivel 3 — Procesos operativos',4:'Nivel 4 — Inventario completo'}[MP_STATE.level];
   const sel=MP_STATE.selected?mpFindItem(MP_STATE.selected):null;
   let nota='';
-  if(sel && MP_STATE.level>0 && MP_STATE.level<3){ nota=`<div class="level-label-note"><strong>${MP_ESC(sel.id)} — ${MP_ESC(sel.name)}</strong>${MP_STATE.selectedSub&&MP_STATE.level===2?` › <strong>${MP_ESC(MP_STATE.selectedSub.subName)}</strong>`:''}</div>`; }
+  if(sel && MP_STATE.level>0 && MP_STATE.level<4){ nota=`<div class="level-label-note"><strong>${MP_ESC(sel.id)} — ${MP_ESC(sel.name)}</strong>${MP_STATE.selectedSub&&(MP_STATE.level===2||MP_STATE.level===3)?` › <strong>${MP_ESC(MP_STATE.selectedSub.subName)}</strong>`:''}</div>`; }
   let cuerpo='';
   if(MP_STATE.level===0) cuerpo=mpLevel0();
   else if(MP_STATE.level===1) cuerpo=mpLevel1();
   else if(MP_STATE.level===2) cuerpo=mpLevel2();
+  else if(MP_STATE.level===3) cuerpo=mpLevel3();
   else cuerpo=mpProcedimientos();
   main.innerHTML=`<div class="level-label"><h2>${lbl}</h2><div class="level-label-line"></div>${nota}</div>${cuerpo}`;
-  if(MP_STATE.level===3) mpBindProcedimientos();
-  // Al entrar al Nivel 1 o 2 desde un proceso, centrar la vista en el proceso resaltado
+  if(MP_STATE.level===4) mpBindProcedimientos();
+  // Al entrar a un nivel desde un proceso, centrar la vista en el proceso resaltado
   if(MP_STATE.level===1 && MP_STATE.selected){
     setTimeout(()=>{ const foco=main.querySelector('.pbox-l1.mp-foco'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
   }
   if(MP_STATE.level===2 && MP_STATE.selected){
+    setTimeout(()=>{ const foco=main.querySelector('.l2-card.mp-foco-l2'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
+  }
+  if(MP_STATE.level===3 && MP_STATE.selected){
     setTimeout(()=>{ const foco=main.querySelector('.l2-card.mp-foco-l2'); if(foco) foco.scrollIntoView({behavior:'smooth',block:'center',inline:'center'}); }, 80);
   }
 }
@@ -2927,7 +2931,7 @@ function mpL2Row(l2,lane,idx){
   if(hasContent){
     let inner='';
     if(l2.l3&&l2.l3.length){ inner+='<div class="detail-label">Nivel 3</div>'+l2.l3.map(l3=>`<div class="l3-block"><div class="l3-header ${lane}"><span class="l3-code">${MP_ESC(l3.code)}</span><span>${MP_ESC(l3.name)}</span></div>${l3.procs&&l3.procs.length?`<div style="padding:4px 8px 8px">${mpProcList(l3.procs,lane)}</div>`:''}</div>`).join(''); }
-    if(l2.procs&&l2.procs.length){ inner+='<div class="detail-label">Procedimientos</div>'+mpProcList(l2.procs,lane); }
+    if(l2.procs&&l2.procs.length){ inner+='<div class="detail-label">Nivel 4</div>'+mpProcList(l2.procs,lane); }
     detail=`<div class="l2-detail" id="${rid}" style="display:none">${inner}</div>`;
   }
   return `<div class="l2-item-row">
@@ -2957,8 +2961,17 @@ function mpLevel2(){
       item.subs.forEach(sub=>{
         const isActive=isHL&&MP_STATE.selectedSub&&MP_STATE.selectedSub.subName===sub.name;
         secciones+=`<div><div class="sub-section-header ${isActive?'active '+lane:''}">${isActive?'<span style="font-size:12px">▶</span>':''}<span class="sub-section-code">${MP_ESC(sub.code)}</span><span class="sub-section-name">${MP_ESC(sub.name)}</span></div>`;
-        if(sub.l2&&sub.l2.length){ secciones+=sub.l2.map((l2,i)=>mpL2Row(l2,lane,i)).join(''); }
-        else if(sub.procs&&sub.procs.length){ secciones+=`<div style="padding:8px 16px 12px"><div class="detail-label">Procedimientos</div>${mpProcList(sub.procs,lane)}</div>`; }
+        if(sub.l2&&sub.l2.length){
+          // Mostrar solo los Nivel 2 (sin desplegar el Nivel 3, que ahora vive en su propia pestaña)
+          secciones+=sub.l2.map(l2=>{
+            const tieneN3=(l2.l3&&l2.l3.length);
+            return `<div class="l2-item-row"><div class="l2-item-header ${lane}">
+              <div class="l2-item-left"><span class="l2-item-code">${MP_ESC(l2.code)}</span><span class="l2-item-name">${MP_ESC(l2.name)}</span></div>
+              ${tieneN3?`<button class="expand-btn ${lane}" onclick="mpVerNivel3('${MP_ESC(item.id)}','${MP_ESC(sub.name).replace(/'/g,"\\'")}')">Ver Nivel 3 ›</button>`:''}
+            </div></div>`;
+          }).join('');
+        }
+        else if(sub.procs&&sub.procs.length){ secciones+=`<div style="padding:8px 16px 12px"><div class="detail-label">Nivel 4</div>${mpProcList(sub.procs,lane)}</div>`; }
         else { secciones+=`<div style="padding:6px 16px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin desagregación registrada</div>`; }
         secciones+='</div>';
       });
@@ -2967,12 +2980,51 @@ function mpLevel2(){
   });
   return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
 }
+function mpVerNivel3(pid,subName){ MP_STATE.selected=pid; MP_STATE.selectedSub={pid,subName}; mpGoLevel(3); }
+window.mpVerNivel3=mpVerNivel3;
+
+// ---- NIVEL 3: procesos operativos (con su Nivel 4 dentro) ----
+function mpLevel3(){
+  const d=MP_STATE.data;
+  const f=MP_STATE.filtroL2;
+  const lanes=f==='all'?['e','m','s']:[f];
+  const filtros=[['all','Todos'],['e','Estratégicos'],['m','Misionales'],['s','Soporte']].map(([k,l])=>`<button class="filter-btn ${MP_STATE.filtroL2===k?'active '+k:''}" onclick="mpSetFiltroL2('${k}')">${l}</button>`).join('');
+  let cards='';
+  let hayN3=false;
+  lanes.forEach(lane=>{
+    d[lane].items.forEach(item=>{
+      // Reunir todos los Nivel 3 de este proceso (a través de sus subs y sus l2)
+      const bloquesN3=[];
+      (item.subs||[]).forEach(sub=>{
+        (sub.l2||[]).forEach(l2=>{
+          if(l2.l3&&l2.l3.length){
+            l2.l3.forEach(l3=>bloquesN3.push({sub,l2,l3}));
+          }
+        });
+      });
+      if(!bloquesN3.length) return;
+      hayN3=true;
+      const isHL=MP_STATE.selected===item.id;
+      const cuerpo=bloquesN3.map(({sub,l2,l3})=>{
+        const procs=(l3.procs&&l3.procs.length)?`<div style="padding:4px 8px 8px"><div class="detail-label">Nivel 4</div>${mpProcList(l3.procs,lane)}</div>`:'<div style="padding:6px 12px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin Nivel 4 registrado</div>';
+        return `<div class="l3-block"><div class="l3-header ${lane}"><span class="l3-code">${MP_ESC(l3.code)}</span><span>${MP_ESC(l3.name)}</span></div>
+          <div style="font-size:11px;color:var(--mp-text-xsoft);padding:2px 12px 4px">${MP_ESC(l2.code)} · ${MP_ESC(l2.name)}</div>
+          ${procs}</div>`;
+      }).join('');
+      cards+=`<div class="l2-card ${lane} ${isHL?'highlighted mp-foco-l2':(MP_STATE.selected?'mp-atenuado-l2':'')}" data-l2pid="${MP_ESC(item.id)}">
+        <div class="l2-card-header"><span class="l2-card-pid ${lane}">${MP_ESC(item.id)}</span><span class="l2-card-title">${MP_ESC(item.name)}</span></div>
+        ${cuerpo}</div>`;
+    });
+  });
+  if(!hayN3) cards='<div class="empty" style="padding:30px"><h3>Sin procesos de Nivel 3</h3><p>No hay procesos de Nivel 3 registrados en el inventario para este filtro.</p></div>';
+  return `<div class="filter-bar"><span style="font-size:13px;color:var(--mp-text-soft);font-weight:600">Mostrar:</span>${filtros}</div><div class="l2-grid">${cards}</div>`;
+}
 function mpSetFiltroL2(f){ MP_STATE.filtroL2=f; mpRenderNivel(); }
 window.mpSetFiltroL2=mpSetFiltroL2;
 
 function mpProcedimientos(){
   const filtros=[['all','Todos'],['e','Estratégicos'],['m','Misionales'],['s','Soporte']].map(([k,l])=>`<button class="filter-btn ${MP_STATE.filtroProc===k?'active '+k:''}" onclick="mpSetFiltroProc('${k}')">${l}</button>`).join('');
-  return `<div class="proc-search-bar"><input class="proc-search" id="mp_buscar" placeholder="Buscar por código o nombre de procedimiento..." value="${MP_ESC(MP_STATE.buscarProc)}"><span class="proc-count" id="mp_proc_count"></span></div>
+  return `<div class="proc-search-bar"><input class="proc-search" id="mp_buscar" placeholder="Buscar por código o nombre de Nivel 4..." value="${MP_ESC(MP_STATE.buscarProc)}"><span class="proc-count" id="mp_proc_count"></span></div>
     <div class="filter-bar">${filtros}</div><div id="mp_proc_groups"></div>`;
 }
 function mpSetFiltroProc(f){ MP_STATE.filtroProc=f; mpRenderNivel(); }
