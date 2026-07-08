@@ -3104,38 +3104,44 @@ function mpRenderNivel(){
   </div>`;
   main.innerHTML=`${mpStepper()}${banner}${mpBreadcrumb()}${cuerpo}`;
   if(MP_STATE.level===4) mpBindProcedimientos();
-  // Desplazamiento EXACTO al elemento resaltado (su título queda visible arriba, con un margen).
+  // Desplazamiento EXACTO: llevar el título del proceso enfocado justo bajo la cabecera fija.
   if(MP_STATE.selected && MP_STATE.level>=1){
     let sel=null;
     if(MP_STATE.level===1) sel='.pbox-l1.mp-foco';
     else if(MP_STATE.level===2||MP_STATE.level===3) sel='.l2-card.mp-foco-l2';
     else if(MP_STATE.level===4) sel='.proc-group.mp-foco-grp';
-    if(sel){ setTimeout(()=>mpScrollExacto(main.querySelector(sel)), 120); }
+    if(sel){
+      // Reintentar por si el layout tarda en estabilizarse (imágenes, fuentes, etc.)
+      [60,180,360].forEach(ms=> setTimeout(()=>{ const el=main.querySelector(sel); if(el) mpScrollExacto(el); }, ms));
+    }
   }
 }
 // Desplaza la vista para que el TÍTULO del elemento quede justo arriba, exacto.
 function mpScrollExacto(el){
   if(!el) return;
-  const MARGEN=16; // pequeño respiro sobre el borde superior del área visible
-  // Detectar el contenedor scrolleable real (el que tiene overflow), o la ventana.
+  const MARGEN=14; // pequeño respiro sobre el borde superior
+  // El body usa zoom (ver CSS); getBoundingClientRect ya viene escalado por el zoom,
+  // pero window.scrollTo espera coordenadas SIN escalar. Compensamos con el factor.
+  const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
+  // Detectar el contenedor scrolleable real (con overflow-y que realmente desborda).
   let cont=el.parentElement;
-  while(cont && cont!==document.body){
+  while(cont && cont!==document.body && cont!==document.documentElement){
     const oy=getComputedStyle(cont).overflowY;
     if((oy==='auto'||oy==='scroll') && cont.scrollHeight>cont.clientHeight+2) break;
     cont=cont.parentElement;
   }
-  // Esperar a que el layout esté 100% estable (dos frames) antes de medir.
-  requestAnimationFrame(()=>requestAnimationFrame(()=>{
-    if(cont && cont!==document.body && cont!==document.documentElement){
-      const cRect=cont.getBoundingClientRect();
-      const eRect=el.getBoundingClientRect();
-      const destino = cont.scrollTop + (eRect.top - cRect.top) - MARGEN;
-      cont.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
-    } else {
-      const destino = window.pageYOffset + el.getBoundingClientRect().top - MARGEN;
-      window.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
-    }
-  }));
+  const usarVentana = !cont || cont===document.body || cont===document.documentElement;
+  if(usarVentana){
+    // rect.top está en píxeles ya escalados; para el scroll de ventana dividimos por zoom.
+    const topEscalado = el.getBoundingClientRect().top;
+    const destino = window.pageYOffset + (topEscalado / zoom) - MARGEN;
+    window.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
+  } else {
+    const cRect=cont.getBoundingClientRect();
+    const eRect=el.getBoundingClientRect();
+    const destino = cont.scrollTop + (eRect.top - cRect.top)/zoom - MARGEN;
+    cont.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
+  }
 }
 
 function mpLaneWrap(inner){
@@ -3382,8 +3388,8 @@ function mpPintarProcGroups(){
         </div>`).join('')}</div>
     </div>`;
   }).join('');
-  // Centrar la vista en el grupo enfocado al llegar desde Nivel 3
-  if(MP_STATE.selected){ setTimeout(()=>{ const foco=cont.querySelector('.proc-group.mp-foco-grp'); if(foco) mpScrollExacto(foco); }, 120); }
+  // Centrar la vista en el grupo enfocado al llegar desde Nivel 3 (reintento para exactitud)
+  if(MP_STATE.selected){ [60,180,360].forEach(ms=> setTimeout(()=>{ const foco=cont.querySelector('.proc-group.mp-foco-grp'); if(foco) mpScrollExacto(foco); }, ms)); }
 }
 
 
