@@ -2809,8 +2809,9 @@ async function guardarNuevoProceso(){
     // 3) Crear la fila en PROCEDIMIENTO con la RUTA (de aquí leen el mapa y el inventario).
     //    Si esto falla, SE REVIERTEN todos los registros creados en esta operación:
     //    así nunca queda un proceso huérfano (fantasma) en las tablas de nivel.
+    let _rutaCreada='';
     try{
-      await _npCrearRuta(nivel, cod, nom);
+      _rutaCreada = await _npCrearRuta(nivel, cod, nom);
     }catch(errRuta){
       const fallidos=await _revertirCreados(_creados);
       if(fallidos.length){
@@ -2822,9 +2823,18 @@ async function guardarNuevoProceso(){
     toast('Proceso creado correctamente.');
     _creados.length=0;   // éxito: ya no hay nada que revertir
     cerrarModal('modalNuevoProceso');
-    // Refrescar TODO en vivo (inventario, padres, catálogo de códigos, mapa)
-    await invalidarCachesProcesos();
-    await repintarVistaActiva();   // se ve en vivo, sin recargar la app
+    // Refrescar TODO en vivo: limpiar cachés y ESPERAR a que el registro sea visible
+    // en el servidor antes de repintar (QuintaDB tarda un instante en propagarlo).
+    if(typeof _NP_CACHE_REG!=='undefined') _NP_CACHE_REG={};
+    if(typeof _NP_CACHE_OPC!=='undefined') _NP_CACHE_OPC={};
+    if(typeof _NP_SCHEMA_OK!=='undefined') _NP_SCHEMA_OK=false;
+    if(typeof MP_STATE!=='undefined') MP_STATE.data=null;
+    if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
+    if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
+    await recargarHastaVer(_rutaCreada);   // reintenta hasta que aparezca
+    console.log('[crear] filas en STATE.inventario:', (STATE.inventario||[]).length,
+                '| vista activa:', (document.querySelector('.view.active')||{}).id);
+    await repintarVistaActiva();           // se ve en vivo, sin recargar la app
   }catch(e){
     // Si quedaron registros creados a medias (p.ej. padres en línea), revertirlos.
     if(_creados.length && !/No se pudo registrar la ruta/.test(e.message||'')){
@@ -2868,6 +2878,7 @@ async function _npCrearRuta(nivel, codObjetivo, nomObjetivo){
   const procDef=_nivelDef('proc');
   if(procDef && procDef.estadoField) campos[procDef.estadoField]='Activo';
   await API.saveForm(null, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
+  return ruta;   // se devuelve para poder confirmar que ya es visible en el servidor
 }
 
 // Inserta un registro en la tabla de un nivel, enlazando los rel a los padres (idsPadres por key).
@@ -2890,7 +2901,9 @@ async function renderInventario(){
   const tb=document.getElementById('tablaInventario');
   if(!tb) return;
   try{
-    const inv=await loadInventario();
+    // Si STATE.inventario ya está poblado (p.ej. tras crear/borrar), usarlo tal cual:
+    // volver a pedirlo aquí podría traer una respuesta cacheada del estado anterior.
+    const inv = (STATE.inventario && STATE.inventario.length) ? STATE.inventario : await loadInventario();
     // Poblar filtro de tipos (una vez)
     const selTipo=document.getElementById('invFiltroTipo');
     if(selTipo && selTipo.options.length<=1){
@@ -3015,9 +3028,12 @@ async function renderInventario(){
       // procedimiento: siempre por fila (es el nivel más fino)
       const bgP=BADGE.proc||{bg:'#e0f2f1',fg:'#00695c'};
       const archTag=f.archivado?'<span style="font-size:10px;color:var(--mist);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px">Archivado</span>':'';
-      html+=`<td style="vertical-align:top;border-top:1px solid var(--line);padding:8px 10px;border-left:3px solid ${bgP.fg}33">${f.proc?`<div style="font-weight:600;color:${bgP.fg};line-height:1.35">${f.proc.replace(/</g,'&lt;')}${archTag}</div>`:'<span style="color:var(--mist)">—</span>'}</td>`;
+      // Sin border-top: el separador se dibuja DENTRO de la celda, así no corta
+      // la línea vertical de color de las columnas agrupadas de la izquierda.
+      const sep = i>0 ? 'border-top:1px solid var(--line);' : '';
+      html+=`<td style="vertical-align:top;padding:0 0 0 0;border-left:3px solid ${bgP.fg}33"><div style="${sep}padding:8px 10px">${f.proc?`<div style="font-weight:600;color:${bgP.fg};line-height:1.35">${f.proc.replace(/</g,'&lt;')}${archTag}</div>`:'<span style="color:var(--mist)">—</span>'}</div></td>`;
       // acciones
-      html+=`<td style="text-align:right;vertical-align:top;white-space:nowrap;border-top:1px solid var(--line);padding:8px 6px">
+      html+=`<td style="text-align:right;vertical-align:top;white-space:nowrap;${i>0?'border-top:1px solid var(--line);':''}padding:8px 6px">
         <button class="icon-btn" title="Editar" onclick="editarInventario('${f.id}')">✏️</button>
         <button class="icon-btn" title="${f.archivado?'Reactivar':'Archivar'}" onclick="archivarInventario('${f.id}', ${f.archivado?'false':'true'})">📦</button>
         <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${f.id}')">🗑️</button>
@@ -3156,7 +3172,8 @@ async function renderMapa(){
   const main=document.getElementById('mp_main'); if(!main) return;
   try{
     if(!MP_STATE.data){
-      const inv=await loadInventario();
+      // Usar el inventario ya cargado si existe (evita leer una respuesta cacheada vieja)
+      const inv = (STATE.inventario && STATE.inventario.length) ? STATE.inventario : await loadInventario();
       MP_STATE.data=mpConstruirData(inv);
     }
     mpRenderTabs();
@@ -3567,19 +3584,41 @@ async function invalidarCachesProcesos(){
   if(typeof MP_STATE!=='undefined') MP_STATE.data=null;
   if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
   if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
-  // Pequeña pausa: QuintaDB necesita un instante para que el registro nuevo sea visible.
   await new Promise(r=>setTimeout(r, 400));
   try{ await loadInventario(true); }catch(_){}   // true = lectura FRESCA, sin caché
 }
 window.invalidarCachesProcesos=invalidarCachesProcesos;
 
+// Recarga el inventario hasta que la RUTA esperada aparezca (QuintaDB tarda un instante
+// en propagar un registro recién insertado). Evita tener que recargar la app a mano.
+async function recargarHastaVer(rutaEsperada, intentos=6){
+  let ultimo=[];
+  for(let i=1; i<=intentos; i++){
+    STATE.inventario=[];
+    try{ ultimo = await loadInventario(true); }catch(_){}
+    const aparece = !rutaEsperada || ultimo.some(r => String(r._rutaTexto||'').trim() === String(rutaEsperada).trim());
+    if(aparece){ STATE.inventario = ultimo; return true; }
+    await new Promise(r=>setTimeout(r, 400*i));   // esperas crecientes: 0.4s, 0.8s, 1.2s…
+  }
+  // Aunque no se confirme, dejamos cargado lo último leído para no pintar una tabla vacía.
+  if(ultimo.length) STATE.inventario = ultimo;
+  console.warn('El registro nuevo no apareció tras varios intentos.');
+  return false;
+}
+window.recargarHastaVer=recargarHastaVer;
+
 // Repinta la vista que el usuario está viendo ahora mismo (para que el cambio se vea en vivo).
+// El resto de vistas se reconstruirán solas al entrar, porque sus cachés fueron invalidados.
 async function repintarVistaActiva(){
   const activa = document.querySelector('.view.active');
   const id = activa ? activa.id : '';
   try{
-    if(id==='view-mapa' && typeof renderMapa==='function') await renderMapa();
-    else if(typeof renderInventario==='function') await renderInventario();
+    if(id==='view-mapa'){ MP_STATE.data=null; if(typeof renderMapa==='function') await renderMapa(); }
+    else if(id==='view-inventario'){ if(typeof renderInventario==='function') await renderInventario(); }
+    else {
+      // En otra vista: refrescar igualmente el inventario en segundo plano si existe la tabla.
+      if(document.getElementById('tablaInventario') && typeof renderInventario==='function') await renderInventario();
+    }
   }catch(e){ console.warn('repintarVistaActiva:', e.message); }
 }
 window.repintarVistaActiva=repintarVistaActiva;
