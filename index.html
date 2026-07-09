@@ -1286,8 +1286,12 @@ const API = {
     }
     throw ultimoError || new Error('Sin respuesta del servidor.');
   },
-  records(entityId){
-    return this.call(`/apps/${CONFIG.APP_ID}/dtypes/entity/${entityId}.json`,'GET',{ name_value:1, fetch_all:true, per_page:2000 });
+  records(entityId, sinCache){
+    const q = { name_value:1, fetch_all:true, per_page:2000 };
+    // Tras crear/editar/borrar necesitamos datos FRESCOS: un parámetro único evita
+    // que el proxy o QuintaDB devuelvan una respuesta cacheada del estado anterior.
+    if(sinCache) q._ts = Date.now();
+    return this.call(`/apps/${CONFIG.APP_ID}/dtypes/entity/${entityId}.json`,'GET', q);
   },
   // Guardar/actualizar por formulario (único método que respeta relaciones).
   // recordId null = crear (POST a /dtypes.json con entity_id en el body).
@@ -1766,13 +1770,14 @@ function detectarNivelAnalisis(nivel, vTipo, vN0, vN1, vN2, vN3){
   }
   return null;
 }
-async function loadInventario(){
-  if(STATE.inventario && STATE.inventario.length) return STATE.inventario;
+async function loadInventario(forzar){
+  if(!forzar && STATE.inventario && STATE.inventario.length) return STATE.inventario;
   // Reintentar si viene vacío (problema de timing/red al inicializar): no cachear el cero.
   let regs=[];
   for(let intento=1; intento<=3; intento++){
     try{
-      const data = await API.records(CONFIG.ENTITIES.PROCEDIMIENTO); // tabla integradora (inventario)
+      // forzar=true → lectura sin caché (datos recién creados/borrados)
+      const data = await API.records(CONFIG.ENTITIES.PROCEDIMIENTO, !!forzar); // tabla integradora (inventario)
       regs = data.records||[];
       if(regs.length) break; // datos válidos
     }catch(_){ /* reintentar */ }
@@ -2415,7 +2420,8 @@ async function _npCargarEsquema(){
 async function _npRegistros(key){
   if(_NP_CACHE_REG[key]) return _NP_CACHE_REG[key];
   const def=_nivelDef(key);
-  const data=await API.records(def.entity());
+  // Sin caché: si el usuario acaba de crear un padre, debe aparecer de inmediato.
+  const data=await API.records(def.entity(), true);
   const literales = new Set([def.colNombre, 'Tipo de procesos', 'Tipo de proceso', def.label].filter(Boolean).map(s=>String(s).toLowerCase()));
   const esId = x => /^[a-zA-Z0-9_-]{22}$/.test(String(x));
   // Columna de código por nivel (para filtrar hijos por prefijo del padre)
@@ -2818,8 +2824,7 @@ async function guardarNuevoProceso(){
     cerrarModal('modalNuevoProceso');
     // Refrescar TODO en vivo (inventario, padres, catálogo de códigos, mapa)
     await invalidarCachesProcesos();
-    if(typeof renderInventario==='function') renderInventario();
-    if(typeof renderMapa==='function' && document.getElementById('view-mapa') && document.getElementById('view-mapa').classList.contains('active')) renderMapa();
+    await repintarVistaActiva();   // se ve en vivo, sin recargar la app
   }catch(e){
     // Si quedaron registros creados a medias (p.ej. padres en línea), revertirlos.
     if(_creados.length && !/No se pudo registrar la ruta/.test(e.message||'')){
@@ -3562,9 +3567,22 @@ async function invalidarCachesProcesos(){
   if(typeof MP_STATE!=='undefined') MP_STATE.data=null;
   if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
   if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
-  try{ await loadInventario(); }catch(_){}
+  // Pequeña pausa: QuintaDB necesita un instante para que el registro nuevo sea visible.
+  await new Promise(r=>setTimeout(r, 400));
+  try{ await loadInventario(true); }catch(_){}   // true = lectura FRESCA, sin caché
 }
 window.invalidarCachesProcesos=invalidarCachesProcesos;
+
+// Repinta la vista que el usuario está viendo ahora mismo (para que el cambio se vea en vivo).
+async function repintarVistaActiva(){
+  const activa = document.querySelector('.view.active');
+  const id = activa ? activa.id : '';
+  try{
+    if(id==='view-mapa' && typeof renderMapa==='function') await renderMapa();
+    else if(typeof renderInventario==='function') await renderInventario();
+  }catch(e){ console.warn('repintarVistaActiva:', e.message); }
+}
+window.repintarVistaActiva=repintarVistaActiva;
 
 // Devuelve la entidad (tabla) de nivel que corresponde a una etiqueta de nivel.
 function _entidadPorNivelLabel(label){
@@ -3608,7 +3626,7 @@ async function _borrarEnTablaNivel(nivelLabel, nombre){
   }[nivelLabel];
   let borrados=0;
   try{
-    const d=await API.records(ent);
+    const d=await API.records(ent, true);   // fresco: debe ver el estado real actual
     const objetivos=(d.records||[]).filter(r=>_codigoInicio((r.values||{})[colNom])===cod);
     for(const o of objetivos){
       try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+o.id+'.json','DELETE',{}); borrados++; }
@@ -3640,7 +3658,8 @@ async function eliminarInventario(rid){
     //    Solo si ya no lo usa nadie, se borra también en la tabla del nivel (evita fantasmas
     //    sin romper procesos que aún cuelgan de él en otras rutas).
     STATE.inventario=[];
-    await loadInventario();
+    await new Promise(r=>setTimeout(r, 400));   // margen de propagación del borrado
+    await loadInventario(true);                 // fresco: refleja el borrado real
     let borradosNivel=0;
     if(codigo){
       const C=INV_COLS;
@@ -3652,7 +3671,7 @@ async function eliminarInventario(rid){
     }
     toast('Eliminado del inventario'+(borradosNivel?' y de la tabla de '+nivel+'.':'.'));
     await invalidarCachesProcesos();   // refresca todo en vivo (inventario, padres, códigos, mapa)
-    renderInventario();
+    await repintarVistaActiva();
   }catch(e){ toast('Error al eliminar: '+e.message, true); }
 }
 window.eliminarInventario=eliminarInventario;
@@ -3678,7 +3697,7 @@ async function archivarInventario(rid, archivar){
     await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','PUT',{ values: JSON.stringify(campos) });
     toast(archivar?'Elemento archivado.':'Elemento reactivado.');
     await invalidarCachesProcesos();
-    renderInventario();
+    await repintarVistaActiva();
   }catch(e){ toast('Error al '+accion+': '+e.message, true); }
 }
 window.archivarInventario=archivarInventario;
