@@ -2559,11 +2559,16 @@ async function _npCodigosUsadosAsync(nivel){
     const col={ n0:C.n0, n1:C.n1, n2:C.n2, n3:C.n3, proc:C.proc }[nivel];
     if(col){ (STATE.inventario||[]).forEach(r=>{ const c=codigoDe((r.values||{})[col]); if(c) usados.add(c); }); }
   }catch(_){}
-  // Fuente 2: la tabla propia del nivel
-  try{
-    const regs=await _npRegistros(nivel);
-    (regs||[]).forEach(r=>{ const c=(r.codigo||'').trim() || codigoDe(r.nombre); if(c) usados.add(c); });
-  }catch(_){}
+  // Fuente 2: la tabla propia del nivel.
+  // NO aplica al Nivel 4 ('proc'): su única tabla ES PROCEDIMIENTO, que ya se leyó como
+  // inventario en la Fuente 1. Leerla otra vez añadía códigos de filas sin ruta (residuos
+  // de versiones antiguas), y hacía que un código borrado siguiera pareciendo ocupado.
+  if(nivel!=='proc'){
+    try{
+      const regs=await _npRegistros(nivel);
+      (regs||[]).forEach(r=>{ const c=(r.codigo||'').trim() || codigoDe(r.nombre); if(c) usados.add(c); });
+    }catch(_){}
+  }
   return usados;
 }
 function _npCodigosUsados(nivel){
@@ -2583,21 +2588,25 @@ function _npCodigosUsados(nivel){
   return usados;
 }
 // Calcula el siguiente código libre, recibiendo el conjunto de usados ya resuelto.
+// Sugiere el PRIMER CÓDIGO LIBRE bajo un prefijo (no el máximo+1).
+// Si existen .01 .02 .03 .05 y se borró el .04, debe sugerir .04 — no .06.
+// Solo cuenta como ocupado lo que está REALMENTE en uso (conjunto `usados`).
+// El catálogo `opciones` sirve para ofrecer códigos, NUNCA para elevar el correlativo:
+// un código que existe en el catálogo pero ya no se usa está libre y debe reutilizarse.
 function _npSiguienteCodigoConUsados(nivel, prefijo, opciones, usados){
   if(!prefijo) return '';
   usados = usados || new Set();
-  // 1) Candidatos del catálogo bajo el prefijo que aún no se usaron
-  const libres=(opciones||[]).filter(c=>c!==prefijo && c.startsWith(prefijo) && !usados.has(c));
-  if(libres.length) return libres.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))[0];
-  // 2) Si no hay libres, GENERAR el siguiente correlativo
   const esN0 = (nivel==='n0');
   const patron = esN0
     ? new RegExp('^'+prefijo+'(\\d+)$')
     : new RegExp('^'+prefijo.replace(/[.]/g,'\\.')+'\\.(\\d+)$');
-  let maxN=0;
-  usados.forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
-  (opciones||[]).forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
-  const num = String(maxN+1).padStart(2,'0');
+  // Números YA OCUPADOS bajo este prefijo (solo del conjunto `usados`)
+  const ocupados=new Set();
+  usados.forEach(c=>{ const m=String(c).match(patron); if(m) ocupados.add(parseInt(m[1],10)); });
+  // Buscar el primer número libre empezando en 1 (rellena huecos dejados por borrados)
+  let n=1;
+  while(ocupados.has(n)) n++;
+  const num = String(n).padStart(2,'0');
   return esN0 ? (prefijo+num) : (prefijo+'.'+num);
 }
 function _npSiguienteCodigo(nivel, prefijo, opciones){
@@ -2621,8 +2630,10 @@ function _npSiguienteCodigo(nivel, prefijo, opciones){
 // Repinta el desplegable de código filtrado por el prefijo del padre, y preselecciona el sugerido.
 async function npActualizarCodigos(){
   // Garantizar que el inventario esté cargado: de él salen los códigos YA USADOS.
-  if(!STATE.inventario || !STATE.inventario.length){
-    try{ await loadInventario(); }catch(_){}
+  // Se relee SIN CACHÉ para que un código recién borrado deje de contar como ocupado
+  // y se pueda reutilizar de inmediato (antes se sugería el siguiente número).
+  try{ await loadInventario(true); }catch(_){
+    if(!STATE.inventario || !STATE.inventario.length){ try{ await loadInventario(); }catch(__){} }
   }
   const nivel=document.getElementById('np_nivel').value;
   const def=_nivelDef(nivel);
