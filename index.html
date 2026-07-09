@@ -2887,6 +2887,14 @@ async function guardarNuevoProceso(){
       if(nivel==='proc' && _resRuta && _resRuta.id) _creados.push(_resRuta.id);
     }catch(errRuta){
       const fallidos=await _revertirCreados(_creados);
+      // Caso conocido: el campo «Código "Procedimiento"» de la tabla PROCEDIMIENTO tiene
+      // activada la opción «Único» en QuintaDB. Es un select cuyo valor por defecto es
+      // 'Seleccione'; al crear un N0/N1/N2/N3 ese campo queda en 'Seleccione' y choca con
+      // cualquier otra fila que ya lo tenga. No es un problema del código del proceso.
+      const msgQ=String(errRuta.message||'');
+      if(/Seleccione.*ya creado|ya creado.*Seleccione/i.test(msgQ)){
+        throw new Error('QuintaDB rechazó el registro por una regla de unicidad. Entra a QuintaDB → tabla «Inventario de procesos y procedimientos» → campo «Código "Procedimiento"» y DESACTIVA la casilla «Único». Ese campo ya no se usa: el código va dentro del nombre y de la Ruta completa. No se creó nada.');
+      }
       if(fallidos.length){
         throw new Error('No se pudo registrar la ruta y quedaron registros incompletos (ids: '+fallidos.join(', ')+'). Avisa al administrador.');
       }
@@ -2948,12 +2956,16 @@ async function _npCrearRuta(nivel, codObjetivo, nomObjetivo){
   const campos={}; campos[FID_RUTA]=ruta;
   const procDef=_nivelDef('proc');
   if(procDef && procDef.estadoField) campos[procDef.estadoField]='Activo';
-  // NIVEL 4: esta fila es el ÚNICO registro de la actividad. Guardamos también su nombre
-  // y su código aquí mismo (TEXTO PLANO). No se usan campos de relación: QuintaDB no los
-  // escribe por API, y ese era el origen de las filas fantasma sin ruta.
+  // NIVEL 4: esta fila es el ÚNICO registro de la actividad. Guardamos su nombre aquí mismo
+  // (TEXTO PLANO). No se usan campos de relación: QuintaDB no los escribe por API.
+  //
+  // IMPORTANTE: NO se escribe el campo «Código "Procedimiento"». Es un select con la opción
+  // «Único» activada en QuintaDB, y su valor por defecto es 'Seleccione'. Escribirlo (o
+  // dejar que el servidor lo rellene) provoca el error «…con 'Seleccione' ya creado» en
+  // cuanto existe más de una fila. El código real vive como prefijo del nombre y dentro
+  // de la «Ruta completa», así que ese campo es redundante.
   if(nivel==='proc'){
     if(procDef && procDef.nombreField) campos[procDef.nombreField] = codObjetivo ? (codObjetivo+' '+nomObjetivo) : nomObjetivo;
-    if(procDef && procDef.codigoField && codObjetivo) campos[procDef.codigoField]=codObjetivo;
   }
   const res = await API.saveForm(null, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
   const newId = res && (res.id || (res.record&&res.record.id) || (res.dtype&&res.dtype.id) || (res.data&&res.data.id)) || null;
@@ -2976,7 +2988,19 @@ async function _npInsertar(def, idsPadres, codigo, nombre){
     if(pid && !String(pid).startsWith('inv::')) campos[p.rel]=[pid];
   });
   if(def.estadoField) campos[def.estadoField]='Activo';
-  const res=await API.saveForm(null, campos, def.entity());
+  let res;
+  try{
+    res = await API.saveForm(null, campos, def.entity());
+  }catch(e){
+    // Si la tabla rechaza el campo de código por una regla de «Único», reintentar SIN él.
+    // El código no se pierde: va como prefijo del nombre («M01.05.01.03 Aprobación…»),
+    // que es de donde lo lee toda la aplicación.
+    const msg=String(e.message||'');
+    if(def.codigoField && campos[def.codigoField] && /ya creado|already (exists|created)|unique/i.test(msg)){
+      delete campos[def.codigoField];
+      res = await API.saveForm(null, campos, def.entity());
+    } else { throw e; }
+  }
   const newId = res && (res.id || (res.record&&res.record.id) || (res.dtype&&res.dtype.id) || (res.data&&res.data.id));
   if(!newId) throw new Error('No se pudo confirmar la creación de '+def.label+'.');
   return newId;
@@ -3883,20 +3907,35 @@ async function guardarEdicionInventario(){
     if(nuevo!==String(n.nombre||'').trim()){ cambios.push({ ...n, nuevo, def:defPorKey[n.key] }); }
   }
   if(!cambios.length){ toast('No hay cambios que guardar.'); return; }
-  // Aviso si algún nivel superior está compartido por varias filas
+  // Aviso de cuántas filas se verán afectadas por cada nivel compartido.
+  // El conteo se hace DENTRO del contexto de ancestros de la fila editada: un mismo nombre
+  // de nivel puede existir bajo padres distintos y esas filas NO deben tocarse.
+  const _ordenKeysAviso=['tipo','n0','n1','n2','n3','proc'];
+  const _filaEd=(STATE.inventario||[]).find(r=>r.id===_EI_FILA.rid);
+  const _vEd=(_filaEd && _filaEd.values)||{};
+  const _mismoCtx=(r,key)=>{
+    const i=_ordenKeysAviso.indexOf(key);
+    const v=r.values||{};
+    return _ordenKeysAviso.slice(0,Math.max(0,i)).every(k=>{
+      const col=INV_COLS[k];
+      return String(v[col]||'').trim()===String(_vEd[col]||'').trim();
+    });
+  };
   const compartidos=[];
   for(const c of cambios){
-    if(c.key==='proc') continue; // el procedimiento es único de esta fila
-    // Si el nivel estaba VACÍO, se está COMPLETANDO solo esta fila: no hay nada compartido
-    // que avisar (todas las filas incompletas comparten el vacío, pero no son el mismo proceso).
-    if(!String(c.nombre||'').trim()) continue;
+    if(c.key==='proc') continue; // la actividad (Nivel 4) es única de esta fila
+    const nombreViejo=String(c.nombre||'').trim();
     const cuantas=(STATE.inventario||[]).filter(r=>{
-      const val=(r.values||{})[INV_COLS[c.key]]; return val && String(val).trim()===c.nombre;
+      if(!_mismoCtx(r,c.key)) return false;
+      return String((r.values||{})[INV_COLS[c.key]]||'').trim()===nombreViejo;
     }).length;
-    if(cuantas>1) compartidos.push(`«${c.nombre}» (${c.label}) → en ${cuantas} filas`);
+    if(cuantas>1){
+      const etq = nombreViejo || '(vacío)';
+      compartidos.push(`«${etq}» (${c.label}) → en ${cuantas} filas del mismo proceso padre`);
+    }
   }
   if(compartidos.length){
-    if(!confirm('Estos niveles están compartidos y el cambio afectará a TODAS sus filas:\n\n'+compartidos.join('\n')+'\n\n¿Continuar?')) return;
+    if(!confirm('Estos niveles son compartidos dentro del mismo proceso padre y el cambio afectará a todas sus filas:\n\n'+compartidos.join('\n')+'\n\n¿Continuar?')) return;
   }
   btn.disabled=true; btn.textContent='Guardando…';
   try{
@@ -3916,6 +3955,20 @@ async function guardarEdicionInventario(){
     // Recolectar TODAS las filas a actualizar (de todos los cambios) evitando duplicados
     const inv=await loadInventario();
     const porFila=new Map(); // id -> {fila, cambios:{key:nuevoNombre}}
+    const filaEditada = inv.find(r=>r.id===_EI_FILA.rid);
+    const vEd = (filaEditada && filaEditada.values) || {};
+    // Ancestros del nivel `key` en la fila que se está editando (tipo, n0, n1… hasta el anterior).
+    // Un mismo nombre de nivel puede repetirse bajo padres distintos: p.ej. «M01.03.01 Gestión
+    // del ingresante» solo debe tocar las filas cuyo N1 sea «M01.03 …», nunca las de «M01.04 …».
+    // Por eso el cambio se acota SIEMPRE al contexto de ancestros de la fila editada.
+    const ancestrosDe = (key)=>{
+      const i = ordenKeys.indexOf(key);
+      return ordenKeys.slice(0, Math.max(0,i)).map(k=>({ col:INV_COLS[k], val:String(vEd[INV_COLS[k]]||'').trim() }));
+    };
+    const mismoContexto = (r, key)=>{
+      const v=r.values||{};
+      return ancestrosDe(key).every(a=> String(v[a.col]||'').trim() === a.val );
+    };
     for(const c of cambios){
       const m=String(c.nombre).match(/^([A-Za-z]\d+(?:\.\d+)*)\s+/);
       const codPrefijoViejo=m?m[1]:'';
@@ -3931,25 +3984,30 @@ async function guardarEdicionInventario(){
       }
       const colNombre=INV_COLS[c.key];
       const nombreViejo=String(c.nombre||'').trim();
-      if(!nombreViejo){
-        // El nivel estaba VACÍO y se está COMPLETANDO (p.ej. añadir el Nivel 4 que faltaba).
-        // Afecta SOLO a la fila que se está editando: no se puede buscar por nombre porque
-        // todas las filas incompletas comparten el vacío. Antes esto no encontraba ninguna
-        // fila y el guardado se quedaba sin hacer nada, en silencio.
-        const fila=inv.find(r=>r.id===_EI_FILA.rid);
-        if(fila){
-          if(!porFila.has(fila.id)) porFila.set(fila.id,{fila,cambios:{}});
-          porFila.get(fila.id).cambios[c.key]=nuevoNombre;
+      if(c.key==='proc'){
+        // La actividad (Nivel 4) es única de su fila: nunca se propaga.
+        if(filaEditada){
+          if(!porFila.has(filaEditada.id)) porFila.set(filaEditada.id,{fila:filaEditada,cambios:{}});
+          porFila.get(filaEditada.id).cambios[c.key]=nuevoNombre;
         }
       } else {
-        // El nivel tenía nombre: el cambio se propaga a todas las filas que lo comparten.
+        // Niveles compartidos (tipo, n0, n1, n2, n3): el cambio alcanza a las filas hermanas,
+        // pero SOLO dentro del mismo contexto de ancestros.
+        //  · Si el nivel tenía nombre  → filas con ese mismo nombre bajo los mismos ancestros.
+        //  · Si el nivel estaba vacío  → filas que también lo tienen vacío bajo los mismos
+        //    ancestros (así se completa de golpe todo el subárbol que le corresponde).
         inv.forEach(r=>{
-          const val=(r.values||{})[colNombre];
-          if(val && String(val).trim()===nombreViejo){
-            if(!porFila.has(r.id)) porFila.set(r.id,{fila:r,cambios:{}});
-            porFila.get(r.id).cambios[c.key]=nuevoNombre;
-          }
+          if(!mismoContexto(r, c.key)) return;
+          const val=String((r.values||{})[colNombre]||'').trim();
+          if(val!==nombreViejo) return;
+          if(!porFila.has(r.id)) porFila.set(r.id,{fila:r,cambios:{}});
+          porFila.get(r.id).cambios[c.key]=nuevoNombre;
         });
+        // Red de seguridad: la fila editada siempre debe recibir el cambio.
+        if(filaEditada && !porFila.has(filaEditada.id)){
+          porFila.set(filaEditada.id,{fila:filaEditada,cambios:{}});
+        }
+        if(filaEditada) porFila.get(filaEditada.id).cambios[c.key]=nuevoNombre;
       }
     }
     const total=porFila.size;
