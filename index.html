@@ -2536,34 +2536,84 @@ function _npPrefijoPadre(nivel){
   return m?m[1]:'';
 }
 // Sugiere el siguiente código correlativo disponible bajo un prefijo, mirando los existentes.
+async function _npCodigosUsadosAsync(nivel){
+  // Reúne los códigos YA USADOS de dos fuentes, para no ofrecer duplicados:
+  //  (1) el inventario (columnas derivadas de la Ruta completa)
+  //  (2) la tabla propia del nivel (NIVEL0/NIVEL1/…), por si hay registros sin ruta aún
+  const usados=new Set();
+  const codigoDe = nombre => { const m=String(nombre||'').trim().match(/^([A-Za-z]\d+(?:\.\d+)*)/); return m?m[1]:''; };
+  // Fuente 1: inventario
+  try{
+    if(!STATE.inventario || !STATE.inventario.length) await loadInventario();
+    const C=INV_COLS;
+    const col={ n0:C.n0, n1:C.n1, n2:C.n2, n3:C.n3, proc:C.proc }[nivel];
+    if(col){ (STATE.inventario||[]).forEach(r=>{ const c=codigoDe((r.values||{})[col]); if(c) usados.add(c); }); }
+  }catch(_){}
+  // Fuente 2: la tabla propia del nivel
+  try{
+    const regs=await _npRegistros(nivel);
+    (regs||[]).forEach(r=>{ const c=(r.codigo||'').trim() || codigoDe(r.nombre); if(c) usados.add(c); });
+  }catch(_){}
+  return usados;
+}
+function _npCodigosUsados(nivel){
+  // Versión síncrona (usa lo que ya esté en memoria). Se mantiene por compatibilidad.
+  const usados=new Set();
+  const C=INV_COLS;
+  const col={ n0:C.n0, n1:C.n1, n2:C.n2, n3:C.n3, proc:C.proc }[nivel];
+  if(!col) return usados;
+  const codigoDe = nombre => { const m=String(nombre||'').trim().match(/^([A-Za-z]\d+(?:\.\d+)*)/); return m?m[1]:''; };
+  (STATE.inventario||[]).forEach(r=>{
+    const v=r.values||{};
+    const cod=codigoDe(v[col]);
+    if(cod) usados.add(cod);
+  });
+  // También los de la tabla del nivel si ya están cacheados
+  try{ (_NP_CACHE_REG[nivel]||[]).forEach(r=>{ const c=(r.codigo||'').trim()||codigoDe(r.nombre); if(c) usados.add(c); }); }catch(_){}
+  return usados;
+}
+// Calcula el siguiente código libre, recibiendo el conjunto de usados ya resuelto.
+function _npSiguienteCodigoConUsados(nivel, prefijo, opciones, usados){
+  if(!prefijo) return '';
+  usados = usados || new Set();
+  // 1) Candidatos del catálogo bajo el prefijo que aún no se usaron
+  const libres=(opciones||[]).filter(c=>c!==prefijo && c.startsWith(prefijo) && !usados.has(c));
+  if(libres.length) return libres.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))[0];
+  // 2) Si no hay libres, GENERAR el siguiente correlativo
+  const esN0 = (nivel==='n0');
+  const patron = esN0
+    ? new RegExp('^'+prefijo+'(\\d+)$')
+    : new RegExp('^'+prefijo.replace(/[.]/g,'\\.')+'\\.(\\d+)$');
+  let maxN=0;
+  usados.forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
+  (opciones||[]).forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
+  const num = String(maxN+1).padStart(2,'0');
+  return esN0 ? (prefijo+num) : (prefijo+'.'+num);
+}
 function _npSiguienteCodigo(nivel, prefijo, opciones){
   if(!prefijo) return '';
-  // Códigos ya usados en el inventario que empiezan con el prefijo
-  const usados=new Set();
-  try{
-    const COLCOD={ n0:'Código "Nivel 0"', n1:'Código "Nivel 1"', n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
-    (STATE.inventario||[]).forEach(r=>{ const v=r.values||{}; const c=v[COLCOD[nivel]]; if(c) usados.add(String(c).trim()); });
-  }catch(_){}
+  const usados=_npCodigosUsados(nivel);
   // 1) Candidatos del catálogo que cuelgan del prefijo y aún no se usaron
   const libres=(opciones||[]).filter(c=>c!==prefijo && c.startsWith(prefijo) && !usados.has(c));
   if(libres.length) return libres.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))[0];
   // 2) Si no hay libres en el catálogo, GENERAR el siguiente correlativo.
-  //    Para N0 el prefijo es una letra (E/M/S) → siguiente sería E07, M07, etc.
-  //    Para los demás, el prefijo es el código del padre (ej. M01) → siguiente hijo M01.07.
   const esN0 = (nivel==='n0');
   const patron = esN0
-    ? new RegExp('^'+prefijo+'(\\d+)$')                 // E06, M03…
-    : new RegExp('^'+prefijo.replace(/[.]/g,'\\.')+'\\.(\\d+)$'); // M01.06, M01.07…
+    ? new RegExp('^'+prefijo+'(\\d+)$')
+    : new RegExp('^'+prefijo.replace(/[.]/g,'\\.')+'\\.(\\d+)$');
   let maxN=0;
   usados.forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
-  // También mirar el catálogo por si define un tope mayor
   (opciones||[]).forEach(c=>{ const m=String(c).match(patron); if(m){ const n=parseInt(m[1],10); if(n>maxN) maxN=n; } });
   const sig=maxN+1;
   const num = String(sig).padStart(2,'0');
   return esN0 ? (prefijo+num) : (prefijo+'.'+num);
 }
 // Repinta el desplegable de código filtrado por el prefijo del padre, y preselecciona el sugerido.
-function npActualizarCodigos(){
+async function npActualizarCodigos(){
+  // Garantizar que el inventario esté cargado: de él salen los códigos YA USADOS.
+  if(!STATE.inventario || !STATE.inventario.length){
+    try{ await loadInventario(); }catch(_){}
+  }
   const nivel=document.getElementById('np_nivel').value;
   const def=_nivelDef(nivel);
   if(!def || !def.codigoField) return;
@@ -2574,13 +2624,9 @@ function npActualizarCodigos(){
   // Filtrar por prefijo del padre (si hay)
   let filtradas = prefijo ? opc.filter(c=>c.startsWith(prefijo)) : opc.slice();
   if(prefijo && !filtradas.length) filtradas=opc.slice(); // si el filtro deja vacío, mostrar todo como respaldo
-  // Códigos YA USADOS en el inventario (para marcarlos y no ofrecerlos como nuevos)
-  const usados=new Set();
-  try{
-    const COLCOD={ n0:'Código "Nivel 0"', n1:'Código "Nivel 1"', n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
-    (STATE.inventario||[]).forEach(r=>{ const v=r.values||{}; const c=v[COLCOD[nivel]]; if(c) usados.add(String(c).trim()); });
-  }catch(_){}
-  const sugerido=_npSiguienteCodigo(nivel, prefijo, opc);
+  // Códigos YA USADOS (inventario + tabla del nivel), para no ofrecer duplicados
+  const usados=await _npCodigosUsadosAsync(nivel);
+  const sugerido=_npSiguienteCodigoConUsados(nivel, prefijo, opc, usados);
   // Opciones: las libres primero (seleccionables), las usadas al final (deshabilitadas y marcadas)
   let libres = filtradas.filter(c=>!usados.has(c));
   // Si el sugerido fue generado (no está en el catálogo), añadirlo al frente de las libres
@@ -2743,11 +2789,16 @@ async function guardarNuevoProceso(){
     try{ await _npCrearRuta(nivel, cod, nom); }catch(e){ console.warn('[ruta] no se pudo crear la fila de ruta:', e.message); }
     toast('Proceso creado correctamente.');
     cerrarModal('modalNuevoProceso');
-    // refrescar inventario y caches
-    STATE.inventario=[]; _NP_CACHE_REG={};
+    // Refrescar TODO en vivo: limpiar cachés y RECARGAR el inventario desde el servidor.
+    STATE.inventario=[];
+    _NP_CACHE_REG={};        // registros de padres (para que el nuevo aparezca como opción)
+    _NP_SCHEMA_OK=false;     // re-leer catálogos de códigos
+    if(typeof MP_STATE!=='undefined'){ MP_STATE.data=null; } // el mapa se reconstruye
+    if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
+    if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
+    await loadInventario();   // recarga real desde el servidor (STATE.inventario está vacío)
     if(typeof renderInventario==='function') renderInventario();
-    // Invalidar los datos del mapa para que se reconstruyan con el nuevo proceso
-    if(typeof MP_STATE!=='undefined'){ MP_STATE.data=null; }
+    if(typeof renderMapa==='function' && document.getElementById('view-mapa') && document.getElementById('view-mapa').classList.contains('active')) renderMapa();
   }catch(e){ toast(e.message||'Error al crear.', true); }
   finally{ btn.disabled=false; btn.textContent='Crear'; }
 }
