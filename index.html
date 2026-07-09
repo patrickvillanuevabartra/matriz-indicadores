@@ -3821,14 +3821,21 @@ async function guardarEdicionInventario(){
     const inp=document.getElementById('ei_nivel_'+n.key);
     if(!inp || inp.disabled) continue;
     const nuevo=String(inp.value||'').trim();
-    if(!nuevo){ toast('El nombre de '+n.label+' no puede quedar vacío.', true); inp.focus(); return; }
-    if(nuevo!==n.nombre){ cambios.push({ ...n, nuevo, def:defPorKey[n.key] }); }
+    const yaEstabaVacio = !String(n.nombre||'').trim();
+    // Un nivel que YA estaba vacío puede quedarse vacío (no toda ruta llega al Nivel 4).
+    // Solo se exige nombre cuando el nivel tenía contenido y se quiere borrar.
+    if(!nuevo && !yaEstabaVacio){ toast('El nombre de '+n.label+' no puede quedar vacío.', true); inp.focus(); return; }
+    if(!nuevo && yaEstabaVacio) continue;   // sigue vacío: no es un cambio
+    if(nuevo!==String(n.nombre||'').trim()){ cambios.push({ ...n, nuevo, def:defPorKey[n.key] }); }
   }
   if(!cambios.length){ toast('No hay cambios que guardar.'); return; }
   // Aviso si algún nivel superior está compartido por varias filas
   const compartidos=[];
   for(const c of cambios){
     if(c.key==='proc') continue; // el procedimiento es único de esta fila
+    // Si el nivel estaba VACÍO, se está COMPLETANDO solo esta fila: no hay nada compartido
+    // que avisar (todas las filas incompletas comparten el vacío, pero no son el mismo proceso).
+    if(!String(c.nombre||'').trim()) continue;
     const cuantas=(STATE.inventario||[]).filter(r=>{
       const val=(r.values||{})[INV_COLS[c.key]]; return val && String(val).trim()===c.nombre;
     }).length;
@@ -3869,20 +3876,40 @@ async function guardarEdicionInventario(){
         nuevoNombre=codPrefijoViejo+' '+nuevoNombre;
       }
       const colNombre=INV_COLS[c.key];
-      inv.forEach(r=>{
-        const val=(r.values||{})[colNombre];
-        if(val && String(val).trim()===String(c.nombre).trim()){
-          if(!porFila.has(r.id)) porFila.set(r.id,{fila:r,cambios:{}});
-          porFila.get(r.id).cambios[c.key]=nuevoNombre;
+      const nombreViejo=String(c.nombre||'').trim();
+      if(!nombreViejo){
+        // El nivel estaba VACÍO y se está COMPLETANDO (p.ej. añadir el Nivel 4 que faltaba).
+        // Afecta SOLO a la fila que se está editando: no se puede buscar por nombre porque
+        // todas las filas incompletas comparten el vacío. Antes esto no encontraba ninguna
+        // fila y el guardado se quedaba sin hacer nada, en silencio.
+        const fila=inv.find(r=>r.id===_EI_FILA.rid);
+        if(fila){
+          if(!porFila.has(fila.id)) porFila.set(fila.id,{fila,cambios:{}});
+          porFila.get(fila.id).cambios[c.key]=nuevoNombre;
         }
-      });
+      } else {
+        // El nivel tenía nombre: el cambio se propaga a todas las filas que lo comparten.
+        inv.forEach(r=>{
+          const val=(r.values||{})[colNombre];
+          if(val && String(val).trim()===nombreViejo){
+            if(!porFila.has(r.id)) porFila.set(r.id,{fila:r,cambios:{}});
+            porFila.get(r.id).cambios[c.key]=nuevoNombre;
+          }
+        });
+      }
     }
     const total=porFila.size;
+    if(!total){ toast('No se encontró la fila a actualizar. Recarga la página e inténtalo de nuevo.', true); btn.disabled=false; btn.textContent='Guardar cambios'; return; }
     let hechos=0, fallos=0, i=0;
     for(const {fila,cambios:camb} of porFila.values()){
       const v=fila.values||{};
-      // Reconstruir la ruta aplicando los cambios de esta fila
-      const partes=ordenKeys.map(k=> (camb[k]!==undefined)? camb[k] : (v[INV_COLS[k]]||'') );
+      // Reconstruir la ruta aplicando los cambios de esta fila.
+      // Se descartan los segmentos vacíos: una ruta que no llega al Nivel 4 debe quedar
+      // «Tipo › N0 › N1 › N2 › N3», nunca «Tipo › N0 › N1 › N2 › N3 › » con separadores sueltos.
+      const partes=ordenKeys
+        .map(k=> (camb[k]!==undefined)? camb[k] : (v[INV_COLS[k]]||'') )
+        .map(x=>String(x||'').trim())
+        .filter(Boolean);
       const nuevaRuta=partes.join(' › ');
       const campos={}; campos[FID_RUTA]=nuevaRuta;
       const ok=await guardarFila(fila.id,campos);
@@ -3897,8 +3924,11 @@ async function guardarEdicionInventario(){
     if(fallos>0) toast('Guardado con '+fallos+' error(es) de '+total+'. Puede que algunas filas no se actualizaran.', true);
     else toast('Cambios guardados.');
     cerrarModal('modalEditInv');
-    STATE.inventario=[]; _NP_CACHE_REG={};
-    renderInventario();
+    // Refresco EN VIVO: invalidar todos los cachés (inventario, padres, códigos, mapa) y
+    // releer del servidor SIN caché. Antes se limpiaba STATE.inventario y se repintaba de
+    // inmediato: el proxy devolvía la respuesta cacheada anterior y el cambio no se veía.
+    await invalidarCachesProcesos();
+    await repintarVistaActiva();
   }catch(e){ toast('Error al guardar: '+e.message, true); }
   finally{ btn.disabled=false; btn.textContent='Guardar cambios'; }
 }
