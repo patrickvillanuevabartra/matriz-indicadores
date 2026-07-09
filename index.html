@@ -3531,16 +3531,91 @@ async function invalidarCachesProcesos(){
 }
 window.invalidarCachesProcesos=invalidarCachesProcesos;
 
+// Devuelve la entidad (tabla) de nivel que corresponde a una etiqueta de nivel.
+function _entidadPorNivelLabel(label){
+  return {
+    'Proceso nivel 0': CONFIG.ENTITIES.NIVEL0,
+    'Proceso nivel 1': CONFIG.ENTITIES.NIVEL1,
+    'Proceso nivel 2': CONFIG.ENTITIES.NIVEL2,
+    'Proceso nivel 3': CONFIG.ENTITIES.NIVEL3
+  }[label] || null;
+}
+// Extrae el código (ej. M01.06) del inicio de un nombre.
+function _codigoInicio(nombre){
+  const m=String(nombre||'').trim().match(/^([A-Za-z]\d+(?:\.\d+)*)/);
+  return m?m[1]:'';
+}
+// Cuenta cuántos procesos "hijos" cuelgan de un código (en el inventario, vía ruta).
+function _hijosDe(codigo){
+  if(!codigo) return 0;
+  const C=INV_COLS;
+  const cols=[C.n0,C.n1,C.n2,C.n3,C.proc];
+  let n=0;
+  (STATE.inventario||[]).forEach(r=>{
+    const v=r.values||{};
+    for(const col of cols){
+      const cod=_codigoInicio(v[col]);
+      // Es hijo si su código empieza con el del padre + "." (ej. M01.06.01 cuelga de M01.06)
+      if(cod && cod!==codigo && cod.startsWith(codigo+'.')){ n++; break; }
+    }
+  });
+  return n;
+}
+// Busca y borra el registro correspondiente en la tabla del nivel (para no dejar fantasmas).
+async function _borrarEnTablaNivel(nivelLabel, nombre){
+  const ent=_entidadPorNivelLabel(nivelLabel);
+  if(!ent) return 0;   // Nivel 4 / Tipo no tienen tabla propia que limpiar aquí
+  const cod=_codigoInicio(nombre);
+  if(!cod) return 0;
+  const colNom={
+    'Proceso nivel 0':'Proceso nivel 0','Proceso nivel 1':'Proceso nivel 1',
+    'Proceso nivel 2':'Proceso nivel 2','Proceso nivel 3':'Proceso nivel 3'
+  }[nivelLabel];
+  let borrados=0;
+  try{
+    const d=await API.records(ent);
+    const objetivos=(d.records||[]).filter(r=>_codigoInicio((r.values||{})[colNom])===cod);
+    for(const o of objetivos){
+      try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+o.id+'.json','DELETE',{}); borrados++; }
+      catch(e){ console.warn('No se pudo borrar en tabla de nivel:', o.id, e.message); }
+    }
+  }catch(e){ console.warn('Error leyendo tabla de nivel:', e.message); }
+  return borrados;
+}
+
 async function eliminarInventario(rid){
   const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
-  const {nombre}=_invNivelElemento(r);
+  const {nivel, nombre}=_invNivelElemento(r);
+  const codigo=_codigoInicio(nombre);
   const enUso=await _fichasQueUsan(nombre);
-  let msg='¿Eliminar «'+nombre+'» del inventario? Esta acción no se puede deshacer.';
-  if(enUso>0) msg='⚠️ «'+nombre+'» está en uso por '+enUso+' ficha(s). Si lo eliminas, esas fichas pueden quedar inconsistentes.\n\n¿Eliminar de todos modos?';
+  const hijos=_hijosDe(codigo);
+
+  // Mensaje de confirmación con TODAS las advertencias relevantes
+  let msg='¿Eliminar «'+nombre+'»?\n\nSe borrará del inventario y también de la tabla de '+(nivel||'su nivel')+'.\nEsta acción no se puede deshacer.';
+  const avisos=[];
+  if(hijos>0) avisos.push('⚠️ Tiene '+hijos+' proceso(s) que dependen de él. Si lo eliminas, quedarán sin su proceso padre.');
+  if(enUso>0) avisos.push('⚠️ Está en uso por '+enUso+' ficha(s). Esas fichas pueden quedar inconsistentes.');
+  if(avisos.length) msg=avisos.join('\n\n')+'\n\n'+msg;
   if(!confirm(msg)) return;
+
   try{
+    // 1) Borrar la fila de PROCEDIMIENTO (la ruta: de aquí leen el inventario y el mapa)
     await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','DELETE',{});
-    toast('Elemento eliminado del inventario.');
+    // 2) Recargar el inventario y comprobar si el código sigue apareciendo en ALGUNA otra ruta.
+    //    Solo si ya no lo usa nadie, se borra también en la tabla del nivel (evita fantasmas
+    //    sin romper procesos que aún cuelgan de él en otras rutas).
+    STATE.inventario=[];
+    await loadInventario();
+    let borradosNivel=0;
+    if(codigo){
+      const C=INV_COLS;
+      const sigueUsado=(STATE.inventario||[]).some(reg=>{
+        const v=reg.values||{};
+        return [C.n0,C.n1,C.n2,C.n3,C.proc].some(col=>_codigoInicio(v[col])===codigo);
+      });
+      if(!sigueUsado){ borradosNivel=await _borrarEnTablaNivel(nivel, nombre); }
+    }
+    toast('Eliminado del inventario'+(borradosNivel?' y de la tabla de '+nivel+'.':'.'));
     await invalidarCachesProcesos();   // refresca todo en vivo (inventario, padres, códigos, mapa)
     renderInventario();
   }catch(e){ toast('Error al eliminar: '+e.message, true); }
