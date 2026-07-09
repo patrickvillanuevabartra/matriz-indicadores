@@ -3359,7 +3359,7 @@ function mpL2Row(l2,lane,idx){
   if(hasContent){
     let inner='';
     if(l2.l3&&l2.l3.length){ inner+='<div class="detail-label">Nivel 3</div>'+l2.l3.map(l3=>`<div class="l3-block"><div class="l3-header ${lane}"><span class="l3-code">${MP_ESC(l3.code)}</span><span>${MP_ESC(l3.name)}</span></div>${l3.procs&&l3.procs.length?`<div style="padding:4px 8px 8px">${mpProcList(l3.procs,lane)}</div>`:''}</div>`).join(''); }
-    if(l2.procs&&l2.procs.length){ inner+='<div class="detail-label">Nivel 4</div>'+mpProcList(l2.procs,lane); }
+    if(l2.procs&&l2.procs.length){ inner+='<div class="detail-label">Actividades</div>'+mpProcList(l2.procs,lane); }
     detail=`<div class="l2-detail" id="${rid}" style="display:none">${inner}</div>`;
   }
   return `<div class="l2-item-row">
@@ -3415,7 +3415,7 @@ function mpLevel2(){
             </div></div>`;
           }).join('');
         }
-        else if(sub.procs&&sub.procs.length){ secciones+=`<div style="padding:8px 16px 12px"><div class="detail-label">Nivel 4</div>${mpProcList(sub.procs,lane)}</div>`; }
+        else if(sub.procs&&sub.procs.length){ secciones+=`<div style="padding:8px 16px 12px"><div class="detail-label">Actividades</div>${mpProcList(sub.procs,lane)}</div>`; }
         else { secciones+=`<div style="padding:6px 16px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin desagregación registrada</div>`; }
         secciones+='</div>';
       });
@@ -3458,7 +3458,7 @@ function mpLevel3(){
       hayN3=true;
       const cuerpo=bloquesN3.map(({sub,l2,l3})=>{
         const tieneN4=(l3.procs&&l3.procs.length);
-        const procs=tieneN4?`<div style="padding:4px 8px 8px"><div class="detail-label">Nivel 4</div>${mpProcList(l3.procs,lane)}</div>`:'<div style="padding:6px 12px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin Nivel 4 registrado</div>';
+        const procs=tieneN4?`<div style="padding:4px 8px 8px"><div class="detail-label">Actividades</div>${mpProcList(l3.procs,lane)}</div>`:'<div style="padding:6px 12px 10px;font-size:12px;color:var(--mp-text-xsoft);font-style:italic">Sin Nivel 4 registrado</div>';
         return `<div class="l3-block mp-n3-block">
           <div class="l3-header ${lane}">
             <span class="l3-code">${MP_ESC(l3.code)}</span><span style="flex:1">${MP_ESC(l3.name)}</span>
