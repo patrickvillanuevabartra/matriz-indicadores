@@ -2789,14 +2789,8 @@ async function guardarNuevoProceso(){
     try{ await _npCrearRuta(nivel, cod, nom); }catch(e){ console.warn('[ruta] no se pudo crear la fila de ruta:', e.message); }
     toast('Proceso creado correctamente.');
     cerrarModal('modalNuevoProceso');
-    // Refrescar TODO en vivo: limpiar cachés y RECARGAR el inventario desde el servidor.
-    STATE.inventario=[];
-    _NP_CACHE_REG={};        // registros de padres (para que el nuevo aparezca como opción)
-    _NP_SCHEMA_OK=false;     // re-leer catálogos de códigos
-    if(typeof MP_STATE!=='undefined'){ MP_STATE.data=null; } // el mapa se reconstruye
-    if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
-    if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
-    await loadInventario();   // recarga real desde el servidor (STATE.inventario está vacío)
+    // Refrescar TODO en vivo (inventario, padres, catálogo de códigos, mapa)
+    await invalidarCachesProcesos();
     if(typeof renderInventario==='function') renderInventario();
     if(typeof renderMapa==='function' && document.getElementById('view-mapa') && document.getElementById('view-mapa').classList.contains('active')) renderMapa();
   }catch(e){ toast(e.message||'Error al crear.', true); }
@@ -3523,6 +3517,20 @@ async function _fichasQueUsan(nombre){
   return total;
 }
 
+// Invalida TODOS los cachés relacionados con procesos/inventario y recarga desde el servidor.
+// Se usa tras crear, editar, archivar o eliminar un proceso, para que todo se refleje en vivo.
+async function invalidarCachesProcesos(){
+  STATE.inventario=[];
+  if(typeof _NP_CACHE_REG!=='undefined') _NP_CACHE_REG={};
+  if(typeof _NP_CACHE_OPC!=='undefined') _NP_CACHE_OPC={};
+  if(typeof _NP_SCHEMA_OK!=='undefined') _NP_SCHEMA_OK=false;
+  if(typeof MP_STATE!=='undefined') MP_STATE.data=null;
+  if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
+  if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
+  try{ await loadInventario(); }catch(_){}
+}
+window.invalidarCachesProcesos=invalidarCachesProcesos;
+
 async function eliminarInventario(rid){
   const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
   const {nombre}=_invNivelElemento(r);
@@ -3533,7 +3541,8 @@ async function eliminarInventario(rid){
   try{
     await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','DELETE',{});
     toast('Elemento eliminado del inventario.');
-    STATE.inventario=[]; renderInventario();
+    await invalidarCachesProcesos();   // refresca todo en vivo (inventario, padres, códigos, mapa)
+    renderInventario();
   }catch(e){ toast('Error al eliminar: '+e.message, true); }
 }
 window.eliminarInventario=eliminarInventario;
@@ -3558,7 +3567,8 @@ async function archivarInventario(rid, archivar){
     const campos={}; campos[ESTADO_REGISTRO_FIELD_ID]=archivar?'Archivado':'Activo';
     await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','PUT',{ values: JSON.stringify(campos) });
     toast(archivar?'Elemento archivado.':'Elemento reactivado.');
-    STATE.inventario=[]; renderInventario();
+    await invalidarCachesProcesos();
+    renderInventario();
   }catch(e){ toast('Error al '+accion+': '+e.message, true); }
 }
 window.archivarInventario=archivarInventario;
