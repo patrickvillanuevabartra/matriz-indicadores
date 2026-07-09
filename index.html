@@ -2801,21 +2801,31 @@ async function guardarNuevoProceso(){
         idsPadres[p.key]=val;
       }
     }
-    // 2) Crear el elemento objetivo en su tabla de nivel
+    // 2) Crear el elemento objetivo en su tabla de nivel.
+    //    EXCEPCIÓN — Nivel 4 (Actividad): NO tiene tabla propia aparte. Su único registro
+    //    es la fila de PROCEDIMIENTO que se crea en el paso 3 (con la Ruta completa).
+    //    Antes se creaba aquí una fila extra en PROCEDIMIENTO sin ruta: quedaba fantasma
+    //    (se veía solo la actividad, con N0..N3 vacíos, porque las relaciones no se
+    //    escriben por API en QuintaDB). Todo se resuelve con TEXTO PLANO en el paso 3.
     let cod = def.codigoField ? (document.getElementById('np_codigo').value||'') : '';
     if(cod==='__otro__'){ cod=(document.getElementById('np_codigo_otro')||{}).value||''; cod=cod.trim(); }
     const nom = (document.getElementById('np_nombre').value||'').trim();
     if(!nom){ throw new Error('Escribe el nombre.'); }
     if(def.codigoField && !cod){ throw new Error('Elige el código.'); }
-    const nuevoId = await _npInsertar(def, idsPadres, cod, nom);
-    _creados.push(nuevoId);
+    if(nivel!=='proc'){
+      const nuevoId = await _npInsertar(def, idsPadres, cod, nom);
+      _creados.push(nuevoId);
+    }
 
     // 3) Crear la fila en PROCEDIMIENTO con la RUTA (de aquí leen el mapa y el inventario).
     //    Si esto falla, SE REVIERTEN todos los registros creados en esta operación:
     //    así nunca queda un proceso huérfano (fantasma) en las tablas de nivel.
     let _rutaCreada='';
     try{
-      _rutaCreada = await _npCrearRuta(nivel, cod, nom);
+      const _resRuta = await _npCrearRuta(nivel, cod, nom);
+      _rutaCreada = (_resRuta && _resRuta.ruta) || '';
+      // Para Nivel 4 esta fila ES el elemento: registrarla para poder revertir si algo falla.
+      if(nivel==='proc' && _resRuta && _resRuta.id) _creados.push(_resRuta.id);
     }catch(errRuta){
       const fallidos=await _revertirCreados(_creados);
       if(fallidos.length){
@@ -2874,13 +2884,21 @@ async function _npCrearRuta(nivel, codObjetivo, nomObjetivo){
   // El propio elemento creado
   segs.push(codObjetivo ? (codObjetivo+' '+nomObjetivo) : nomObjetivo);
   const ruta=segs.filter(Boolean).join(' › ');
-  if(!ruta) return;
-  // Crear la fila en PROCEDIMIENTO solo con el campo de texto Ruta completa (+ estado activo)
+  if(!ruta) return { ruta:'', id:null };
+  // Crear la fila en PROCEDIMIENTO con el campo de texto Ruta completa (+ estado activo).
   const campos={}; campos[FID_RUTA]=ruta;
   const procDef=_nivelDef('proc');
   if(procDef && procDef.estadoField) campos[procDef.estadoField]='Activo';
-  await API.saveForm(null, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
-  return ruta;   // se devuelve para poder confirmar que ya es visible en el servidor
+  // NIVEL 4: esta fila es el ÚNICO registro de la actividad. Guardamos también su nombre
+  // y su código aquí mismo (TEXTO PLANO). No se usan campos de relación: QuintaDB no los
+  // escribe por API, y ese era el origen de las filas fantasma sin ruta.
+  if(nivel==='proc'){
+    if(procDef && procDef.nombreField) campos[procDef.nombreField] = codObjetivo ? (codObjetivo+' '+nomObjetivo) : nomObjetivo;
+    if(procDef && procDef.codigoField && codObjetivo) campos[procDef.codigoField]=codObjetivo;
+  }
+  const res = await API.saveForm(null, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
+  const newId = res && (res.id || (res.record&&res.record.id) || (res.dtype&&res.dtype.id) || (res.data&&res.data.id)) || null;
+  return { ruta, id:newId };   // la ruta permite confirmar que ya es visible en el servidor
 }
 
 // Inserta un registro en la tabla de un nivel, enlazando los rel a los padres (idsPadres por key).
@@ -3828,10 +3846,16 @@ async function guardarEdicionInventario(){
     const porFila=new Map(); // id -> {fila, cambios:{key:nuevoNombre}}
     for(const c of cambios){
       const m=String(c.nombre).match(/^([A-Za-z]\d+(?:\.\d+)*)\s+/);
-      const codPrefijo=m?m[1]:'';
-      let nuevoNombre=c.nuevo;
-      if(codPrefijo && !new RegExp('^'+codPrefijo.replace(/\./g,'\\.')).test(nuevoNombre)){
-        nuevoNombre=codPrefijo+' '+nuevoNombre;
+      const codPrefijoViejo=m?m[1]:'';
+      let nuevoNombre=String(c.nuevo||'').trim();
+      // Si el texto que escribió el usuario YA trae su propio código al inicio (p.ej. quiso
+      // renumerar de M01.03.00.02 a M01.03.00.01), se respeta tal cual. Solo se antepone el
+      // código anterior cuando editó únicamente el nombre y no escribió ningún código.
+      // Antes se comparaba contra el código VIEJO, y al cambiar de número quedaba duplicado:
+      // «M01.03.00.02 M01.03.00.01 Nombre».
+      const tieneCodigoPropio = /^[A-Za-z]\d+(?:\.\d+)*\s+/.test(nuevoNombre);
+      if(!tieneCodigoPropio && codPrefijoViejo){
+        nuevoNombre=codPrefijoViejo+' '+nuevoNombre;
       }
       const colNombre=INV_COLS[c.key];
       inv.forEach(r=>{
