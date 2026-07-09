@@ -2407,22 +2407,64 @@ async function _npCargarEsquema(){
   _NP_CACHE_OPC.tipo=[];
   _NP_CACHE_OPC.n0=[..._CODIGOS_FIJOS.n0];
   _NP_CACHE_OPC.n1=[..._CODIGOS_FIJOS.n1];
-  // Niveles N2, N3 y Procedimiento: derivar los códigos de los que ya existen en el inventario
-  // (el endpoint del esquema no es accesible por el proxy). Cubre todos los códigos en uso.
+  // Niveles N2, N3 y Nivel 4: derivar los códigos desde el NOMBRE de cada nivel en la ruta
+  // (el nombre siempre empieza por su código, ej. «M01.06.02 Grados y Títulos»).
+  // NO se usan las columnas «Código "Nivel N"» de PROCEDIMIENTO: al renombrar o renumerar
+  // un proceso desde el inventario solo se reescribe la «Ruta completa», así que esas
+  // columnas conservan los códigos ANTIGUOS y el desplegable los seguía ofreciendo.
   try{
     const inv=await loadInventario();
-    const COLCOD={ n2:'Código "Nivel 2"', n3:'Código "Nivel 3"', proc:'Código "Procedimiento"' };
-    Object.keys(COLCOD).forEach(k=>{
+    const C=INV_COLS;
+    const COL={ n2:C.n2, n3:C.n3, proc:C.proc };
+    Object.keys(COL).forEach(k=>{
       const set=new Set();
-      inv.forEach(r=>{ const v=r.values||{}; const c=v[COLCOD[k]]; if(c && !/^[a-zA-Z0-9_-]{22}$/.test(String(c)) && String(c).trim()!==COLCOD[k]) set.add(String(c).trim()); });
-      _NP_CACHE_OPC[k]=[...set].sort();
+      inv.forEach(r=>{
+        const v=r.values||{};
+        const cod=_codigoDe(v[COL[k]]);
+        if(cod) set.add(cod);
+      });
+      _NP_CACHE_OPC[k]=[...set].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
     });
   }catch(_){ _NP_CACHE_OPC.n2=_NP_CACHE_OPC.n2||[]; _NP_CACHE_OPC.n3=_NP_CACHE_OPC.n3||[]; _NP_CACHE_OPC.proc=_NP_CACHE_OPC.proc||[]; }
   _NP_SCHEMA_OK=true;
 }
-// Carga los registros existentes de un nivel (para elegir padre), devolviendo [{id, nombre}].
+// Carga los procesos existentes de un nivel para elegirlos como PADRE en la cascada.
+// FUENTE DE VERDAD = el INVENTARIO (campo de texto «Ruta completa» de PROCEDIMIENTO).
+// Las tablas de nivel (NIVEL0..NIVEL3) NO se usan aquí: al editar un proceso desde el
+// inventario solo se reescribe la ruta, así que esas tablas conservan nombres/códigos
+// viejos. Leerlas hacía que el desplegable mostrara códigos desactualizados y duplicados
+// (p.ej. dos «M01.06.02.01», o un «.02» que ya se había renumerado a «.03»).
+// Los ids que devolvemos son sintéticos: solo se usaban para escribir campos de relación,
+// que QuintaDB no persiste por API. La ruta se arma con el TEXTO del nombre.
 async function _npRegistros(key){
   if(_NP_CACHE_REG[key]) return _NP_CACHE_REG[key];
+  if(key!=='tipo'){
+    const C=INV_COLS;
+    const col={ n0:C.n0, n1:C.n1, n2:C.n2, n3:C.n3, proc:C.proc }[key];
+    if(col){
+      if(!STATE.inventario || !STATE.inventario.length){ try{ await loadInventario(true); }catch(_){} }
+      const vistos=new Map();   // nombre -> {id,nombre,tipo,codigo}
+      (STATE.inventario||[]).forEach(r=>{
+        if(_invArchivado(r)) return;                 // los archivados no se ofrecen como padre
+        const v=r.values||{};
+        const nombre=String(v[col]||'').trim();
+        if(!nombre) return;
+        if(/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(nombre)) return;
+        if(vistos.has(nombre)) return;               // un mismo proceso aparece en muchas rutas
+        vistos.set(nombre, {
+          id: 'inv::'+key+'::'+nombre,               // id sintético: no se usa para relaciones
+          nombre,
+          tipo: String(v[C.tipo]||'').trim(),
+          codigo: _codigoDe(nombre)
+        });
+      });
+      const regs=[...vistos.values()];
+      regs.sort((a,b)=>String(a.codigo||a.nombre).localeCompare(String(b.codigo||b.nombre), undefined, {numeric:true, sensitivity:'base'}));
+      _NP_CACHE_REG[key]=regs;
+      return regs;
+    }
+  }
+  // 'tipo' (y respaldo): sí vive en su propia tabla y no se edita desde el inventario.
   const def=_nivelDef(key);
   // Sin caché: si el usuario acaba de crear un padre, debe aparecer de inmediato.
   const data=await API.records(def.entity(), true);
@@ -2493,6 +2535,11 @@ function _npActivarArrastre(){
 
 // Genera los desplegables de la cadena de padres según el nivel elegido.
 async function npRenderCascada(){
+  // Inventario FRESCO antes de pintar la cascada: los desplegables de padre y el catálogo
+  // de códigos se derivan de él. Sin esto, tras renombrar/renumerar procesos seguían
+  // apareciendo los códigos viejos hasta recargar la página.
+  _NP_CACHE_REG={}; _NP_CACHE_OPC={}; _NP_SCHEMA_OK=false;
+  try{ await loadInventario(true); }catch(_){}
   await _npCargarEsquema(); // asegurar que las opciones de código estén listas
   const nivel=document.getElementById('np_nivel').value;
   const cont=document.getElementById('np_cascada');
@@ -2776,6 +2823,7 @@ async function _revertirCreados(ids){
   const fallidos=[];
   for(const id of (ids||[]).slice().reverse()){   // borrar en orden inverso (hijos antes que padres)
     if(!id) continue;
+    if(String(id).startsWith('inv::')) continue;  // id sintético del inventario: no es un registro real
     try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','DELETE',{}); }
     catch(e){ console.error('No se pudo revertir', id, e.message); fallidos.push(id); }
   }
@@ -2919,8 +2967,14 @@ async function _npInsertar(def, idsPadres, codigo, nombre){
   const campos={};
   campos[def.nombreField]=nombreFinal;
   if(def.codigoField && codigo) campos[def.codigoField]=codigo;
-  // rel a cada padre → como ARRAY (QuintaDB espera values[fid][]=id)
-  (def.padres||[]).forEach(p=>{ if(idsPadres[p.key]) campos[p.rel]=[idsPadres[p.key]]; });
+  // rel a cada padre → como ARRAY (QuintaDB espera values[fid][]=id).
+  // Se descartan los ids SINTÉTICOS ('inv::…') que provienen del inventario: no son ids
+  // reales de registro. Da igual, porque QuintaDB no persiste relaciones por API y todo
+  // el sistema se apoya en la «Ruta completa» de texto plano.
+  (def.padres||[]).forEach(p=>{
+    const pid=idsPadres[p.key];
+    if(pid && !String(pid).startsWith('inv::')) campos[p.rel]=[pid];
+  });
   if(def.estadoField) campos[def.estadoField]='Activo';
   const res=await API.saveForm(null, campos, def.entity());
   const newId = res && (res.id || (res.record&&res.record.id) || (res.dtype&&res.dtype.id) || (res.data&&res.data.id));
