@@ -1727,7 +1727,7 @@ const JERARQUIA = [
   { key:'n3', label:'Proceso nivel 3', entity:()=>CONFIG.ENTITIES.NIVEL3,
     nombreField:'bhW7BcSuzcPykKW6hcQmoQ', colNombre:'Proceso nivel 3', codigoField:'b_kSkXW4jdJQ_cR8kjWPPB',
     padres:[ {key:'tipo', rel:'dcTspcN8naW73dQv5TWO1B'}, {key:'n0', rel:'a3B3jxu8jiWO5cimkCEN0q'}, {key:'n1', rel:'a7W6OMWPHdRypcGCkoW79-'}, {key:'n2', rel:'ddJu_cImnpyyk2W5pdRSo9'} ] },
-  { key:'proc', label:'Procedimiento', entity:()=>CONFIG.ENTITIES.PROCEDIMIENTO,
+  { key:'proc', label:'Actividad (Nivel 4)', entity:()=>CONFIG.ENTITIES.PROCEDIMIENTO,
     nombreField:'coi8oUW41cMOk7cCk2W4vk', colNombre:'Procedimiento', codigoField:'dcVSkHkSnhl5iaW7uMqCox',
     padres:[ {key:'tipo', rel:'bTW5RdU8jfvRChwwFdPSkI'}, {key:'n0', rel:'dcUWH1c1zhW5bGiCkMjrK8'}, {key:'n1', rel:'cSWR_cI8jbqPpcGSkJd8oL'}, {key:'n2', rel:'ccWP_cOmnkj4oNbcOzaZq4'}, {key:'n3', rel:'cDW5SHlCnmW7bkgaaMW6fP'} ],
     estadoField:'cGoSkYwSnnWPj6W7tcHSoK' },
@@ -2749,12 +2749,25 @@ function npPadreChange(pkey){
 }
 window.npPadreChange=npPadreChange;
 
+// Borra los registros creados en una operación fallida (evita dejar procesos huérfanos).
+// Devuelve los ids que NO se pudieron borrar (para avisar al usuario).
+async function _revertirCreados(ids){
+  const fallidos=[];
+  for(const id of (ids||[]).slice().reverse()){   // borrar en orden inverso (hijos antes que padres)
+    if(!id) continue;
+    try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','DELETE',{}); }
+    catch(e){ console.error('No se pudo revertir', id, e.message); fallidos.push(id); }
+  }
+  return fallidos;
+}
+
 async function guardarNuevoProceso(){
   const btn=document.getElementById('np_guardar');
   const nivel=document.getElementById('np_nivel').value;
   if(!nivel){ toast('Elige qué nivel crear.', true); return; }
   const def=_nivelDef(nivel);
   btn.disabled=true; btn.textContent='Creando…';
+  const _creados=[];   // ids creados en esta operación (para revertir si algo falla)
   try{
     // 1) Resolver/crear cada padre, de arriba hacia abajo, para tener sus ids
     const idsPadres={}; // key → recordId
@@ -2771,29 +2784,50 @@ async function guardarNuevoProceso(){
         if(pdef.codigoField && !cod){ throw new Error('Elige el código del nuevo '+pdef.label+'.'); }
         const nuevoId=await _npInsertar(pdef, idsPadres, cod, nom.trim());
         idsPadres[p.key]=nuevoId;
+        _creados.push(nuevoId);   // registrar para poder revertir si algo falla después
         // refrescar cache de ese nivel para futuras
         delete _NP_CACHE_REG[p.key];
       } else {
         idsPadres[p.key]=val;
       }
     }
-    // 2) Crear el elemento objetivo
+    // 2) Crear el elemento objetivo en su tabla de nivel
     let cod = def.codigoField ? (document.getElementById('np_codigo').value||'') : '';
     if(cod==='__otro__'){ cod=(document.getElementById('np_codigo_otro')||{}).value||''; cod=cod.trim(); }
     const nom = (document.getElementById('np_nombre').value||'').trim();
     if(!nom){ throw new Error('Escribe el nombre.'); }
     if(def.codigoField && !cod){ throw new Error('Elige el código.'); }
-    await _npInsertar(def, idsPadres, cod, nom);
-    // 3) Crear la fila en PROCEDIMIENTO con la RUTA CORTA real (de aquí lee el mapa/inventario).
-    //    La ruta se arma con los TEXTOS de cada nivel, hasta el nivel recién creado.
-    try{ await _npCrearRuta(nivel, cod, nom); }catch(e){ console.warn('[ruta] no se pudo crear la fila de ruta:', e.message); }
+    const nuevoId = await _npInsertar(def, idsPadres, cod, nom);
+    _creados.push(nuevoId);
+
+    // 3) Crear la fila en PROCEDIMIENTO con la RUTA (de aquí leen el mapa y el inventario).
+    //    Si esto falla, SE REVIERTEN todos los registros creados en esta operación:
+    //    así nunca queda un proceso huérfano (fantasma) en las tablas de nivel.
+    try{
+      await _npCrearRuta(nivel, cod, nom);
+    }catch(errRuta){
+      const fallidos=await _revertirCreados(_creados);
+      if(fallidos.length){
+        throw new Error('No se pudo registrar la ruta y quedaron registros incompletos (ids: '+fallidos.join(', ')+'). Avisa al administrador.');
+      }
+      throw new Error('No se pudo registrar la ruta del proceso. No se creó nada. Detalle: '+errRuta.message);
+    }
+
     toast('Proceso creado correctamente.');
+    _creados.length=0;   // éxito: ya no hay nada que revertir
     cerrarModal('modalNuevoProceso');
     // Refrescar TODO en vivo (inventario, padres, catálogo de códigos, mapa)
     await invalidarCachesProcesos();
     if(typeof renderInventario==='function') renderInventario();
     if(typeof renderMapa==='function' && document.getElementById('view-mapa') && document.getElementById('view-mapa').classList.contains('active')) renderMapa();
-  }catch(e){ toast(e.message||'Error al crear.', true); }
+  }catch(e){
+    // Si quedaron registros creados a medias (p.ej. padres en línea), revertirlos.
+    if(_creados.length && !/No se pudo registrar la ruta/.test(e.message||'')){
+      const fallidos=await _revertirCreados(_creados);
+      if(fallidos.length) console.error('Registros huérfanos sin revertir:', fallidos);
+    }
+    toast(e.message||'Error al crear.', true);
+  }
   finally{ btn.disabled=false; btn.textContent='Crear'; }
 }
 window.guardarNuevoProceso=guardarNuevoProceso;
@@ -2963,7 +2997,8 @@ async function renderInventario(){
       const bg=BADGE[c]||{bg:'#f4f4f4',fg:'#555'};
       if(!val) return `<td style="vertical-align:top;border-top:1px solid var(--line);color:var(--mist);padding:8px 10px">—</td>`;
       const borde = `border-left:3px solid ${bg.fg}33`;
-      return `<td style="vertical-align:top;border-top:1px solid var(--line);padding:8px 10px;${borde}"><div style="font-weight:600;color:var(--slate);line-height:1.35">${val.replace(/</g,'&lt;')}</div></td>`;
+      // Sin border-top en las celdas agrupadas: así la línea vertical de color se ve CONTINUA
+      return `<td style="vertical-align:top;padding:8px 10px;${borde}"><div style="font-weight:600;color:var(--slate);line-height:1.35">${val.replace(/</g,'&lt;')}</div></td>`;
     };
     let html='';
     filas.forEach((f,i)=>{
@@ -3662,16 +3697,18 @@ async function editarInventario(rid){
     { key:'n1',   label:'Proceso nivel 1',  nombre:limpio(v[C.n1]),   recId:relId('cSWR_cI8jbqPpcGSkJd8oL') },
     { key:'n2',   label:'Proceso nivel 2',  nombre:limpio(v[C.n2]),   recId:relId('ccWP_cOmnkj4oNbcOzaZq4') },
     { key:'n3',   label:'Proceso nivel 3',  nombre:limpio(v[C.n3]),   recId:relId('cDW5SHlCnmW7bkgaaMW6fP') },
-    { key:'proc', label:'Procedimiento',    nombre:limpio(v[C.proc]), recId:rid }, // el procedimiento es este mismo registro
+    { key:'proc', label:'Actividad (Nivel 4)', nombre:limpio(v[C.proc]), recId:rid }, // la actividad N4 es este mismo registro
   ];
   _EI_FILA={ rid, niveles };
   // Pintar el formulario
   const cont=document.getElementById('ei_campos');
   cont.innerHTML=niveles.map((n,i)=>{
-    if(!n.nombre && n.key!=='proc') return ''; // no mostrar niveles vacíos (salvo procedimiento)
+    // Mostrar TODOS los niveles, incluso los vacíos: así se puede completar la ruta
+    // (ej. un proceso que llegaba hasta N2 y ahora quiere añadir su N3 y su actividad N4).
+    const vacio = !n.nombre;
     return `<div class="field">
-      <label>${n.label}${n.key!=='proc'&&n.key!=='tipo'?' <span class="hint" style="font-weight:400">· compartido</span>':''}</label>
-      <input id="ei_nivel_${n.key}" data-key="${n.key}" value="${(n.nombre||'').replace(/"/g,'&quot;')}">
+      <label>${n.label}${n.key!=='proc'&&n.key!=='tipo'?' <span class="hint" style="font-weight:400">· compartido</span>':''}${vacio?' <span class="hint" style="font-weight:400;color:#94a3b8">· vacío, puedes completarlo</span>':''}</label>
+      <input id="ei_nivel_${n.key}" data-key="${n.key}" value="${(n.nombre||'').replace(/"/g,'&quot;')}" placeholder="${vacio?'Escribe el código y nombre (ej. '+(n.key==='n3'?'M01.01.01.01 Nombre del proceso':'…')+')':''}">
     </div>`;
   }).join('');
   document.getElementById('modalEditInv').classList.add('show'); document.body.style.overflow='hidden';
