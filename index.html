@@ -5066,10 +5066,13 @@ function relTieneAlgo(r, fieldId){
 // Ruta: "Tipo › N0 › N1 › N2 › Componente". El componente es el último segmento.
 function nivelDesdeRuta(ruta){
   const segs=String(ruta).split(/\s*›\s*/).filter(Boolean);
-  // Quitar el componente final (el análisis) para contar el nivel de la ficha
-  const n=segs.length; // Tipo(1)+N0(2)+...+componente
-  // Tipo+N0+componente = 3 → N0 ; +N1=4 → N1 ; +N2=5 → N2
-  if(n>=5) return 'N2';
+  // Quitar el componente final (el análisis) para contar el nivel de la ficha.
+  // Ruta: Tipo(1) + N0(2) + N1(3) + N2(4) + N3(5) + componente.
+  const n=segs.length;
+  //  6+ → N3 (Tipo+N0+N1+N2+N3+componente)
+  //  5  → N2 ; 4 → N1 ; 3 → N0
+  if(n>=6) return 'N3';
+  if(n===5) return 'N2';
   if(n===4) return 'N1';
   if(n===3) return 'N0';
   return '';
