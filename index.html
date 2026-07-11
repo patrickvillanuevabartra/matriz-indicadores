@@ -5858,6 +5858,8 @@ async function eliminarProgMeta(progId){
     await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+progId+'.json','DELETE',{});
     toast('Programación eliminada.');
     await cargarProgMetas();
+    // Refrescar la tabla de la matriz EN VIVO (el contador de metas cambió), sin recargar.
+    STATE.matriz=[]; renderMatriz();
   }catch(err){ toast('Error al eliminar: '+err.message, true); }
 }
 window.eliminarProgMeta=eliminarProgMeta;
@@ -5894,7 +5896,9 @@ async function guardarProgMeta(){
     _limpiarVarsMeta();   // dejar las variables de referencia y meta en blanco
     _mostrarBtnCancelarMeta(false);
     await cargarProgMetas();
-    STATE.matriz=[]; // forzar recálculo del contador de metas en la matriz al volver
+    // Refrescar la tabla de la matriz EN VIVO (contador de metas y avances), sin cerrar el
+    // modal ni recargar la app — mismo patrón que al guardar un seguimiento.
+    STATE.matriz=[]; renderMatriz();
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
 }
 window.guardarProgMeta=guardarProgMeta;
