@@ -116,6 +116,10 @@
      por eso anulamos el border-bottom global: cortaba las lineas verticales de color. */
   #tablaInventarioTbl td{ border-bottom:0; padding:0 }
   #tablaInventarioTbl th{ border-bottom:1px solid var(--line) }
+  /* Texto del inventario un poco más grande para lectura cómoda.
+     Se aplica al contenido de las celdas (el nombre del proceso va en un div interno). */
+  #tablaInventarioTbl td > div{ font-size:13.5px }
+  #tablaInventarioTbl th{ font-size:12px }
   tr:hover td{background:var(--paper)}
   /* Celda recortada a 2 líneas con elipsis (compacta la matriz sin perder info: el resto se ve en tooltip o en 👁) */
   .clip2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
@@ -795,7 +799,7 @@
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
     </div>
-    <div class="card"><div style="overflow-x:auto"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse;font-size:12px">
+    <div class="card"><div style="overflow-x:auto"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse;font-size:13.5px">
       <thead><tr>
         <th style="min-width:90px">Tipo</th>
         <th style="min-width:150px">Proceso N0</th>
@@ -829,6 +833,9 @@
       <h1>Matriz de indicadores</h1>
       <p>Define indicadores jalados de las fichas, su fórmula y frecuencia, y gestiona sus metas (programación y seguimiento).</p>
     </div>
+
+    <!-- Resumen de avance: cuántos indicadores se vienen completando -->
+    <div id="mat_resumen" style="margin-bottom:16px"></div>
 
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnAgregarInd" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
@@ -5041,10 +5048,49 @@ window.renderTablero=renderTablero;
 
 // Salta a la vista "Fichas registradas" pre-filtrada por el proceso de origen,
 // para que el hilo conductor matriz → ficha sea navegable de un clic.
+// Pinta la franja de resumen de avance sobre la tabla de la matriz: cuántos indicadores
+// se vienen completando (con meta programada, con seguimiento, sin nada) del total.
+// Usa los campos _progMetas y _periodos que loadMatriz ya calcula por indicador.
+function pintarResumenMatriz(recs){
+  const cont=document.getElementById('mat_resumen');
+  if(!cont) return;
+  const total=(recs||[]).length;
+  if(!total){ cont.innerHTML=''; return; }
+  let conMeta=0, conSeg=0, sinNada=0;
+  (recs||[]).forEach(m=>{
+    const tieneMeta=(m._progMetas||0)>0;
+    const tieneSeg=(m._periodos||0)>0;
+    if(tieneSeg) conSeg++;
+    else if(tieneMeta) conMeta++;   // solo meta, aún sin medición
+    else sinNada++;
+  });
+  // "En proceso de completarse" = tienen al menos meta programada (meta o meta+seguimiento).
+  const enProceso = conMeta + conSeg;
+  const pct = total? Math.round(enProceso/total*100) : 0;
+  const chip=(color,valor,txt)=>`
+    <div style="display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);border-left:4px solid ${color};border-radius:11px;padding:11px 15px;min-width:0;flex:1">
+      <div style="font-size:26px;font-weight:800;color:${color};line-height:1">${valor}</div>
+      <div style="font-size:12px;color:var(--slate);line-height:1.25">${txt}</div>
+    </div>`;
+  cont.innerHTML=`
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:stretch">
+      ${chip('var(--brand)', total, 'indicadores<br>en la matriz')}
+      ${chip('#1f7a3d', conSeg, 'con seguimiento<br>(ya midiéndose)')}
+      ${chip('#b8860b', conMeta, 'con meta programada<br>(aún sin medir)')}
+      ${chip('#c0392b', sinNada, 'sin datos<br>todavía')}
+    </div>
+    <div style="margin-top:8px;font-size:12px;color:var(--mist)">
+      <strong style="color:var(--brand)">${enProceso}</strong> de <strong>${total}</strong> indicador(es) se vienen completando con información
+      (meta programada o seguimiento) &middot; <strong>${pct}%</strong> de avance.
+    </div>`;
+}
+window.pintarResumenMatriz=pintarResumenMatriz;
+
 async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
   try{
     const recs = await loadMatriz();
+    pintarResumenMatriz(recs);   // resumen de avance (sobre TODOS los indicadores, no los filtrados)
     const filtro=(document.getElementById('matBuscar').value||'').toLowerCase();
     const filas = recs.filter(r=>{
       const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
