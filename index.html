@@ -4220,6 +4220,9 @@ async function renderListado(){
     const filtro=(document.getElementById('listBuscar').value||'').toLowerCase();
     const filas = todas.filter(o=>{
       const {r,nivel}=o;
+      // Filtro por OFICINA: el rol "Oficina" solo ve las fichas cuyo Dueño del proceso
+      // coincide con su oficina. Admin, Gestor y Usuario libre ven todo.
+      if(!_registroVisibleOficina(leerDueno(r, EDF(nivel)))) return false;
       if(filtro && !(rutaFicha(r,nivel)+' '+objFicha(r,nivel)).toLowerCase().includes(filtro)) return false;
       if(typeof pasaFiltrosList==='function' && !pasaFiltrosList(o)) return false;
       return true;
@@ -4842,7 +4845,14 @@ async function renderTablero(){
   const cont=document.getElementById('tablero_cuerpo');
   if(!cont) return;
   try{
-    const recs=await loadMatriz();
+    const recsTodos=await loadMatriz();
+    // Filtro por OFICINA: el rol "Oficina" ve el tablero solo con SUS indicadores (los de su
+    // oficina de medición o dueña). Admin, Gestor y Usuario libre ven toda la facultad.
+    const recs = puedeVerTodo() ? recsTodos : recsTodos.filter(m=>{
+      const ofiMed=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+      const ofiDue=MAT.oficina_resp_ind?leerCampo(m, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
+      return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
+    });
     const total=recs.length;
     // Clasificar cada indicador en 3 etapas segun tenga meta programada y/o seguimiento
     const sinNada=[], soloMeta=[], metaYseg=[];
@@ -5090,11 +5100,25 @@ async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
   try{
     const recs = await loadMatriz();
-    pintarResumenMatriz(recs);   // resumen de avance (sobre TODOS los indicadores, no los filtrados)
+    // Para el resumen: contar solo los indicadores VISIBLES según la oficina del usuario
+    // (el rol Oficina ve un subconjunto). El buscador de texto no afecta al total del resumen.
+    const recsVisibles = puedeVerTodo() ? recs : recs.filter(r=>{
+      const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+      const ofiDue=MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
+      return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
+    });
+    pintarResumenMatriz(recsVisibles);
     const filtro=(document.getElementById('matBuscar').value||'').toLowerCase();
     const filas = recs.filter(r=>{
       const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
       if(!ind) return false;
+      // Filtro por OFICINA: el rol "Oficina" solo ve los indicadores cuya oficina de medición
+      // o cuya oficina dueña coincide con la suya. Admin, Gestor y Usuario libre ven todo.
+      if(!puedeVerTodo()){
+        const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+        const ofiDue=MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
+        if(!_registroVisibleOficina(ofiMed) && !_registroVisibleOficina(ofiDue)) return false;
+      }
       if(filtro && !ind.toLowerCase().includes(filtro)) return false;
       if(typeof pasaFiltrosMat==='function' && !pasaFiltrosMat(r)) return false;
       return true;
@@ -6322,9 +6346,22 @@ async function verDetalleMatriz(matId){
 window.verDetalleMatriz=verDetalleMatriz;
 
 // Detalle de una ficha registrada (listado)
-function verDetalleFicha(nivel, fichaId){
-  const r=(STATE.fichas[nivel]||[]).find(x=>x.id===fichaId); if(!r) return;
+async function verDetalleFicha(nivel, fichaId){
+  // Abrir el modal de inmediato con un indicador de carga (los datos se leen frescos)
+  document.getElementById('det_titulo').textContent='Cargando ficha…';
+  document.getElementById('det_cuerpo').innerHTML='<p class="hint">Cargando datos de la ficha…</p>';
+  document.getElementById('modalDetalle').classList.add('show'); document.body.style.overflow='hidden';
+  // Leer la ficha FRESCA e individual desde QuintaDB. La lista masiva (STATE.fichas) no
+  // devuelve de forma fiable los campos de texto largo (objetivo, alcance…), sobre todo en
+  // N2 — por eso el detalle salía incompleto para algunos usuarios aunque el dato SÍ existía.
   const F=EDF(nivel);
+  let r=null;
+  try{
+    const d=await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json','GET',{name_value:1});
+    r=d && d.record;
+  }catch(_){}
+  if(!r) r=(STATE.fichas[nivel]||[]).find(x=>x.id===fichaId);   // respaldo: caché
+  if(!r) return;
   const cur=(f,nombre)=> f?leerCampo(r,f.id,nombre):'';
   const filas=[
     ['Nivel', nivel],
