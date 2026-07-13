@@ -3200,6 +3200,33 @@ async function renderInventario(){
       return;
     }
     // ===== MODO COMPLETO (Todos / Procedimiento): tabla agrupada tipo Excel =====
+    // Ocultar filas ANCESTRO redundantes: cuando la jerarquía se creó nivel por nivel, cada
+    // paso dejó su propia fila (una que llega solo hasta N1, otra hasta N2, etc.). Si ya
+    // existe una fila que EXTIENDE esa misma rama (llega más profundo), las parciales no
+    // aportan nada y ensucian la tabla con muchos «—».
+    // Regla: una fila se OCULTA solo si otra fila comparte exactamente sus niveles con valor
+    // y además tiene contenido en algún nivel más abajo. Las ramas que aún NO llegan al N4
+    // (su fila es la más profunda de su rama) se conservan: son la única forma de verlas.
+    {
+      const keysNiv=['tipo','n0','n1','n2','n3','proc'];
+      const prof=(f)=>{ let p=0; for(let i=0;i<keysNiv.length;i++){ if(String(f[keysNiv[i]]||'').trim()) p=i+1; } return p; };
+      // Firma de una fila hasta cierta profundidad (para comparar prefijos de ruta)
+      const firma=(f,hasta)=> keysNiv.slice(0,hasta).map(k=>String(f[k]||'').trim()).join(' ¦ ');
+      // Copia estable: se compara contra el conjunto ORIGINAL, no contra el array en filtrado.
+      const todas=filas.slice();
+      filas = filas.filter(f=>{
+        const pf=prof(f);
+        if(pf===0) return true;
+        // ¿existe otra fila MÁS profunda cuya ruta empiece exactamente por esta? → esta es ancestro redundante
+        const miFirma=firma(f,pf);
+        const extendida = todas.some(o=>{
+          if(o===f) return false;
+          const po=prof(o);
+          return po>pf && firma(o,pf)===miFirma;
+        });
+        return !extendida; // conservar solo si NADIE la extiende (es la hoja de su rama)
+      });
+    }
     // Orden jerárquico por las columnas (igual que el Excel)
     filas.sort((a,b)=> (a.tipo.localeCompare(b.tipo)) || (a.n0.localeCompare(b.n0)) || (a.n1.localeCompare(b.n1)) || (a.n2.localeCompare(b.n2)) || (a.n3.localeCompare(b.n3)) || (a.proc.localeCompare(b.proc)) );
     document.getElementById('inv_total').textContent=filas.length;
