@@ -3508,6 +3508,12 @@ function mpRenderNivel(){
 function mpScrollExacto(el){
   if(!el) return;
   const MARGEN=14; // pequeño respiro sobre el borde superior
+  // El header es sticky (position:sticky; top:0): queda fijo arriba y TAPA el contenido si
+  // no se descuenta su altura. Se mide en vivo (cambia entre escritorio y móvil) para dejar
+  // el elemento justo por debajo del header, no oculto tras él.
+  const header=document.querySelector('header');
+  const hRect=header?header.getBoundingClientRect():null;
+  const headerAlto=(hRect && getComputedStyle(header).position==='sticky') ? hRect.height : 0;
   // El body usa zoom (ver CSS); getBoundingClientRect ya viene escalado por el zoom,
   // pero window.scrollTo espera coordenadas SIN escalar. Compensamos con el factor.
   const zoom = parseFloat(getComputedStyle(document.body).zoom) || 1;
@@ -3521,13 +3527,14 @@ function mpScrollExacto(el){
   const usarVentana = !cont || cont===document.body || cont===document.documentElement;
   if(usarVentana){
     // rect.top está en píxeles ya escalados; para el scroll de ventana dividimos por zoom.
+    // Se resta la altura del header fijo (también escalada → /zoom) para no quedar tapado.
     const topEscalado = el.getBoundingClientRect().top;
-    const destino = window.pageYOffset + (topEscalado / zoom) - MARGEN;
+    const destino = window.pageYOffset + (topEscalado / zoom) - (headerAlto / zoom) - MARGEN;
     window.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
   } else {
     const cRect=cont.getBoundingClientRect();
     const eRect=el.getBoundingClientRect();
-    const destino = cont.scrollTop + (eRect.top - cRect.top)/zoom - MARGEN;
+    const destino = cont.scrollTop + (eRect.top - cRect.top)/zoom - (headerAlto / zoom) - MARGEN;
     cont.scrollTo({top:Math.max(0,destino), behavior:'smooth'});
   }
 }
