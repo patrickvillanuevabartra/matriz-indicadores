@@ -5599,6 +5599,7 @@ async function autocompletarRespMatriz(){
   const oficina = sel && sel.value ? sel.value : '';
   const elRep=document.getElementById('ag_responsable'), elCel=document.getElementById('ag_celular'), elCor=document.getElementById('ag_correo');
   if(!oficina){ [elRep,elCel,elCor].forEach(e=>{ if(e) e.value=''; }); return; }
+  MAPA_RESP_PROCESO=null;   // refrescar sin caché para no heredar responsable viejo
   const mapa=await cargarMapaRespProceso();
   const info=mapa[String(oficina).replace(/\s+/g,' ').trim().toLowerCase()] || {};
   if(elRep) elRep.value = info.responsable || '(sin responsable registrado)';
@@ -5712,8 +5713,12 @@ async function autocompletarRespMatrizEdit(){
   const oficina=sel&&sel.value?sel.value:'';
   const elR=document.getElementById('em_responsable'), elC=document.getElementById('em_celular'), elE=document.getElementById('em_correo');
   if(!oficina){ [elR,elC,elE].forEach(e=>{ if(e) e.value=''; }); return; }
+  // Refrescar el mapa SIN caché: si el responsable de la oficina se registró o cambió después
+  // de abrir la app, la caché estaría vieja y heredaría el responsable anterior.
+  MAPA_RESP_PROCESO=null;
   const mapa=await cargarMapaRespProceso();
   const info=mapa[String(oficina).replace(/\s+/g,' ').trim().toLowerCase()]||{};
+  // Si la oficina no tiene responsable en el mapa, LIMPIAR (no dejar el valor anterior).
   if(elR) elR.value=info.responsable||'(sin responsable registrado)';
   if(elC) elC.value=info.celular||'';
   if(elE) elE.value=info.correo||'';
