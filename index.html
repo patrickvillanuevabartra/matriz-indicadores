@@ -955,10 +955,17 @@
     </div>
     <div class="modal-body">
       <div class="grid">
+        <div class="field full"><label>Nombre completo</label><input id="us_nombre" placeholder="ej. Ricardo Yamashiro Torres"></div>
         <div class="field full"><label>Usuario</label><input id="us_usuario" placeholder="ej. ind.industrial"></div>
         <div class="field full"><label>Contraseña</label><input id="us_password" placeholder="clave de acceso"></div>
         <div class="field full"><label>Rol</label><select id="us_rol" onchange="toggleOficinaUsuario()"><option value="">Seleccione…</option><option>Administrador</option><option>Gestor</option><option>Oficina</option><option>Usuario libre</option></select></div>
-        <div class="field full" id="us_wrap_oficina"><label>Oficina asignada</label><select id="us_oficina"><option value="">Seleccione…</option></select></div>
+        <div class="field full" id="us_wrap_oficina">
+          <label>Oficinas asignadas <span class="hint" style="font-weight:400">· puede marcar más de una</span></label>
+          <div style="position:relative">
+            <input id="us_oficina_buscar" placeholder="Filtrar oficinas…" oninput="filtrarOficinasUsuario()" style="margin-bottom:6px">
+            <div id="us_oficinas_lista" style="max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:9px;padding:8px 10px;display:flex;flex-direction:column;gap:6px"></div>
+          </div>
+        </div>
         <div class="field full"><label>Activo</label><select id="us_activo"><option>Sí</option><option>No</option></select></div>
       </div>
     </div>
@@ -1475,7 +1482,11 @@ async function hacerLogin(){
     if(_limpioU(v['Activo'])!=='Sí'){ mostrarError('Este usuario está desactivado. Contacta al administrador.'); btn.disabled=false; btn.textContent='Iniciar sesión'; return; }
     let rol = _limpioU(v['Rol']) || 'Usuario libre';
     if(!['Administrador','Gestor','Oficina','Usuario libre'].includes(rol)) rol='Usuario libre';
-    SESION = { rol, usuario:_limpioU(v['Usuario']), oficina:_limpioU(v['Oficina asignada']), recordId: encontrado.id };
+    // Oficinas: pueden ser varias, guardadas separadas por ';'. Se normalizan a un arreglo.
+    const oficinasTxt = _limpioU(v['Oficina asignada'])||'';
+    const oficinas = oficinasTxt.split(';').map(s=>s.trim()).filter(Boolean);
+    const nombre = _leerNombreUsuario(v);
+    SESION = { rol, usuario:_limpioU(v['Usuario']), nombre, oficina:oficinas[0]||'', oficinas, recordId: encontrado.id };
     entrarApp();
   }catch(e){
     mostrarError('Error al verificar: '+e.message);
@@ -1541,8 +1552,13 @@ function mostrarBarraSesion(){
   const cont = document.createElement('div');
   cont.id='sesionInfo';
   cont.style.cssText='display:flex;align-items:center;gap:10px;margin-left:14px;font-size:12px;color:rgba(255,255,255,.9)';
-  const quien = (SESION.rol==='Oficina') ? (SESION.oficina||'Oficina') : SESION.rol;
-  cont.innerHTML = `<span title="${SESION.usuario} · ${SESION.rol}">👤 ${quien}</span>`
+  // Mostrar nombre (si existe) y, para rol Oficina, sus oficinas.
+  const nombre = SESION.nombre || SESION.usuario;
+  const listaOfi = (SESION.oficinas && SESION.oficinas.length) ? SESION.oficinas.join(' · ') : (SESION.oficina||'');
+  const sub = (SESION.rol==='Oficina') ? (listaOfi||'Oficina') : SESION.rol;
+  const tooltip = `${SESION.usuario} · ${SESION.rol}${listaOfi?(' · '+listaOfi):''}`;
+  cont.innerHTML = `<span title="${tooltip.replace(/"/g,'&quot;')}" style="line-height:1.2">👤 <strong>${nombre.replace(/</g,'&lt;')}</strong>`
+    + `<br><span style="opacity:.8;font-size:11px">${sub.replace(/</g,'&lt;')}</span></span>`
     + `<button onclick="abrirCambiarPass()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">🔑 Cambiar contraseña</button>`
     + `<button onclick="cerrarSesion()" style="background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer">Salir</button>`;
   nav.appendChild(cont);
@@ -1551,14 +1567,27 @@ function mostrarBarraSesion(){
 function cerrarSesion(){ SESION = null; location.reload(); }
 window.cerrarSesion = cerrarSesion;
 
-// ¿El registro pertenece a la oficina del usuario? (Admin, Gestor y Usuario libre ven todo)
+// ¿El registro pertenece a ALGUNA de las oficinas del usuario? (Admin, Gestor y Usuario libre ven todo)
+// Un usuario puede estar en varias oficinas (SESION.oficinas); basta que coincida con una.
 function _registroVisibleOficina(oficinaTexto){
   if(!SESION) return false;
   if(puedeVerTodo()) return true;
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
-  return norm(oficinaTexto)===norm(SESION.oficina);
+  const objetivo = norm(oficinaTexto);
+  if(!objetivo) return false;
+  const mias = (SESION.oficinas && SESION.oficinas.length) ? SESION.oficinas : (SESION.oficina?[SESION.oficina]:[]);
+  return mias.some(o=>norm(o)===objetivo);
 }
 window._registroVisibleOficina = _registroVisibleOficina;
+
+// Lee el "Nombre completo" del usuario de forma robusta (por field-id o por nombre de columna).
+function _leerNombreUsuario(v){
+  if(!v) return '';
+  const cand=[ NOMBRE_USUARIO_FIELD_ID?v[NOMBRE_USUARIO_FIELD_ID]:'', v['Nombre completo'], v['Nombre'] ]
+    .find(x=> x && !esBasura(x) && x!=='Nombre completo' && x!=='Nombre');
+  return cand?String(cand).trim():'';
+}
+window._leerNombreUsuario=_leerNombreUsuario;
 
 /* ============================================================
    GESTIÓN DE USUARIOS (pestaña Administración, solo admin)
@@ -1574,38 +1603,64 @@ async function cargarUsuarios(){
     const data = await API.records(CONFIG.ENTITIES.USUARIOS);
     _usuariosCache = data.records||[];
     if(!_usuariosCache.length){ cont.innerHTML='<p class="hint">No hay usuarios. Crea el primero con "+ Crear usuario".</p>'; return; }
-    let html = '<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="background:var(--paper);text-align:left">'
-      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Usuario</th>'
-      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Contraseña</th>'
-      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Rol</th>'
-      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Oficina</th>'
-      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand);text-align:center">Activo</th>'
-      + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand);text-align:right">Acciones</th></tr></thead><tbody>';
-    _usuariosCache.forEach(r=>{
-      const v=r.values||{};
-      const usuario=_limpioU(v['Usuario']), pass=_limpioU(v['Contraseña']), rol=_limpioU(v['Rol'])||'Usuario libre', oficina=_limpioU(v['Oficina asignada'])||'—', activo=_limpioU(v['Activo']);
-      const activoBadge = activo==='Sí' ? '<span style="color:#0f8f5e;font-weight:600">● Sí</span>' : '<span style="color:#c0392b;font-weight:600">● No</span>';
-      const passEsc = (pass||'').replace(/"/g,'&quot;').replace(/'/g,"\\'");
-      html += `<tr style="border-bottom:1px solid var(--line)">
-        <td style="padding:10px 12px"><strong>${usuario}</strong></td>
-        <td style="padding:10px 12px;white-space:nowrap">
-          <span id="pw-${r.id}" data-pw="${passEsc}" data-shown="0" style="font-family:monospace">••••••</span>
-          <button class="icon-btn" title="Mostrar/ocultar" onclick="togglePassVista('${r.id}')" style="margin-left:4px">👁️</button>
-        </td>
-        <td style="padding:10px 12px">${rol}</td>
-        <td style="padding:10px 12px">${rol==='Oficina'?oficina:'<span style=\\"color:var(--mist)\\">(ve todo)</span>'}</td>
-        <td style="padding:10px 12px;text-align:center">${activoBadge}</td>
-        <td style="padding:10px 12px;text-align:right;white-space:nowrap">
-          <button class="icon-btn" title="Editar" onclick="editarUsuario('${r.id}')">✏️</button>
-          <button class="icon-btn" title="${activo==='Sí'?'Desactivar':'Activar'}" onclick="toggleActivoUsuario('${r.id}')">${activo==='Sí'?'🔒':'🔓'}</button>
-          <button class="icon-btn" title="Eliminar" onclick="eliminarUsuario('${r.id}')">🗑️</button>
-        </td></tr>`;
-    });
-    html += '</tbody></table></div>';
-    cont.innerHTML = html;
+    // Buscador de usuarios
+    const buscador = `<div style="margin-bottom:12px"><input id="usBuscar" placeholder="Buscar por nombre, usuario, rol u oficina…" oninput="renderUsuariosTabla()" style="width:100%"></div>`;
+    cont.innerHTML = buscador + '<div id="usuariosTablaCont"></div>';
+    renderUsuariosTabla();
   }catch(e){ cont.innerHTML = '<p class="hint">Error al cargar usuarios: '+e.message+'</p>'; }
 }
 window.cargarUsuarios = cargarUsuarios;
+
+// Pinta la tabla de usuarios aplicando el filtro del buscador (sobre la caché ya cargada).
+function renderUsuariosTabla(){
+  const cont=document.getElementById('usuariosTablaCont');
+  if(!cont) return;
+  const q = (document.getElementById('usBuscar')?.value||'').toLowerCase().trim();
+  const norm=s=>String(s||'').toLowerCase();
+  const filtrados = _usuariosCache.filter(r=>{
+    if(!q) return true;
+    const v=r.values||{};
+    const campos=[ _leerNombreUsuario(v), _limpioU(v['Usuario']), _limpioU(v['Rol']), _limpioU(v['Oficina asignada']) ].map(norm).join(' ');
+    return campos.includes(q);
+  });
+  if(!filtrados.length){ cont.innerHTML='<p class="hint">Ningún usuario coincide con la búsqueda.</p>'; return; }
+  let html = '<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:14px"><thead><tr style="background:var(--paper);text-align:left">'
+    + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Nombre</th>'
+    + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Usuario</th>'
+    + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Contraseña</th>'
+    + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Rol</th>'
+    + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand)">Oficina(s)</th>'
+    + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand);text-align:center">Activo</th>'
+    + '<th style="padding:10px 12px;border-bottom:2px solid var(--brand);text-align:right">Acciones</th></tr></thead><tbody>';
+  filtrados.forEach(r=>{
+    const v=r.values||{};
+    const nombre=_leerNombreUsuario(v)||'<span style="color:var(--mist)">—</span>';
+    const usuario=_limpioU(v['Usuario']), pass=_limpioU(v['Contraseña']), rol=_limpioU(v['Rol'])||'Usuario libre';
+    const oficinaTxt=_limpioU(v['Oficina asignada'])||'—';
+    const oficinaVista=(rol==='Oficina')? oficinaTxt.split(';').map(s=>s.trim()).filter(Boolean).join(' · ') : '<span style="color:var(--mist)">(ve todo)</span>';
+    const activo=_limpioU(v['Activo']);
+    const activoBadge = activo==='Sí' ? '<span style="color:#0f8f5e;font-weight:600">● Sí</span>' : '<span style="color:#c0392b;font-weight:600">● No</span>';
+    const passEsc = (pass||'').replace(/"/g,'&quot;').replace(/'/g,"\\'");
+    html += `<tr style="border-bottom:1px solid var(--line)">
+      <td style="padding:10px 12px">${String(nombre).replace(/</g,'&lt;')}</td>
+      <td style="padding:10px 12px"><strong>${usuario}</strong></td>
+      <td style="padding:10px 12px;white-space:nowrap">
+        <span id="pw-${r.id}" data-pw="${passEsc}" data-shown="0" style="font-family:monospace">••••••</span>
+        <button class="icon-btn" title="Mostrar/ocultar" onclick="togglePassVista('${r.id}')" style="margin-left:4px">👁️</button>
+      </td>
+      <td style="padding:10px 12px">${rol}</td>
+      <td style="padding:10px 12px">${oficinaVista}</td>
+      <td style="padding:10px 12px;text-align:center">${activoBadge}</td>
+      <td style="padding:10px 12px;text-align:right;white-space:nowrap">
+        <button class="icon-btn" title="Editar" onclick="editarUsuario('${r.id}')">✏️</button>
+        <button class="icon-btn" title="${activo==='Sí'?'Desactivar':'Activar'}" onclick="toggleActivoUsuario('${r.id}')">${activo==='Sí'?'🔒':'🔓'}</button>
+        <button class="icon-btn" title="Eliminar" onclick="eliminarUsuario('${r.id}')">🗑️</button>
+      </td></tr>`;
+  });
+  html += '</tbody></table></div>';
+  cont.innerHTML = html;
+}
+window.renderUsuariosTabla = renderUsuariosTabla;
 
 function togglePassVista(id){
   const el = document.getElementById('pw-'+id);
@@ -1616,19 +1671,38 @@ function togglePassVista(id){
 }
 window.togglePassVista = togglePassVista;
 
-async function poblarOficinasUsuario(){
-  const sel = document.getElementById('us_oficina');
-  if(!sel) return;
+let _oficinasDisponibles=[];   // cache de oficinas para los checkboxes
+
+// Pinta la lista de oficinas como CHECKBOXES (selección múltiple). `marcadas` es un arreglo.
+async function poblarOficinasUsuario(marcadas){
+  const cont = document.getElementById('us_oficinas_lista');
+  if(!cont) return;
+  marcadas=(marcadas||[]).map(s=>String(s).trim().toLowerCase());
   try{
     const oficinas = await cargarOficinasOpts();
-    sel.innerHTML = '<option value="">Seleccione…</option>';
-    (oficinas||[]).forEach(o=>{
-      const nombre = (typeof o==='string') ? o : (o.label || o.value || '');
-      if(nombre && !/^[a-zA-Z0-9_\-]{22}$/.test(nombre)){
-        const op=document.createElement('option'); op.value=nombre; op.textContent=nombre; sel.appendChild(op);
-      }
-    });
+    _oficinasDisponibles = (oficinas||[]).map(o=> (typeof o==='string')?o:(o.label||o.value||'') )
+      .filter(n=> n && !/^[a-zA-Z0-9_\-]{22}$/.test(n));
+    if(!_oficinasDisponibles.length){ cont.innerHTML='<p class="hint">No hay oficinas registradas.</p>'; return; }
+    cont.innerHTML = _oficinasDisponibles.map(n=>{
+      const ck = marcadas.includes(n.toLowerCase()) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer" data-ofi="${n.toLowerCase().replace(/"/g,'')}">
+        <input type="checkbox" value="${n.replace(/"/g,'&quot;')}" ${ck}> ${n.replace(/</g,'&lt;')}</label>`;
+    }).join('');
   }catch(e){ toast('No se pudieron cargar las oficinas: '+e.message, true); }
+}
+
+// Filtra los checkboxes de oficina por el texto tecleado.
+function filtrarOficinasUsuario(){
+  const q=(document.getElementById('us_oficina_buscar')?.value||'').toLowerCase().trim();
+  document.querySelectorAll('#us_oficinas_lista label[data-ofi]').forEach(l=>{
+    l.style.display = (!q || l.getAttribute('data-ofi').includes(q)) ? 'flex' : 'none';
+  });
+}
+window.filtrarOficinasUsuario=filtrarOficinasUsuario;
+
+// Devuelve las oficinas marcadas como arreglo de nombres.
+function _oficinasMarcadas(){
+  return [...document.querySelectorAll('#us_oficinas_lista input[type=checkbox]:checked')].map(c=>c.value);
 }
 
 function toggleOficinaUsuario(){
@@ -1641,12 +1715,13 @@ window.toggleOficinaUsuario = toggleOficinaUsuario;
 async function abrirFormUsuario(){
   _editandoUsuarioId = null;
   document.getElementById('modalUsuarioTitulo').textContent = 'Crear usuario';
+  document.getElementById('us_nombre').value='';
   document.getElementById('us_usuario').value='';
   document.getElementById('us_password').value='';
   document.getElementById('us_rol').value='';
   document.getElementById('us_activo').value='Sí';
-  await poblarOficinasUsuario();
-  document.getElementById('us_oficina').value='';
+  const bq=document.getElementById('us_oficina_buscar'); if(bq) bq.value='';
+  await poblarOficinasUsuario([]);
   toggleOficinaUsuario();
   const bg=document.getElementById('us_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar usuario'; }
   document.getElementById('modalUsuario').classList.add('show');
@@ -1658,12 +1733,14 @@ async function editarUsuario(id){
   const v=r.values||{};
   _editandoUsuarioId = id;
   document.getElementById('modalUsuarioTitulo').textContent = 'Editar usuario';
+  document.getElementById('us_nombre').value = _leerNombreUsuario(v);
   document.getElementById('us_usuario').value = _limpioU(v['Usuario']);
   document.getElementById('us_password').value = _limpioU(v['Contraseña']);
   document.getElementById('us_rol').value = _limpioU(v['Rol'])||'';
   document.getElementById('us_activo').value = _limpioU(v['Activo'])==='No'?'No':'Sí';
-  await poblarOficinasUsuario();
-  document.getElementById('us_oficina').value = _limpioU(v['Oficina asignada'])||'';
+  const bq=document.getElementById('us_oficina_buscar'); if(bq) bq.value='';
+  const marcadas = (_limpioU(v['Oficina asignada'])||'').split(';').map(s=>s.trim()).filter(Boolean);
+  await poblarOficinasUsuario(marcadas);
   toggleOficinaUsuario();
   const bg=document.getElementById('us_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar usuario'; }
   document.getElementById('modalUsuario').classList.add('show');
@@ -1673,20 +1750,28 @@ window.editarUsuario = editarUsuario;
 async function guardarUsuario(){
   const U = CONFIG.USUARIOS_FIELDS;
   const g = id => document.getElementById(id).value.trim();
-  const usuario=g('us_usuario'), pass=g('us_password'), rol=g('us_rol'), activo=g('us_activo');
-  let oficina = g('us_oficina');
+  const nombre=g('us_nombre'), usuario=g('us_usuario'), pass=g('us_password'), rol=g('us_rol'), activo=g('us_activo');
+  // Oficinas múltiples: se toman los checkboxes marcados y se guardan separadas por ';'
+  let oficinasArr = (rol==='Oficina') ? _oficinasMarcadas() : [];
+  let oficina = oficinasArr.join('; ');
   if(!usuario || !pass){ toast('Usuario y contraseña son obligatorios.', true); return; }
   if(!rol){ toast('Selecciona un rol.', true); return; }
-  if(rol==='Oficina' && !oficina){ toast('El rol Oficina requiere una oficina asignada.', true); return; }
+  if(rol==='Oficina' && !oficinasArr.length){ toast('El rol Oficina requiere al menos una oficina asignada.', true); return; }
   if(rol!=='Oficina') oficina='';
   const btn=document.getElementById('us_guardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   const campos = {};
   campos[U.usuario.id]=usuario; campos[U.password.id]=pass; campos[U.rol.id]=rol;
   campos[U.oficina.id]=oficina; campos[U.activo.id]=activo;
+  // Nombre completo: solo se guarda si ya configuraste el field-id en QuintaDB.
+  if(NOMBRE_USUARIO_FIELD_ID) campos[NOMBRE_USUARIO_FIELD_ID]=nombre;
+  else if(U.nombre && U.nombre.id) campos[U.nombre.id]=nombre;
   try{
     if(_editandoUsuarioId){ await API.saveForm(_editandoUsuarioId, campos, CONFIG.ENTITIES.USUARIOS); toast('Usuario actualizado.'); }
     else { await API.saveForm(null, campos, CONFIG.ENTITIES.USUARIOS); toast('Usuario creado.'); }
+    if(nombre && !NOMBRE_USUARIO_FIELD_ID && !(U.nombre&&U.nombre.id)){
+      toast('Nota: el campo "Nombre completo" aún no está configurado en QuintaDB; el nombre no se guardó.', true);
+    }
     btn.disabled=false; btn.textContent='Guardar usuario';
     cerrarModal('modalUsuario'); cargarUsuarios();
   }catch(e){ toast('Error al guardar: '+e.message, true); btn.disabled=false; btn.textContent='Guardar usuario'; }
@@ -1827,6 +1912,9 @@ async function loadMaestra(entityKey, labelCol){
 const INV_COLS = { tipo:'Tipo de proceso', n0:'Proceso nivel 0', n1:'Procesos nivel 1', n2:'Proceso nivel 2', n3:'Proceso nivel 3', proc:'Procedimiento', estado:'Estado del registro' };
 // ⬇️ PEGA AQUÍ el id del campo "Estado del registro" creado en QuintaDB (tabla del inventario / PROCEDIMIENTO).
 const ESTADO_REGISTRO_FIELD_ID = "cGoSkYwSnnWPj6W7tcHSoK"; // campo "Estado del registro" (tabla PROCEDIMIENTO) — valores: "Activo" / "Archivado"
+// ⬇️ PEGA AQUÍ el id del campo "Nombre completo" que crearás en QuintaDB (tabla de usuarios).
+// Mientras esté vacío, el nombre solo se LEE por nombre de columna (no se podrá guardar).
+const NOMBRE_USUARIO_FIELD_ID = "bZCCoBWRXcSQhdJapdTCoY"; // campo "Nombre completo" (tabla USUARIOS)
 
 // ===================== MAPA DE LAS 6 TABLAS JERÁRQUICAS (para crear procesos) =====================
 // Cada nivel: entity, campo del nombre, campo del código (select con opciones), y los rel a sus padres.
@@ -3135,6 +3223,25 @@ async function renderInventario(){
     const fTipo=document.getElementById('invFiltroTipo').value;
     const verArch=document.getElementById('invVerArchivados').checked;
     const limpio = s => { const t=String(s||'').trim(); return (!t || /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(t))?'':t; };
+    // Para el rol OFICINA: construir el conjunto de procesos vinculados a SUS oficinas.
+    // La vinculación proceso↔oficina vive en las FICHAS (Dueño del proceso). Un proceso es
+    // visible si él o alguno de sus ancestros aparece como dueño de una ficha de su oficina.
+    let setArea=null;
+    if(SESION && !puedeVerTodo()){
+      setArea=new Set();
+      const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+      try{
+        for(const nivel of ['N0','N1','N2','N3']){
+          const fichas=await loadFichas(nivel);
+          (fichas||[]).forEach(fr=>{
+            if(!_registroVisibleOficina(leerDueno(fr, EDF(nivel)))) return;
+            // Añadir todos los segmentos de la ruta de esa ficha (para incluir la rama completa)
+            const ruta=rutaFicha(fr,nivel)||'';
+            ruta.split(/\s*›\s*/).map(x=>norm(x)).filter(Boolean).forEach(seg=>setArea.add(seg));
+          });
+        }
+      }catch(_){}
+    }
     // Filtros base (tipo, archivado, búsqueda)
     let filas=inv.map(r=>{
       const v=r.values||{};
@@ -3150,6 +3257,13 @@ async function renderInventario(){
       if(!verArch && f.archivado) return false;
       if(fTipo && f.tipo!==fTipo) return false;
       if(q){ const blob=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
+      // Filtro por ÁREA (rol Oficina): mostrar la fila solo si alguno de sus niveles pertenece
+      // a un proceso vinculado a su oficina. Admin/Gestor/Usuario libre no tienen setArea → ven todo.
+      if(setArea){
+        const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+        const algunNivel=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].map(norm).filter(Boolean);
+        if(!algunNivel.some(seg=>setArea.has(seg))) return false;
+      }
       return true;
     });
 
