@@ -750,7 +750,8 @@
       <div class="eyebrow">Inventario documental</div>
       <h1>Fichas registradas</h1>
       <p>Fichas de proceso guardadas en los tres niveles. Edita o elimina según necesites.</p>
-      <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="list_total_ficha">0</span> ficha(s) · <span id="list_total_ind">0</span> indicador(es)</p>
+      <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="list_total_ficha">0</span> ficha(s) · <span id="list_total_ind">0</span> indicador(es) <span id="list_falta_matriz" style="font-weight:600"></span></p>
+      <p style="margin-top:2px;font-size:12px;color:var(--mist)">Los indicadores resaltados en <span style="background:#fff8e6;border:1px solid #f0c987;border-radius:4px;padding:0 5px;color:#b06a00;font-weight:600">ámbar</span> aún no se han desarrollado en la Matriz de indicadores.</p>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
@@ -2088,6 +2089,7 @@ function invalidarCacheIndicadores(){
   for(const k in _IDX_SUBIND) delete _IDX_SUBIND[k];
   if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
   if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
+  if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz();
 }
 window.invalidarCacheIndicadores=invalidarCacheIndicadores;
 // Ejecuta tareas async con CONCURRENCIA LIMITADA (máx N a la vez). Evita saturar la API
@@ -4421,7 +4423,8 @@ async function renderListado(){
 const _DESAG_CACHE = {}; // key → html ya calculado
 async function cargarDesagregadoIndicadores(lista){
   // Construir (o reutilizar) el caché compartido de subindicadores — UNA sola vez, en paralelo.
-  try{ await Promise.all([loadInventario(), construirMapaIndicadores()]); }catch(_){}
+  // También el set de indicadores que ya están en la matriz, para marcar los que faltan.
+  try{ await Promise.all([loadInventario(), construirMapaIndicadores(), cargarIndsEnMatriz()]); }catch(_){}
   for(const {celdaId, r, nivel} of lista){
     const celda=document.getElementById(celdaId);
     if(!celda) continue;
@@ -4439,12 +4442,13 @@ async function cargarDesagregadoIndicadores(lista){
   }
   // Sumar indicadores por grupo (dueño) y total general, y actualizar las cabeceras
   try{
-    const porGrupo={}; let totalInd=0;
+    const porGrupo={}; let totalInd=0; let totalFalta=0;
     for(const {r, nivel} of lista){
-      const n=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]).length;
-      totalInd+=n;
+      const its=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]);
+      totalInd+=its.length;
+      its.forEach(it=>{ if(!_indEnMatriz(it.elemento, it.indicador)) totalFalta++; });
       const cabId=_GRP_DE_FICHA[nivel+'_'+r.id];
-      if(cabId) porGrupo[cabId]=(porGrupo[cabId]||0)+n;
+      if(cabId) porGrupo[cabId]=(porGrupo[cabId]||0)+its.length;
     }
     Object.keys(porGrupo).forEach(cabId=>{
       const el=document.getElementById(cabId);
@@ -4452,7 +4456,38 @@ async function cargarDesagregadoIndicadores(lista){
     });
     const totEl=document.getElementById('list_total_ind');
     if(totEl) totEl.textContent=totalInd;
+    const faltaEl=document.getElementById('list_falta_matriz');
+    if(faltaEl) faltaEl.innerHTML = totalFalta>0
+      ? `· <span style="color:#b06a00">⏳ ${totalFalta} sin desarrollar en la matriz</span>`
+      : '· <span style="color:#0f8f5e">✓ todos en la matriz</span>';
   }catch(_){}
+}
+
+// Set global de indicadores que YA están en la Matriz (texto "Elemento — Indicador"
+// normalizado). Se usa para marcar en Fichas registradas los que aún faltan desarrollar.
+let _INDS_EN_MATRIZ = null;
+async function cargarIndsEnMatriz(){
+  if(_INDS_EN_MATRIZ) return _INDS_EN_MATRIZ;
+  _INDS_EN_MATRIZ = new Set();
+  try{
+    const recs = await loadMatriz();
+    const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    (recs||[]).forEach(m=>{
+      const t = leerCampo(m, MAT.indicador_txt.id, 'Indicador');
+      if(t) _INDS_EN_MATRIZ.add(norm(t));
+    });
+  }catch(_){}
+  return _INDS_EN_MATRIZ;
+}
+function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; }
+// ¿Este indicador de ficha ya está desarrollado en la matriz?
+function _indEnMatriz(elemento, indicador){
+  if(!_INDS_EN_MATRIZ) return true; // si aún no cargó, no marcar nada (evita falsos positivos)
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  // En la matriz se guarda como "Elemento — Indicador"; también probamos solo el indicador.
+  const full = norm((elemento?elemento+' — ':'')+indicador);
+  const solo = norm(indicador);
+  return _INDS_EN_MATRIZ.has(full) || _INDS_EN_MATRIZ.has(solo);
 }
 
 // Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
@@ -4468,12 +4503,18 @@ function _pintaDesagregado(naLabel, items){
       ${naPill}
       <span style="font-size:13px;color:var(--mist);font-weight:600">${items.length} indicador(es)</span>
     </div>`;
-  const filas = items.map((it,i)=>`
-    <tr>
+  const filas = items.map((it,i)=>{
+    const enMatriz = _indEnMatriz(it.elemento, it.indicador);
+    // Los que AÚN NO están en la matriz se resaltan en ámbar, con una etiqueta "Falta en matriz".
+    const bgFila = enMatriz ? '' : 'background:#fff8e6;';
+    const pend = enMatriz ? '' : ' <span style="display:inline-block;font-size:10px;font-weight:700;color:#b06a00;background:#ffe9b8;border:1px solid #f0c987;border-radius:8px;padding:0 6px;margin-left:4px;white-space:nowrap">⏳ Falta en matriz</span>';
+    return `
+    <tr style="${bgFila}">
       <td style="padding:4px 8px 4px 0;font-size:13px;color:var(--mist);text-align:right;white-space:nowrap;vertical-align:top">${i+1}.</td>
       <td style="padding:4px 8px;font-size:13px;font-weight:600;color:var(--brand);vertical-align:top;border-right:2px solid var(--line)" title="${attr(it.elemento)}">${it.elemento?esc(it.elemento.length>34?it.elemento.slice(0,34)+'…':it.elemento):'<span class=hint>(sin elemento)</span>'}</td>
-      <td style="padding:4px 8px;font-size:14px;color:var(--slate);vertical-align:top" title="${attr(it.indicador)}">${esc(it.indicador.length>70?it.indicador.slice(0,70)+'…':it.indicador)}</td>
-    </tr>`).join('');
+      <td style="padding:4px 8px;font-size:14px;color:var(--slate);vertical-align:top" title="${attr(it.indicador)}">${esc(it.indicador.length>70?it.indicador.slice(0,70)+'…':it.indicador)}${pend}</td>
+    </tr>`;
+  }).join('');
   const tabla = `<table style="border-collapse:collapse;width:100%">
       <thead><tr>
         <th style="width:18px"></th>
@@ -5620,13 +5661,29 @@ async function guardarIndicadoresMatriz(){
   if(!formula || !formula.trim()){ toast('La Fórmula de cálculo es obligatoria.', true); document.getElementById('ag_formula').focus(); return; }
   const btn=document.getElementById('ag_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Agregando…';
   try{
+    // Evitar DUPLICADOS: cargar los indicadores que ya están en la matriz (texto + ruta) para
+    // no volver a crear uno que ya existe. Un duplicado = mismo indicador bajo la misma ruta.
+    const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const yaEnMatriz = new Set();
+    try{
+      const recsM = await loadMatriz();
+      (recsM||[]).forEach(m=>{
+        const t = leerCampo(m, MAT.indicador_txt.id, 'Indicador');
+        const ru = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
+        if(t) yaEnMatriz.add(norm(t)+' ¦¦ '+norm(ru));
+      });
+    }catch(_){}
+
+    let creados=0; const duplicados=[];
     for(const i of marcados){
       const ind=AG_INDS[i];
-      const campos={};
-      campos[MAT.indicador_txt.id]=ind.texto;
-      // Ruta completa hasta el análisis: ruta de la ficha + componente (parte antes de " — ")
       const comp=(ind.texto.split(' — ')[0]||'').trim();
       const rutaCompleta = AG_CTX.ruta + (comp? ' › '+comp : '');
+      // ¿ya existe este indicador con esta misma ruta? → no duplicar
+      const clave = norm(ind.texto)+' ¦¦ '+norm(rutaCompleta);
+      if(yaEnMatriz.has(clave)){ duplicados.push(ind.texto); continue; }
+      const campos={};
+      campos[MAT.indicador_txt.id]=ind.texto;
       campos[MAT.proceso_ruta.id]=rutaCompleta;
       if(formula) campos[MAT.formula.id]=formula;
       if(fuente) campos[MAT.fuente_info.id]=fuente;
@@ -5643,13 +5700,23 @@ async function guardarIndicadoresMatriz(){
       const resp=await API.saveForm(null, campos, CONFIG.ENTITIES.MATRIZ_IND);
       const matId = resp.record && resp.record.id;
       if(matId){
+        yaEnMatriz.add(clave);   // registrar para no duplicar en la misma tanda
+        creados++;
         const rel={};
         const relFicha = AG_CTX.nivel==='N0'?MAT.indicador_n0 : AG_CTX.nivel==='N1'?MAT.indicador_n1 : MAT.indicador_n2;
         if(relFicha) rel[relFicha.id]=[AG_CTX.fichaId];
         if(Object.keys(rel).length){ try{ await API.saveForm(matId, rel); }catch(_){} }
       }
     }
-    toast(marcados.length+' indicador(es) agregado(s) a la matriz.');
+    // Mensaje según resultado
+    if(creados>0 && duplicados.length>0){
+      toast(creados+' indicador(es) agregado(s). '+duplicados.length+' ya estaba(n) en la matriz y se omitió(eron).', true);
+    } else if(creados>0){
+      toast(creados+' indicador(es) agregado(s) a la matriz.');
+    } else if(duplicados.length>0){
+      toast('No se agregó nada: '+(duplicados.length===1?'ese indicador ya estaba':'todos ya estaban')+' en la matriz.', true);
+      btn.disabled=false; btn.textContent='Agregar a la matriz'; return;
+    }
     STATE.matriz=[]; invalidarCacheIndicadores(); cerrarModal('modalAgregar'); renderMatriz();
   }catch(err){ toast('Error al agregar: '+err.message, true); }
   finally{ btn.disabled=false; btn.textContent='Agregar a la matriz'; }
