@@ -1473,20 +1473,36 @@ async function hacerLogin(){
   try{
     const data = await API.records(CONFIG.ENTITIES.USUARIOS);
     const recs = data.records||[];
-    const encontrado = recs.find(r=>{
+    // Puede haber VARIOS registros con el mismo usuario+contraseña (uno por oficina, forma
+    // antigua de asignar multi-oficina). Se recogen TODOS para sumar sus oficinas.
+    const coincidencias = recs.filter(r=>{
       const v=r.values||{};
       return _limpioU(v['Usuario'])===u && _limpioU(v['Contraseña'])===p;
     });
-    if(!encontrado){ mostrarError('Usuario o contraseña incorrectos.'); btn.disabled=false; btn.textContent='Iniciar sesión'; return; }
+    if(!coincidencias.length){ mostrarError('Usuario o contraseña incorrectos.'); btn.disabled=false; btn.textContent='Iniciar sesión'; return; }
+    // Registro principal: el primero ACTIVO; si ninguno está activo, se bloquea el acceso.
+    const activos = coincidencias.filter(r=>_limpioU((r.values||{})['Activo'])==='Sí');
+    if(!activos.length){ mostrarError('Este usuario está desactivado. Contacta al administrador.'); btn.disabled=false; btn.textContent='Iniciar sesión'; return; }
+    const encontrado = activos[0];
     const v = encontrado.values||{};
-    if(_limpioU(v['Activo'])!=='Sí'){ mostrarError('Este usuario está desactivado. Contacta al administrador.'); btn.disabled=false; btn.textContent='Iniciar sesión'; return; }
     let rol = _limpioU(v['Rol']) || 'Usuario libre';
     if(!['Administrador','Gestor','Oficina','Usuario libre'].includes(rol)) rol='Usuario libre';
-    // Oficinas: pueden ser varias, guardadas separadas por ';'. Se normalizan a un arreglo.
-    const oficinasTxt = _limpioU(v['Oficina asignada'])||'';
-    const oficinas = oficinasTxt.split(';').map(s=>s.trim()).filter(Boolean);
+    // Oficinas: unir las de TODOS los registros activos de este usuario (registros duplicados
+    // + el propio campo, que puede traer varias separadas por ';'). Se deduplican.
+    const norm=s=>String(s||'').replace(/\s+/g,' ').trim();
+    const setOfi=new Map(); // clave normalizada minúsculas -> texto original
+    activos.forEach(r=>{
+      _parseOficinas(_limpioU((r.values||{})['Oficina asignada'])).forEach(o=>{
+        const k=norm(o).toLowerCase(); if(k && !setOfi.has(k)) setOfi.set(k, norm(o));
+      });
+    });
+    const oficinas = [...setOfi.values()];
     const nombre = _leerNombreUsuario(v);
     SESION = { rol, usuario:_limpioU(v['Usuario']), nombre, oficina:oficinas[0]||'', oficinas, recordId: encontrado.id };
+    // Aviso solo para administradores: hay registros duplicados que conviene unificar.
+    if(rol==='Administrador' && coincidencias.length>1){
+      setTimeout(()=>toast('Nota: el usuario "'+u+'" tiene '+coincidencias.length+' registros. Conviene unificarlo en uno solo con varias oficinas.', true), 1200);
+    }
     entrarApp();
   }catch(e){
     mostrarError('Error al verificar: '+e.message);
@@ -1589,6 +1605,16 @@ function _leerNombreUsuario(v){
 }
 window._leerNombreUsuario=_leerNombreUsuario;
 
+// Separa el texto de "Oficina asignada" en un arreglo. Tolerante: acepta ';', salto de línea
+// o ' · ' como separadores (la COMA no, porque un nombre de oficina puede contenerla).
+function _parseOficinas(txt){
+  return String(txt||'')
+    .split(/;|\n|\r|\s·\s/)
+    .map(s=>s.trim())
+    .filter(Boolean);
+}
+window._parseOficinas=_parseOficinas;
+
 /* ============================================================
    GESTIÓN DE USUARIOS (pestaña Administración, solo admin)
    ============================================================ */
@@ -1637,7 +1663,7 @@ function renderUsuariosTabla(){
     const nombre=_leerNombreUsuario(v)||'<span style="color:var(--mist)">—</span>';
     const usuario=_limpioU(v['Usuario']), pass=_limpioU(v['Contraseña']), rol=_limpioU(v['Rol'])||'Usuario libre';
     const oficinaTxt=_limpioU(v['Oficina asignada'])||'—';
-    const oficinaVista=(rol==='Oficina')? oficinaTxt.split(';').map(s=>s.trim()).filter(Boolean).join(' · ') : '<span style="color:var(--mist)">(ve todo)</span>';
+    const oficinaVista=(rol==='Oficina')? _parseOficinas(oficinaTxt).join(' · ') : '<span style="color:var(--mist)">(ve todo)</span>';
     const activo=_limpioU(v['Activo']);
     const activoBadge = activo==='Sí' ? '<span style="color:#0f8f5e;font-weight:600">● Sí</span>' : '<span style="color:#c0392b;font-weight:600">● No</span>';
     const passEsc = (pass||'').replace(/"/g,'&quot;').replace(/'/g,"\\'");
@@ -1739,7 +1765,7 @@ async function editarUsuario(id){
   document.getElementById('us_rol').value = _limpioU(v['Rol'])||'';
   document.getElementById('us_activo').value = _limpioU(v['Activo'])==='No'?'No':'Sí';
   const bq=document.getElementById('us_oficina_buscar'); if(bq) bq.value='';
-  const marcadas = (_limpioU(v['Oficina asignada'])||'').split(';').map(s=>s.trim()).filter(Boolean);
+  const marcadas = _parseOficinas(_limpioU(v['Oficina asignada']));
   await poblarOficinasUsuario(marcadas);
   toggleOficinaUsuario();
   const bg=document.getElementById('us_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar usuario'; }
@@ -3223,25 +3249,9 @@ async function renderInventario(){
     const fTipo=document.getElementById('invFiltroTipo').value;
     const verArch=document.getElementById('invVerArchivados').checked;
     const limpio = s => { const t=String(s||'').trim(); return (!t || /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(t))?'':t; };
-    // Para el rol OFICINA: construir el conjunto de procesos vinculados a SUS oficinas.
-    // La vinculación proceso↔oficina vive en las FICHAS (Dueño del proceso). Un proceso es
-    // visible si él o alguno de sus ancestros aparece como dueño de una ficha de su oficina.
-    let setArea=null;
-    if(SESION && !puedeVerTodo()){
-      setArea=new Set();
-      const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
-      try{
-        for(const nivel of ['N0','N1','N2','N3']){
-          const fichas=await loadFichas(nivel);
-          (fichas||[]).forEach(fr=>{
-            if(!_registroVisibleOficina(leerDueno(fr, EDF(nivel)))) return;
-            // Añadir todos los segmentos de la ruta de esa ficha (para incluir la rama completa)
-            const ruta=rutaFicha(fr,nivel)||'';
-            ruta.split(/\s*›\s*/).map(x=>norm(x)).filter(Boolean).forEach(seg=>setArea.add(seg));
-          });
-        }
-      }catch(_){}
-    }
+    // El inventario muestra la ESTRUCTURA COMPLETA de la facultad a todos los roles: es
+    // navegación estructural, no datos de gestión. El control por oficina se aplica donde se
+    // trabajan los datos reales (fichas, matriz, tablero, metas), no aquí.
     // Filtros base (tipo, archivado, búsqueda)
     let filas=inv.map(r=>{
       const v=r.values||{};
@@ -3257,13 +3267,6 @@ async function renderInventario(){
       if(!verArch && f.archivado) return false;
       if(fTipo && f.tipo!==fTipo) return false;
       if(q){ const blob=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
-      // Filtro por ÁREA (rol Oficina): mostrar la fila solo si alguno de sus niveles pertenece
-      // a un proceso vinculado a su oficina. Admin/Gestor/Usuario libre no tienen setArea → ven todo.
-      if(setArea){
-        const norm=s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
-        const algunNivel=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].map(norm).filter(Boolean);
-        if(!algunNivel.some(seg=>setArea.has(seg))) return false;
-      }
       return true;
     });
 
