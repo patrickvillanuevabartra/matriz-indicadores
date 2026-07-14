@@ -5740,10 +5740,23 @@ async function guardarEdicionMatriz(){
   if(MAT.oficina_resp_ind) campos[MAT.oficina_resp_ind.id]=g('em_oficina_dueno');
   if(g('em_frec_med')) campos[MAT.frecuencia_medicion.id]=g('em_frec_med');
   if(g('em_frec_calc')) campos[MAT.frecuencia_calculo.id]=g('em_frec_calc');
-  const resp=g('em_responsable'); const respLimpio=(resp&&!resp.startsWith('('))?resp:'';
+  // Responsable/celular/correo: SIEMPRE se toman de la oficina de medición seleccionada,
+  // recalculando desde la tabla de responsables (fresco). Así el responsable corresponde
+  // a la oficina actual aunque el campo en pantalla no se hubiera refrescado por el onchange.
+  let respLimpio='', celVal=g('em_celular'), corVal=g('em_correo');
+  const _ofiMed=g('em_oficina');
+  if(_ofiMed){
+    try{
+      MAPA_RESP_PROCESO=null;
+      const _mapa=await cargarMapaRespProceso();
+      const _info=_mapa[String(_ofiMed).replace(/\s+/g,' ').trim().toLowerCase()];
+      if(_info){ respLimpio=_info.responsable||''; celVal=_info.celular||''; corVal=_info.correo||''; }
+      else { respLimpio=''; celVal=''; corVal=''; }
+    }catch(_){ const resp=g('em_responsable'); respLimpio=(resp&&!resp.startsWith('('))?resp:''; }
+  }
   campos[MAT.resp_med_txt.id]=respLimpio;
-  campos[MAT.resp_celular.id]=g('em_celular');
-  campos[MAT.resp_correo.id]=g('em_correo');
+  campos[MAT.resp_celular.id]=celVal;
+  campos[MAT.resp_correo.id]=corVal;
   const btn=document.getElementById('em_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(EM_ID, campos);
