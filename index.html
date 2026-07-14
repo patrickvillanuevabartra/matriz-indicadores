@@ -754,7 +754,7 @@
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
-        <input id="listBuscar" placeholder="Buscar por proceso u objetivo…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderListado()">
+        <input id="listBuscar" placeholder="Buscar por proceso, objetivo o dueño (oficina)…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderListado()">
       </div>
       <div style="display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px">
         <button class="list-tab active" data-f="todos" onclick="setListFiltro('todos')" style="border:0;background:var(--brand);color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Todas</button>
@@ -797,7 +797,7 @@
       <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="inv_total">0</span> elemento(s)</p>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-primary" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
+      <button class="btn btn-primary" id="btnNuevoProceso" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:200px">
         <input id="invBuscar" placeholder="Buscar por proceso, actividad o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
       </div>
@@ -847,7 +847,7 @@
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnAgregarInd" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
-        <input id="matBuscar" placeholder="Buscar por indicador o proceso…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
+        <input id="matBuscar" placeholder="Buscar por indicador, proceso u oficina…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
       </div>
       <button class="btn btn-ghost" title="Configurar las plantillas de notificación" onclick="abrirEditorPlantillas()">⚙️ Plantillas</button>
     </div>
@@ -1541,6 +1541,9 @@ function entrarApp(){
 function esAdmin(){ return SESION && SESION.rol==='Administrador'; }
 function puedeCrear(){ return esAdmin(); }
 function puedeEliminar(){ return esAdmin(); }
+// El INVENTARIO de procesos es la estructura de la facultad: solo el Administrador puede
+// crear, editar, archivar o eliminar procesos. Oficina, Gestor y Usuario libre solo VEN.
+function puedeGestionarInventario(){ return esAdmin(); }
 function puedeEditar(){ return SESION && (SESION.rol==='Administrador' || SESION.rol==='Gestor' || SESION.rol==='Oficina'); }
 function puedeVerTodo(){ return SESION && (SESION.rol==='Administrador' || SESION.rol==='Gestor' || SESION.rol==='Usuario libre'); }
 function soloLectura(){ return SESION && SESION.rol==='Usuario libre'; }
@@ -2723,6 +2726,8 @@ async function _npRegistros(key){
 }
 
 async function abrirNuevoProceso(){
+  if(!puedeGestionarInventario()){ toast("Solo el administrador puede modificar el inventario de procesos.", true); return; }
+
   document.getElementById('np_nivel').value='';
   document.getElementById('np_cascada').innerHTML='';
   document.getElementById('np_nuevo').style.display='none';
@@ -3243,6 +3248,9 @@ async function _npInsertar(def, idsPadres, codigo, nombre){
 async function renderInventario(){
   const tb=document.getElementById('tablaInventario');
   if(!tb) return;
+  // Botón "+ Nuevo proceso" solo para quien puede gestionar el inventario (admin)
+  const btnNP=document.getElementById('btnNuevoProceso');
+  if(btnNP) btnNP.style.display = puedeGestionarInventario() ? '' : 'none';
   try{
     // Si STATE.inventario ya está poblado (p.ej. tras crear/borrar), usarlo tal cual:
     // volver a pedirlo aquí podría traer una respuesta cacheada del estado anterior.
@@ -3324,7 +3332,7 @@ async function renderInventario(){
         html+=`<tr style="${it.archivado?'opacity:.5':''}">
           <td colspan="6" style="padding:8px 14px 8px ${padresSinTipo.length?42:26}px;border-top:1px solid var(--line);color:var(--slate);font-weight:600">${it.valor.replace(/</g,'&lt;')}${archTag}</td>
           <td style="text-align:right;white-space:nowrap;border-top:1px solid var(--line);padding:8px 6px">
-            <button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>
+            ${puedeGestionarInventario()?`<button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>`:'<span style="color:var(--mist);font-size:11px">Solo lectura</span>'}
           </td>
         </tr>`;
       });
@@ -3412,9 +3420,9 @@ async function renderInventario(){
       html+=`<td style="vertical-align:top;padding:0 0 0 0;border-left:3px solid ${bgP.fg}33"><div style="${sep}padding:8px 10px">${f.proc?`<div style="font-weight:600;color:${bgP.fg};line-height:1.35">${f.proc.replace(/</g,'&lt;')}${archTag}</div>`:'<span style="color:var(--mist)">—</span>'}</div></td>`;
       // acciones
       html+=`<td style="text-align:right;vertical-align:top;white-space:nowrap;padding:0"><div style="${sep}padding:8px 6px">
-        <button class="icon-btn" title="Editar" onclick="editarInventario('${f.id}')">✏️</button>
+        ${puedeGestionarInventario()?`<button class="icon-btn" title="Editar" onclick="editarInventario('${f.id}')">✏️</button>
         <button class="icon-btn" title="${f.archivado?'Reactivar':'Archivar'}" onclick="archivarInventario('${f.id}', ${f.archivado?'false':'true'})">📦</button>
-        <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${f.id}')">🗑️</button>
+        <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${f.id}')">🗑️</button>`:'<span style="color:var(--mist);font-size:11px">Solo lectura</span>'}
       </div></td>`;
       html+=`</tr>`;
     });
@@ -4061,6 +4069,8 @@ async function _borrarEnTablaNivel(nivelLabel, nombre){
 }
 
 async function eliminarInventario(rid){
+  if(!puedeGestionarInventario()){ toast("Solo el administrador puede modificar el inventario de procesos.", true); return; }
+
   const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
   const {nivel, nombre}=_invNivelElemento(r);
   const codigo=_codigoInicio(nombre);
@@ -4101,6 +4111,8 @@ async function eliminarInventario(rid){
 window.eliminarInventario=eliminarInventario;
 
 async function archivarInventario(rid, archivar){
+  if(!puedeGestionarInventario()){ toast("Solo el administrador puede modificar el inventario de procesos.", true); return; }
+
   if(!ESTADO_REGISTRO_FIELD_ID){ toast('Falta configurar el campo «Estado del registro» en QuintaDB.', true); return; }
   const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
   const {nombre}=_invNivelElemento(r);
@@ -4128,6 +4140,8 @@ window.archivarInventario=archivarInventario;
 
 let _EI_FILA=null; // datos de la fila en edición
 async function editarInventario(rid){
+  if(!puedeGestionarInventario()){ toast("Solo el administrador puede modificar el inventario de procesos.", true); return; }
+
   const inv=await loadInventario(); const r=inv.find(x=>x.id===rid); if(!r) return;
   const v=r.values||{}; const C=INV_COLS;
   const limpio = s => { const t=String(s||'').trim(); return (!t || /^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i.test(t))?'':t; };
@@ -4349,7 +4363,12 @@ async function renderListado(){
       // Filtro por OFICINA: el rol "Oficina" solo ve las fichas cuyo Dueño del proceso
       // coincide con su oficina. Admin, Gestor y Usuario libre ven todo.
       if(!_registroVisibleOficina(leerDueno(r, EDF(nivel)))) return false;
-      if(filtro && !(rutaFicha(r,nivel)+' '+objFicha(r,nivel)).toLowerCase().includes(filtro)) return false;
+      // Buscar en ruta + objetivo + DUEÑO del proceso (para que "escuela" encuentre fichas
+      // cuyo dueño es una escuela, aunque la palabra no esté en la ruta ni el objetivo).
+      if(filtro){
+        const blob = (rutaFicha(r,nivel)+' '+objFicha(r,nivel)+' '+leerDueno(r, EDF(nivel))).toLowerCase();
+        if(!blob.includes(filtro)) return false;
+      }
       if(typeof pasaFiltrosList==='function' && !pasaFiltrosList(o)) return false;
       return true;
     });
@@ -5245,7 +5264,16 @@ async function renderMatriz(){
         const ofiDue=MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
         if(!_registroVisibleOficina(ofiMed) && !_registroVisibleOficina(ofiDue)) return false;
       }
-      if(filtro && !ind.toLowerCase().includes(filtro)) return false;
+      // Buscar en varios campos, no solo el nombre del indicador: también la ruta del proceso
+      // y las oficinas (medición y dueña). Así "escuela" encuentra registros cuya escuela está
+      // en la ruta o en la oficina, aunque el nombre del indicador no la contenga.
+      if(filtro){
+        const ruta = leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)') || '';
+        const ofiMed2 = leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición') || '';
+        const ofiDue2 = MAT.oficina_resp_ind ? (leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador') || '') : '';
+        const blob = (ind+' '+ruta+' '+ofiMed2+' '+ofiDue2).toLowerCase();
+        if(!blob.includes(filtro)) return false;
+      }
       if(typeof pasaFiltrosMat==='function' && !pasaFiltrosMat(r)) return false;
       return true;
     });
