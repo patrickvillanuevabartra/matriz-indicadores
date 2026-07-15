@@ -2191,15 +2191,31 @@ async function construirMapaIndicadores(){
     }
   });
   // ---- Volcar a las estructuras finales, respetando el orden del subformulario ----
+  // Algunos subregistros traen VARIOS indicadores en una sola celda, unidos por coma:
+  //   "S04...01 — Indic A, S04...01 — Indic B, S04...02 — Indic C"
+  // Hay que separarlos en indicadores individuales; si no, se leen como un solo texto
+  // gigante que nunca coincide con la matriz (falso "sin desarrollar").
+  // Separador fiable: ", " seguido de un CÓDIGO de proceso (letra + números con puntos) + espacio.
+  const _dividirMultiples = (txt)=>{
+    const s=String(txt||'').trim();
+    if(!s) return [];
+    // Insertar un marcador antes de cada código que sigue a una coma, y partir por él.
+    const conMarca = s.replace(/,\s+(?=[A-Za-z]\d+(?:\.\d+)*\s)/g, '\u0001');
+    return conMarca.split('\u0001').map(x=>x.trim()).filter(Boolean);
+  };
   Object.keys(porFicha).forEach(key=>{
     const { items, huboFallo, fi, ordenSid } = porFicha[key];
     items.sort((a,b)=>(ordenSid[a.sid]??999)-(ordenSid[b.sid]??999));
     const lista=[];
-    items.forEach((it,idx)=>{
-      const tt=it.texto;
-      _MAPA_IND[tt] = { fichaId:fi.fichaId, fichaRuta:fi.fichaRuta, nivel:fi.nivel, orden:idx, fichaOrden:fi.fichaOrden };
-      const partes=tt.split(' — ');
-      lista.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
+    let idx=0;
+    items.forEach((it)=>{
+      // Un mismo subregistro puede contener varios indicadores unidos por coma → dividir.
+      _dividirMultiples(it.texto).forEach(tt=>{
+        _MAPA_IND[tt] = { fichaId:fi.fichaId, fichaRuta:fi.fichaRuta, nivel:fi.nivel, orden:idx, fichaOrden:fi.fichaOrden };
+        const partes=tt.split(' — ');
+        lista.push({ elemento: partes.length>1?partes[0].trim():'', indicador: partes.length>1?partes.slice(1).join(' — ').trim():tt });
+        idx++;
+      });
     });
     // Solo cachear si no hubo fallos de red, o si sí obtuvimos items (datos válidos)
     if(!huboFallo || lista.length){ _SUBIND_POR_FICHA[key]=lista; }
