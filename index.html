@@ -2540,6 +2540,8 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
     STATE.fichas[NIVEL]=[]; EDIT_FICHA=null;
     if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
     resetFicha();
+    // Refrescar EN VIVO la lista de Fichas registradas (antes había que cambiar de pestaña)
+    if(typeof renderListado==='function'){ try{ renderListado(); }catch(_){} }
   }catch(err){ toast('Error al guardar: '+err.message, true); }
   finally{ btn.disabled=false; btn.textContent='Guardar ficha'; }
 });
@@ -5387,7 +5389,7 @@ async function abrirControlSync(){
     if(!huerfanos.length){
       html+='<p style="color:#0f8f5e;margin:4px 0 16px">✓ No hay indicadores huérfanos. Todo lo de la matriz existe en las fichas.</p>';
     }else{
-      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores están en la matriz pero su texto ya no aparece en ninguna ficha (probablemente el indicador se eliminó o se corrigió su texto en la ficha). Revisa cada uno: si ya no aplica, puedes eliminarlo. <strong>Ojo:</strong> si tiene metas o seguimientos registrados, se perderán al eliminar.</p>';
+      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores están en la matriz pero su texto ya no coincide con ninguna ficha. Esto ocurre si el indicador <strong>se eliminó</strong> de la ficha, o si <strong>se corrigió su texto</strong> en la ficha (en ese caso conviene volver a agregarlo con el texto nuevo). Revisa cada uno: si ya no aplica, elimínalo. <strong>Ojo:</strong> si tiene metas o seguimientos registrados, se perderán al eliminar.</p>';
       html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Indicador</th><th style="padding:8px 10px">Dueño</th><th style="padding:8px 10px;text-align:right">Acción</th></tr></thead><tbody>';
       huerfanos.forEach(h=>{
         html+=`<tr style="border-bottom:1px solid var(--line)">
@@ -5414,6 +5416,8 @@ async function eliminarHuerfanoSync(id, btn){
     const tr=btn.closest('tr'); if(tr){ tr.style.opacity='.4'; tr.style.textDecoration='line-through'; }
     btn.textContent='Eliminado';
     STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz();
+    // Refrescar la tabla de la matriz en vivo (el registro eliminado desaparece sin cambiar de pestaña)
+    if(typeof renderMatriz==='function'){ try{ renderMatriz(); }catch(_){} }
   }catch(e){ toast('Error al eliminar: '+e.message, true); btn.disabled=false; btn.textContent='Eliminar'; }
 }
 window.eliminarHuerfanoSync=eliminarHuerfanoSync;
