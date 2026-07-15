@@ -847,6 +847,7 @@
 
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnAgregarInd" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
+      <button class="btn" id="btnControlSync" onclick="abrirControlSync()" style="margin-left:8px" title="Detecta indicadores de la matriz desincronizados con las fichas">🔄 Control de sincronización</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
         <input id="matBuscar" placeholder="Buscar por indicador, proceso u oficina…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
       </div>
@@ -1008,6 +1009,23 @@
 <div class="toast" id="toast"></div>
 
 <!-- ===================== MODAL: AGREGAR INDICADOR DESDE FICHA ===================== -->
+<!-- Panel de control de sincronización matriz ↔ fichas -->
+<div class="modal-bg" id="modalControlSync">
+  <div class="modal" style="max-width:900px">
+    <div class="modal-head">
+      <div><div class="eyebrow">Matriz de indicadores</div><h2>Control de sincronización con fichas</h2></div>
+      <button class="modal-close" onclick="cerrarModal('modalControlSync')" title="Cerrar">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="margin-top:0">Detecta indicadores de la matriz que ya no coinciden con las fichas. Tú decides qué hacer con cada uno; nada se cambia automáticamente.</p>
+      <div id="cs_cuerpo"><p class="hint">Cargando…</p></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="cerrarModal('modalControlSync')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalAgregar">
   <div class="modal">
     <div class="modal-head">
@@ -5323,6 +5341,82 @@ function pintarResumenMatriz(recs){
     </div>`;
 }
 window.pintarResumenMatriz=pintarResumenMatriz;
+
+// ============================================================================
+//  CONTROL DE SINCRONIZACIÓN matriz ↔ fichas
+//  Detecta: (1) HUÉRFANOS — en la matriz pero su indicador ya no está en ninguna
+//  ficha; (2) POSIBLES MODIFICADOS — coincide el proceso/oficina con una ficha,
+//  pero el texto ya no aparece igual (posible corrección de texto en la ficha).
+//  No cambia nada solo: el usuario decide por cada uno.
+// ============================================================================
+async function abrirControlSync(){
+  document.getElementById('modalControlSync').classList.add('show'); document.body.style.overflow='hidden';
+  const cont=document.getElementById('cs_cuerpo');
+  cont.innerHTML='<p class="hint">Analizando matriz y fichas…</p>';
+  try{
+    // Cargar todo lo necesario
+    await Promise.all([loadMatriz(), (async()=>{ for(const n of ['N0','N1','N2','N3']) await loadFichas(n); })(), construirMapaIndicadores()]);
+    const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+
+    // Conjunto de TODOS los textos de indicador que existen HOY en las fichas
+    const enFichas = new Set();
+    Object.keys(_SUBIND_POR_FICHA).forEach(k=>{
+      (_SUBIND_POR_FICHA[k]||[]).forEach(it=>{
+        const texto=(it.elemento?it.elemento+' — ':'')+it.indicador;
+        enFichas.add(norm(texto));
+        enFichas.add(norm(it.indicador));
+      });
+    });
+
+    const recs = await loadMatriz();
+    const huerfanos=[];
+    recs.forEach(m=>{
+      const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
+      if(!ind) return;
+      // Huérfano: su texto ya no existe en ninguna ficha
+      if(!enFichas.has(norm(ind))){
+        const due = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+        const ruta = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
+        huerfanos.push({ id:m.id, ind, due, ruta });
+      }
+    });
+
+    let html='';
+    // Sección huérfanos
+    html+='<h3 style="font-size:15px;margin:8px 0 6px">🗑️ Indicadores huérfanos <span class="hint" style="font-weight:400">· ya no existen en ninguna ficha</span></h3>';
+    if(!huerfanos.length){
+      html+='<p style="color:#0f8f5e;margin:4px 0 16px">✓ No hay indicadores huérfanos. Todo lo de la matriz existe en las fichas.</p>';
+    }else{
+      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores están en la matriz pero su texto ya no aparece en ninguna ficha (probablemente el indicador se eliminó o se corrigió su texto en la ficha). Revisa cada uno: si ya no aplica, puedes eliminarlo. <strong>Ojo:</strong> si tiene metas o seguimientos registrados, se perderán al eliminar.</p>';
+      html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Indicador</th><th style="padding:8px 10px">Dueño</th><th style="padding:8px 10px;text-align:right">Acción</th></tr></thead><tbody>';
+      huerfanos.forEach(h=>{
+        html+=`<tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:8px 10px" title="${(h.ruta||'').replace(/"/g,'&quot;')}">${String(h.ind).replace(/</g,'&lt;')}</td>
+          <td style="padding:8px 10px">${String(h.due||'—').replace(/</g,'&lt;')}</td>
+          <td style="padding:8px 10px;text-align:right"><button class="btn" style="padding:5px 12px;font-size:12px;background:#fde8e8;color:#c0392b;border:1px solid #f0c0c0" onclick="eliminarHuerfanoSync('${h.id}', this)">Eliminar</button></td>
+        </tr>`;
+      });
+      html+='</tbody></table></div>';
+    }
+
+    cont.innerHTML=html;
+  }catch(e){ cont.innerHTML='<p class="hint">Error al analizar: '+e.message+'</p>'; }
+}
+window.abrirControlSync=abrirControlSync;
+
+async function eliminarHuerfanoSync(id, btn){
+  if(!puedeEliminar()){ toast('Solo el administrador puede eliminar.', true); return; }
+  if(!confirm('¿Eliminar este indicador huérfano de la matriz? Si tiene metas o seguimientos, también se perderán. Esta acción no se puede deshacer.')) return;
+  btn.disabled=true; btn.textContent='Eliminando…';
+  try{
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+id+'.json','DELETE',{});
+    toast('Indicador huérfano eliminado.');
+    const tr=btn.closest('tr'); if(tr){ tr.style.opacity='.4'; tr.style.textDecoration='line-through'; }
+    btn.textContent='Eliminado';
+    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz();
+  }catch(e){ toast('Error al eliminar: '+e.message, true); btn.disabled=false; btn.textContent='Eliminar'; }
+}
+window.eliminarHuerfanoSync=eliminarHuerfanoSync;
 
 async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
