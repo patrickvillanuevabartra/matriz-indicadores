@@ -4435,7 +4435,8 @@ async function cargarDesagregadoIndicadores(lista){
       let naLabel=''; { const det=await nivelAnalisisDeFicha(r, nivel); naLabel = det && det.label ? det.label : ''; }
       // Subindicadores: del caché compartido (datos COMPLETOS, leídos por construirMapaIndicadores)
       const items = _SUBIND_POR_FICHA[nivel+'_'+r.id] || [];
-      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items);
+      const rutaF = rutaFicha(r, nivel);
+      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items, rutaF);
       const c2=document.getElementById(celdaId);
       if(c2) c2.innerHTML=_DESAG_CACHE[key];
     }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
@@ -4445,8 +4446,9 @@ async function cargarDesagregadoIndicadores(lista){
     const porGrupo={}; let totalInd=0; let totalFalta=0;
     for(const {r, nivel} of lista){
       const its=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]);
+      const rutaF = rutaFicha(r, nivel);
       totalInd+=its.length;
-      its.forEach(it=>{ if(!_indEnMatriz(it.elemento, it.indicador)) totalFalta++; });
+      its.forEach(it=>{ if(!_indEnMatriz(it.elemento, it.indicador, rutaF)) totalFalta++; });
       const cabId=_GRP_DE_FICHA[nivel+'_'+r.id];
       if(cabId) porGrupo[cabId]=(porGrupo[cabId]||0)+its.length;
     }
@@ -4463,36 +4465,45 @@ async function cargarDesagregadoIndicadores(lista){
   }catch(_){}
 }
 
-// Set global de indicadores que YA están en la Matriz (texto "Elemento — Indicador"
-// normalizado). Se usa para marcar en Fichas registradas los que aún faltan desarrollar.
+// Set global de indicadores que YA están en la Matriz. Guardamos varias claves por registro
+// para que el cruce sea robusto: el texto completo "Elemento — Indicador" Y también con la
+// ruta, porque un mismo nombre de indicador puede repetirse en fichas distintas.
 let _INDS_EN_MATRIZ = null;
 async function cargarIndsEnMatriz(){
   if(_INDS_EN_MATRIZ) return _INDS_EN_MATRIZ;
-  _INDS_EN_MATRIZ = new Set();
+  const set = new Set();
   try{
     const recs = await loadMatriz();
     const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
     (recs||[]).forEach(m=>{
       const t = leerCampo(m, MAT.indicador_txt.id, 'Indicador');
-      if(t) _INDS_EN_MATRIZ.add(norm(t));
+      const ru = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
+      if(t){
+        set.add(norm(t));                    // texto del indicador ("Elemento — Indicador")
+        if(ru) set.add(norm(t)+' ¦¦ '+norm(ru)); // con ruta (identifica el indicador exacto)
+      }
     });
-  }catch(_){}
-  return _INDS_EN_MATRIZ;
+    _INDS_EN_MATRIZ = set;   // solo se fija si la carga fue exitosa
+  }catch(_){ /* no fijar: se reintentará */ }
+  return _INDS_EN_MATRIZ || set;
 }
 function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; }
 // ¿Este indicador de ficha ya está desarrollado en la matriz?
-function _indEnMatriz(elemento, indicador){
-  if(!_INDS_EN_MATRIZ) return true; // si aún no cargó, no marcar nada (evita falsos positivos)
+// Recibe también la ruta de la ficha para un cruce preciso.
+function _indEnMatriz(elemento, indicador, rutaFichaTxt){
+  if(!_INDS_EN_MATRIZ) return true; // aún no cargó: no marcar (se repinta cuando cargue)
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
-  // En la matriz se guarda como "Elemento — Indicador"; también probamos solo el indicador.
-  const full = norm((elemento?elemento+' — ':'')+indicador);
-  const solo = norm(indicador);
-  return _INDS_EN_MATRIZ.has(full) || _INDS_EN_MATRIZ.has(solo);
+  const texto = (elemento?elemento+' — ':'')+indicador;
+  // La ruta que se guarda al agregar es: ruta de la ficha + " › " + componente(elemento).
+  const rutaConComp = (rutaFichaTxt||'') + (elemento? ' › '+elemento : '');
+  const claveConRuta = norm(texto)+' ¦¦ '+norm(rutaConComp);
+  // Preferimos el match por ruta (preciso). Como respaldo, el match por texto solo.
+  return _INDS_EN_MATRIZ.has(claveConRuta) || _INDS_EN_MATRIZ.has(norm(texto));
 }
 
 // Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
 // sub-tabla con una fila por indicador (Elemento del nivel | Indicador).
-function _pintaDesagregado(naLabel, items){
+function _pintaDesagregado(naLabel, items, rutaFichaTxt){
   if(!items.length) return '<span class="hint">Sin indicadores</span>';
   const esc=s=>String(s||'').replace(/</g,'&lt;');
   const attr=s=>String(s||'').replace(/"/g,'&quot;');
@@ -4504,7 +4515,7 @@ function _pintaDesagregado(naLabel, items){
       <span style="font-size:13px;color:var(--mist);font-weight:600">${items.length} indicador(es)</span>
     </div>`;
   const filas = items.map((it,i)=>{
-    const enMatriz = _indEnMatriz(it.elemento, it.indicador);
+    const enMatriz = _indEnMatriz(it.elemento, it.indicador, rutaFichaTxt);
     // Los que AÚN NO están en la matriz se resaltan en ámbar, con una etiqueta "Falta en matriz".
     const bgFila = enMatriz ? '' : 'background:#fff8e6;';
     const pend = enMatriz ? '' : ' <span style="display:inline-block;font-size:10px;font-weight:700;color:#b06a00;background:#ffe9b8;border:1px solid #f0c987;border-radius:8px;padding:0 6px;margin-left:4px;white-space:nowrap">⏳ Falta en matriz</span>';
