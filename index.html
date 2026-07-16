@@ -5489,15 +5489,21 @@ async function abrirControlSync(){
     recs.forEach(m=>{
       const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       if(!ind) return;
+      // FILTRO POR OFICINA: cada usuario ve en el panel solo los cambios de SU(S) oficina(s)
+      // (misma regla que en la vista de la matriz: oficina de medición O dueña). El admin y
+      // los roles con vista total ven todo.
+      const ofiMedSync = leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+      const ofiDueSync = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+      if(!_registroVisibleOficina(ofiMedSync) && !_registroVisibleOficina(ofiDueSync)) return;
       if(enFichas.has(norm(ind))){
         // Sincronizado. Si su ficha está ARCHIVADA, se lista solo a título informativo.
         if(textosDeArchivadas.has(norm(ind))){
-          const due = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+          const due = ofiDueSync;
           deArchivadas.push({ ind, due });
         }
         return;
       }
-      const due = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+      const due = ofiDueSync;
       const rutaMat = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
       const partes = String(rutaMat||'').split(' › ');
       const rutaBase = norm(partes.slice(0,-1).join(' › '));
