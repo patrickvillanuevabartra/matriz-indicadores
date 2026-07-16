@@ -2554,10 +2554,29 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
       await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+fichaId+'.json','PUT',{ json_subforms_values: JSON.stringify(subforms) });
     }
     toast(EDIT_FICHA?'Ficha actualizada.':'Ficha guardada correctamente.');
-    STATE.fichas[NIVEL]=[]; EDIT_FICHA=null;
+    EDIT_FICHA=null;
+    // Refresco EN VIVO robusto. Problema original: recargar de inmediato tras el POST a veces
+    // trae la lista SIN el registro nuevo (QuintaDB tarda un instante en indexarlo), y ese
+    // caché "viejo" hacía que la ficha no apareciera hasta recargar todo el sistema.
+    // Solución: (1) recargar forzado y, si el registro recién creado aún no viene, insertarlo
+    // de forma optimista con los datos enviados; (2) recarga diferida para sustituirlo por el
+    // registro real completo cuando el servidor ya lo tenga indexado.
+    try{
+      const _nivelGuardado = NIVEL;
+      const lista = await loadFichas(_nivelGuardado, true);
+      if(fichaId && !lista.some(r=>r.id===fichaId)){
+        lista.push({ id: fichaId, values: Object.assign({}, campos) });
+      }
+      setTimeout(async ()=>{
+        try{
+          await loadFichas(_nivelGuardado, true);
+          if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
+          if(typeof renderListado==='function') renderListado();
+        }catch(_){}
+      }, 2500);
+    }catch(_){ STATE.fichas[NIVEL]=[]; }
     if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
     resetFicha();
-    // Refrescar EN VIVO la lista de Fichas registradas (antes había que cambiar de pestaña)
     if(typeof renderListado==='function'){ try{ renderListado(); }catch(_){} }
   }catch(err){ toast('Error al guardar: '+err.message, true); }
   finally{ btn.disabled=false; btn.textContent='Guardar ficha'; }
