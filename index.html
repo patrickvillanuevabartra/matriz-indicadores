@@ -5509,11 +5509,26 @@ async function abrirControlSync(){
       const rutaBase = norm(partes.slice(0,-1).join(' › '));
       // El elemento del indicador viejo: la parte antes de " — "
       const elemViejo = norm((String(ind).split(' — ')[0]||''));
+      // Emparejamiento por MEJOR SIMILITUD dentro del mismo elemento. Antes solo se
+      // emparejaba si había UN único candidato; si el usuario corregía DOS indicadores
+      // del mismo elemento a la vez, ambos caían a "huérfanos". Ahora cada uno toma el
+      // candidato más parecido disponible (≥ 30% de palabras compartidas). Cada candidato
+      // se usa una sola vez, y si nada se parece lo suficiente, sigue siendo huérfano
+      // (protege el caso de un indicador reemplazado por otro sin relación).
       const cands = candidatosPorRutaElem[rutaBase+' ¦ '+elemViejo] || [];
-      // Emparejar SOLO si hay un único candidato en el MISMO elemento Y el texto del
-      // indicador se parece lo suficiente (≥ 30% de palabras compartidas).
-      if(cands.length===1 && similitud(ind, cands[0].texto)>=0.3){
-        modificados.push({ id:m.id, viejo:ind, nuevo:cands[0].texto, due, rutaMat });
+      // La similitud se calcula SOLO sobre la parte del INDICADOR (después de " — "),
+      // porque el elemento es idéntico en ambos y de incluirlo inflaría la similitud,
+      // haciendo pasar como "corrección" un reemplazo total sin relación.
+      const soloInd = t => { const p=String(t||'').split(' — '); return p.length>1 ? p.slice(1).join(' — ') : String(t||''); };
+      let mejor=null, mejorSim=0;
+      cands.forEach(c=>{
+        if(c._usado) return;
+        const s=similitud(soloInd(ind), soloInd(c.texto));
+        if(s>mejorSim){ mejorSim=s; mejor=c; }
+      });
+      if(mejor && mejorSim>=0.3){
+        mejor._usado=true;
+        modificados.push({ id:m.id, viejo:ind, nuevo:mejor.texto, due, rutaMat });
       }else{
         huerfanos.push({ id:m.id, ind, due, ruta:rutaMat });
       }
