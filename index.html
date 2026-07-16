@@ -757,6 +757,9 @@
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
         <input id="listBuscar" placeholder="Buscar por proceso, objetivo o dueño (oficina)…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderListado()">
       </div>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer;white-space:nowrap">
+        <input type="checkbox" id="listVerArchivadas" onchange="renderListado()" style="width:15px;height:15px;cursor:pointer"> Ver archivadas
+      </label>
       <div style="display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px">
         <button class="list-tab active" data-f="todos" onclick="setListFiltro('todos')" style="border:0;background:var(--brand);color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Todas</button>
         <button class="list-tab" data-f="N0" onclick="setListFiltro('N0')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 0</button>
@@ -1987,6 +1990,20 @@ const ESTADO_REGISTRO_FIELD_ID = "cGoSkYwSnnWPj6W7tcHSoK"; // campo "Estado del 
 // ⬇️ PEGA AQUÍ el id del campo "Nombre completo" que crearás en QuintaDB (tabla de usuarios).
 // Mientras esté vacío, el nombre solo se LEE por nombre de columna (no se podrá guardar).
 const NOMBRE_USUARIO_FIELD_ID = "bZCCoBWRXcSQhdJapdTCoY"; // campo "Nombre completo" (tabla USUARIOS)
+// ⬇️ PEGA AQUÍ los ids del campo "Estado del registro" que crearás en cada tabla de FICHAS
+// (tipo Lista desplegable con opciones: Activo / Archivado; por defecto Activo).
+// Mientras estén vacíos, el archivado de fichas queda deshabilitado y todo funciona normal.
+const ESTADO_FICHA_FIELD_IDS = { N0:"ddLmohjCjhsOknisdcOKLF", N1:"ddVmo4WPLhh4k3W4ZcR8o7", N2:"dcR8ooiG5dHykaFSoYqu0y", N3:"ciWPNdGCnmWPr7WQ7cIM4a" };
+// Lee el estado de una ficha (por field-id configurado o por nombre de columna). '' = activa.
+function _estadoFicha(r, nivel){
+  const v=(r&&r.values)||{};
+  const fid=ESTADO_FICHA_FIELD_IDS[nivel];
+  const cand=[ fid?v[fid]:'', v['Estado del registro'] ]
+    .find(x=> x && !esBasura(x) && x!=='Estado del registro');
+  return cand?String(cand).trim():'';
+}
+function _fichaArchivada(r, nivel){ return _estadoFicha(r,nivel)==='Archivado'; }
+window._fichaArchivada=_fichaArchivada;
 
 // ===================== MAPA DE LAS 6 TABLAS JERÁRQUICAS (para crear procesos) =====================
 // Cada nivel: entity, campo del nombre, campo del código (select con opciones), y los rel a sus padres.
@@ -4413,6 +4430,10 @@ async function renderListado(){
     const filtro=(document.getElementById('listBuscar').value||'').toLowerCase();
     const filas = todas.filter(o=>{
       const {r,nivel}=o;
+      // Fichas ARCHIVADAS: la vista normal muestra solo activas; con "Ver archivadas"
+      // marcada, muestra solo las archivadas (mismo patrón que el inventario).
+      const verArch = !!(document.getElementById('listVerArchivadas')||{}).checked;
+      if(_fichaArchivada(r,nivel) !== verArch) return false;
       // Filtro por OFICINA: el rol "Oficina" solo ve las fichas cuyo Dueño del proceso
       // coincide con su oficina. Admin, Gestor y Usuario libre ven todo.
       if(!_registroVisibleOficina(leerDueno(r, EDF(nivel)))) return false;
@@ -4457,6 +4478,7 @@ async function renderListado(){
           <td style="text-align:right;white-space:nowrap;vertical-align:top">
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleFicha('${nivel}','${r.id}')">👁</button>
             ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
+            ${puedeEditar()?`<button class="icon-btn" title="${_fichaArchivada(r,nivel)?'Reactivar':'Archivar'}" onclick="archivarFicha('${nivel}','${r.id}', ${_fichaArchivada(r,nivel)?'false':'true'})">📦</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>`:''}
           </td>
         </tr>`;
@@ -4487,7 +4509,7 @@ async function cargarDesagregadoIndicadores(lista){
       // Subindicadores: del caché compartido (datos COMPLETOS, leídos por construirMapaIndicadores)
       const items = _SUBIND_POR_FICHA[nivel+'_'+r.id] || [];
       const rutaF = rutaFicha(r, nivel);
-      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items, rutaF);
+      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items, rutaF, _fichaArchivada(r,nivel));
       const c2=document.getElementById(celdaId);
       if(c2) c2.innerHTML=_DESAG_CACHE[key];
     }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
@@ -4499,7 +4521,8 @@ async function cargarDesagregadoIndicadores(lista){
       const its=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]);
       const rutaF = rutaFicha(r, nivel);
       totalInd+=its.length;
-      its.forEach(it=>{ if(!_indEnMatriz(it.elemento, it.indicador, rutaF)) totalFalta++; });
+      // No exigir desarrollo de indicadores de fichas ARCHIVADAS (no cuentan como faltantes)
+      if(!_fichaArchivada(r,nivel)) its.forEach(it=>{ if(!_indEnMatriz(it.elemento, it.indicador, rutaF)) totalFalta++; });
       const cabId=_GRP_DE_FICHA[nivel+'_'+r.id];
       if(cabId) porGrupo[cabId]=(porGrupo[cabId]||0)+its.length;
     }
@@ -4554,7 +4577,7 @@ function _indEnMatriz(elemento, indicador, rutaFichaTxt){
 
 // Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
 // sub-tabla con una fila por indicador (Elemento del nivel | Indicador).
-function _pintaDesagregado(naLabel, items, rutaFichaTxt){
+function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada){
   if(!items.length) return '<span class="hint">Sin indicadores</span>';
   const esc=s=>String(s||'').replace(/</g,'&lt;');
   const attr=s=>String(s||'').replace(/"/g,'&quot;');
@@ -4566,7 +4589,8 @@ function _pintaDesagregado(naLabel, items, rutaFichaTxt){
       <span style="font-size:13px;color:var(--mist);font-weight:600">${items.length} indicador(es)</span>
     </div>`;
   const filas = items.map((it,i)=>{
-    const enMatriz = _indEnMatriz(it.elemento, it.indicador, rutaFichaTxt);
+    // En fichas ARCHIVADAS no se marca el ámbar de "falta en matriz": no aplica.
+    const enMatriz = esArchivada ? true : _indEnMatriz(it.elemento, it.indicador, rutaFichaTxt);
     // Los que AÚN NO están en la matriz se resaltan en ámbar, con una etiqueta "Falta en matriz".
     const bgFila = enMatriz ? '' : 'background:#fff8e6;';
     const pend = enMatriz ? '' : ' <span style="display:inline-block;font-size:10px;font-weight:700;color:#b06a00;background:#ffe9b8;border:1px solid #f0c987;border-radius:8px;padding:0 6px;margin-left:4px;white-space:nowrap">⏳ Falta en matriz</span>';
@@ -4978,6 +5002,30 @@ async function reconstruirCascadaFicha(ruta){
 }
 window.reconstruirCascadaFicha=reconstruirCascadaFicha;
 
+// Archiva o reactiva una ficha (campo "Estado del registro": Activo/Archivado).
+// Requiere que el field-id del nivel esté configurado en ESTADO_FICHA_FIELD_IDS.
+async function archivarFicha(nivel, id, archivar){
+  if(!puedeEditar()){ toast('No tienes permiso para archivar.', true); return; }
+  const fid = ESTADO_FICHA_FIELD_IDS[nivel];
+  if(!fid){
+    toast('Para usar Archivar, primero crea el campo "Estado del registro" (Activo/Archivado) en la tabla de fichas '+nivel+' de QuintaDB y pega su id en ESTADO_FICHA_FIELD_IDS.', true);
+    return;
+  }
+  const msg = archivar
+    ? 'La ficha se archivará: saldrá de la vista normal pero se conserva (junto con sus indicadores en la matriz). ¿Continuar?'
+    : '¿Reactivar esta ficha? Volverá a la vista normal.';
+  if(!confirm(msg)) return;
+  try{
+    const campos={}; campos[fid]=archivar?'Archivado':'Activo';
+    await API.saveForm(id, campos, entFicha(nivel));
+    toast(archivar?'Ficha archivada.':'Ficha reactivada.');
+    STATE.fichas[nivel]=[];
+    if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
+    renderListado();
+  }catch(e){ toast('Error: '+e.message, true); }
+}
+window.archivarFicha=archivarFicha;
+
 async function eliminarFicha(nivel, id){
   if(!confirm('¿Eliminar esta ficha de proceso? Esta acción no se puede deshacer.')) return;
   try{
@@ -5360,36 +5408,117 @@ async function abrirControlSync(){
     await Promise.all([loadMatriz(), (async()=>{ for(const n of ['N0','N1','N2','N3']) await loadFichas(n); })(), construirMapaIndicadores()]);
     const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
 
-    // Conjunto de TODOS los textos de indicador que existen HOY en las fichas
+    // Conjunto de TODOS los textos de indicador que existen HOY en las fichas.
+    // IMPORTANTE: incluye también las fichas ARCHIVADAS — así sus indicadores en la
+    // matriz no aparecen como huérfanos falsos. Aparte, se registra qué textos
+    // pertenecen a fichas archivadas, para la sección informativa.
     const enFichas = new Set();
+    const textosDeArchivadas = new Set();
+    const fichaArchivadaPorKey = {};
+    for(const n of ['N0','N1','N2','N3']){
+      const fs = await loadFichas(n);
+      (fs||[]).forEach(fr=>{ fichaArchivadaPorKey[n+'_'+fr.id] = _fichaArchivada(fr,n); });
+    }
     Object.keys(_SUBIND_POR_FICHA).forEach(k=>{
+      const arch = !!fichaArchivadaPorKey[k];
       (_SUBIND_POR_FICHA[k]||[]).forEach(it=>{
         const texto=(it.elemento?it.elemento+' — ':'')+it.indicador;
         enFichas.add(norm(texto));
         enFichas.add(norm(it.indicador));
+        if(arch){ textosDeArchivadas.add(norm(texto)); textosDeArchivadas.add(norm(it.indicador)); }
       });
     });
 
     const recs = await loadMatriz();
-    const huerfanos=[];
+
+    // Índice de indicadores que SÍ están en la matriz (para saber cuáles de la ficha faltan)
+    const textosEnMatriz = new Set();
+    recs.forEach(m=>{ const t=leerCampo(m,MAT.indicador_txt.id,'Indicador'); if(t) textosEnMatriz.add(norm(t)); });
+
+    // Índice: por RUTA DE FICHA (base) + ELEMENTO → candidatos de la ficha que no están en la
+    // matriz. El ELEMENTO (componente con su código) es el ancla del emparejamiento: al
+    // corregir el texto de un indicador, el elemento casi nunca cambia. Emparejar por
+    // elemento evita el caso peligroso de sugerir como "corrección" un indicador nuevo sin
+    // relación (p.ej. uno eliminado en el elemento A y otro agregado en el elemento B).
+    const candidatosPorRutaElem = {}; // (rutaBase ¦ elemento) → [{texto, indicador}]
+    Object.keys(_SUBIND_POR_FICHA).forEach(k=>{
+      (_SUBIND_POR_FICHA[k]||[]).forEach(it=>{
+        const texto=(it.elemento?it.elemento+' — ':'')+it.indicador;
+        if(textosEnMatriz.has(norm(texto))) return;
+        const info=_MAPA_IND[texto] || _MAPA_IND[it.indicador];
+        const rutaBase = info && info.fichaRuta ? norm(info.fichaRuta) : '';
+        if(!rutaBase) return;
+        const clave = rutaBase+' ¦ '+norm(it.elemento||'');
+        (candidatosPorRutaElem[clave]=candidatosPorRutaElem[clave]||[]).push({ texto, indicador:it.indicador });
+      });
+    });
+
+    // Similitud básica entre dos textos (proporción de palabras compartidas).
+    // Se usa como segunda verificación: una corrección de texto conserva la mayoría de las
+    // palabras; un reemplazo conceptual no. Umbral conservador.
+    const similitud=(a,b)=>{
+      const wa=new Set(norm(a).split(' ').filter(w=>w.length>3));
+      const wb=new Set(norm(b).split(' ').filter(w=>w.length>3));
+      if(!wa.size||!wb.size) return 0;
+      let comunes=0; wa.forEach(w=>{ if(wb.has(w)) comunes++; });
+      return comunes/Math.max(wa.size,wb.size);
+    };
+
+    const huerfanos=[];      // sin candidato claro → probablemente eliminado
+    const modificados=[];    // mismo elemento + texto similar → probablemente corrección
+    const deArchivadas=[];   // pertenecen a fichas archivadas → solo informativo
     recs.forEach(m=>{
       const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       if(!ind) return;
-      // Huérfano: su texto ya no existe en ninguna ficha
-      if(!enFichas.has(norm(ind))){
-        const due = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
-        const ruta = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
-        huerfanos.push({ id:m.id, ind, due, ruta });
+      if(enFichas.has(norm(ind))){
+        // Sincronizado. Si su ficha está ARCHIVADA, se lista solo a título informativo.
+        if(textosDeArchivadas.has(norm(ind))){
+          const due = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+          deArchivadas.push({ ind, due });
+        }
+        return;
+      }
+      const due = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+      const rutaMat = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
+      const partes = String(rutaMat||'').split(' › ');
+      const rutaBase = norm(partes.slice(0,-1).join(' › '));
+      // El elemento del indicador viejo: la parte antes de " — "
+      const elemViejo = norm((String(ind).split(' — ')[0]||''));
+      const cands = candidatosPorRutaElem[rutaBase+' ¦ '+elemViejo] || [];
+      // Emparejar SOLO si hay un único candidato en el MISMO elemento Y el texto del
+      // indicador se parece lo suficiente (≥ 30% de palabras compartidas).
+      if(cands.length===1 && similitud(ind, cands[0].texto)>=0.3){
+        modificados.push({ id:m.id, viejo:ind, nuevo:cands[0].texto, due, rutaMat });
+      }else{
+        huerfanos.push({ id:m.id, ind, due, ruta:rutaMat });
       }
     });
 
     let html='';
-    // Sección huérfanos
-    html+='<h3 style="font-size:15px;margin:8px 0 6px">🗑️ Indicadores huérfanos <span class="hint" style="font-weight:400">· ya no existen en ninguna ficha</span></h3>';
-    if(!huerfanos.length){
-      html+='<p style="color:#0f8f5e;margin:4px 0 16px">✓ No hay indicadores huérfanos. Todo lo de la matriz existe en las fichas.</p>';
+
+    // ---- Sección POSIBLES MODIFICADOS ----
+    html+='<h3 style="font-size:15px;margin:8px 0 6px">✏️ Texto corregido en la ficha <span class="hint" style="font-weight:400">· actualiza la matriz conservando metas</span></h3>';
+    if(!modificados.length){
+      html+='<p style="color:#0f8f5e;margin:4px 0 16px">✓ No se detectaron indicadores con el texto cambiado.</p>';
     }else{
-      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores están en la matriz pero su texto ya no coincide con ninguna ficha. Esto ocurre si el indicador <strong>se eliminó</strong> de la ficha, o si <strong>se corrigió su texto</strong> en la ficha (en ese caso conviene volver a agregarlo con el texto nuevo). Revisa cada uno: si ya no aplica, elimínalo. <strong>Ojo:</strong> si tiene metas o seguimientos registrados, se perderán al eliminar.</p>';
+      html+='<p class="hint" style="margin:2px 0 8px">En el mismo proceso, el indicador de la matriz tiene un texto y la ficha tiene otro. Probablemente corregiste el texto en la ficha. Puedes <strong>actualizar el texto en la matriz</strong> — sus metas y mediciones se conservan.</p>';
+      html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">En la matriz (actual)</th><th style="padding:8px 10px">En la ficha (nuevo)</th><th style="padding:8px 10px;text-align:right">Acción</th></tr></thead><tbody>';
+      modificados.forEach(mo=>{
+        html+=`<tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:8px 10px;color:#b06a00">${String(mo.viejo).replace(/</g,'&lt;')}</td>
+          <td style="padding:8px 10px;color:#0f8f5e">${String(mo.nuevo).replace(/</g,'&lt;')}</td>
+          <td style="padding:8px 10px;text-align:right"><button class="btn" style="padding:5px 12px;font-size:12px;background:#e8f5ee;color:#0f8f5e;border:1px solid #b8e0c8" onclick="actualizarTextoSync('${mo.id}', this)" data-nuevo="${String(mo.nuevo).replace(/"/g,'&quot;')}">Actualizar texto</button></td>
+        </tr>`;
+      });
+      html+='</tbody></table></div>';
+    }
+
+    // ---- Sección HUÉRFANOS ----
+    html+='<h3 style="font-size:15px;margin:20px 0 6px">🗑️ Indicadores huérfanos <span class="hint" style="font-weight:400">· ya no existen en ninguna ficha</span></h3>';
+    if(!huerfanos.length){
+      html+='<p style="color:#0f8f5e;margin:4px 0 8px">✓ No hay indicadores huérfanos.</p>';
+    }else{
+      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores de la matriz no coinciden con ninguna ficha y no se encontró un reemplazo claro en su proceso. Probablemente el indicador se eliminó de la ficha. Si ya no aplica, elimínalo. <strong>Ojo:</strong> si tiene metas o seguimientos, se perderán.</p>';
       html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Indicador</th><th style="padding:8px 10px">Dueño</th><th style="padding:8px 10px;text-align:right">Acción</th></tr></thead><tbody>';
       huerfanos.forEach(h=>{
         html+=`<tr style="border-bottom:1px solid var(--line)">
@@ -5401,10 +5530,43 @@ async function abrirControlSync(){
       html+='</tbody></table></div>';
     }
 
+    // ---- Sección INFORMATIVA: indicadores de fichas archivadas ----
+    if(deArchivadas.length){
+      html+='<h3 style="font-size:15px;margin:20px 0 6px">📦 Indicadores de fichas archivadas <span class="hint" style="font-weight:400">· solo informativo</span></h3>';
+      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores de la matriz pertenecen a fichas que fueron <strong>archivadas</strong>. Siguen activos y pueden seguir midiéndose; esto es solo para tu control. Si alguno ya no debe medirse, puedes eliminarlo tú desde la Matriz de indicadores.</p>';
+      html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Indicador</th><th style="padding:8px 10px">Dueño</th></tr></thead><tbody>';
+      deArchivadas.forEach(d=>{
+        html+=`<tr style="border-bottom:1px solid var(--line)">
+          <td style="padding:8px 10px">${String(d.ind).replace(/</g,'&lt;')}</td>
+          <td style="padding:8px 10px">${String(d.due||'—').replace(/</g,'&lt;')}</td>
+        </tr>`;
+      });
+      html+='</tbody></table></div>';
+    }
+
     cont.innerHTML=html;
   }catch(e){ cont.innerHTML='<p class="hint">Error al analizar: '+e.message+'</p>'; }
 }
 window.abrirControlSync=abrirControlSync;
+
+// Actualiza SOLO el texto del indicador en la matriz (conserva metas y mediciones).
+async function actualizarTextoSync(id, btn){
+  if(!puedeEditar()){ toast('No tienes permiso para editar.', true); return; }
+  const nuevo = btn.getAttribute('data-nuevo')||'';
+  if(!nuevo) return;
+  if(!confirm('¿Actualizar el texto de este indicador en la matriz al de la ficha?\n\nNuevo texto:\n'+nuevo+'\n\nSus metas y mediciones se conservan.')) return;
+  btn.disabled=true; btn.textContent='Actualizando…';
+  try{
+    const campos={}; campos[MAT.indicador_txt.id]=nuevo;
+    await API.saveForm(id, campos, CONFIG.ENTITIES.MATRIZ_IND);
+    toast('Texto actualizado. Metas y mediciones conservadas.');
+    const tr=btn.closest('tr'); if(tr){ tr.style.opacity='.5'; }
+    btn.textContent='✓ Actualizado';
+    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz();
+    if(typeof renderMatriz==='function'){ try{ renderMatriz(); }catch(_){} }
+  }catch(e){ toast('Error: '+e.message, true); btn.disabled=false; btn.textContent='Actualizar texto'; }
+}
+window.actualizarTextoSync=actualizarTextoSync;
 
 async function eliminarHuerfanoSync(id, btn){
   if(!puedeEliminar()){ toast('Solo el administrador puede eliminar.', true); return; }
