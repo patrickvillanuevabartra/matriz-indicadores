@@ -5530,7 +5530,10 @@ async function abrirControlSync(){
         mejor._usado=true;
         modificados.push({ id:m.id, viejo:ind, nuevo:mejor.texto, due, rutaMat });
       }else{
-        huerfanos.push({ id:m.id, ind, due, ruta:rutaMat });
+        // Si en el MISMO elemento hay un indicador nuevo sin desarrollar (aunque el texto
+        // no se parezca), puede tratarse de un REEMPLAZO y no de una eliminación. Se ofrece
+        // como opción, sin decidir por el usuario.
+        huerfanos.push({ id:m.id, ind, due, ruta:rutaMat, posibleReemplazo: mejor?mejor.texto:'' });
       }
     });
 
@@ -5558,13 +5561,19 @@ async function abrirControlSync(){
     if(!huerfanos.length){
       html+='<p style="color:#0f8f5e;margin:4px 0 8px">✓ No hay indicadores huérfanos.</p>';
     }else{
-      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores de la matriz no coinciden con ninguna ficha y no se encontró un reemplazo claro en su proceso. Probablemente el indicador se eliminó de la ficha. Si ya no aplica, elimínalo. <strong>Ojo:</strong> si tiene metas o seguimientos, se perderán.</p>';
+      html+='<p class="hint" style="margin:2px 0 8px">Estos indicadores de la matriz ya no coinciden con ninguna ficha. Puede ser porque el indicador <strong>se quitó del formulario</strong> de la ficha (eliminación) o porque <strong>se reemplazó por otro</strong> con un nombre distinto. Cuando en el mismo elemento existe un indicador nuevo sin desarrollar, se muestra como posible reemplazo y tú decides: usar ese texto (conservando metas) o eliminar el registro. <strong>Ojo:</strong> al eliminar, sus metas y seguimientos se pierden.</p>';
       html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Indicador</th><th style="padding:8px 10px">Dueño</th><th style="padding:8px 10px;text-align:right">Acción</th></tr></thead><tbody>';
       huerfanos.forEach(h=>{
+        const reempHtml = h.posibleReemplazo
+          ? `<div style="margin-top:6px;padding:6px 8px;background:#eef6ff;border:1px solid #cfe3f7;border-radius:7px;font-size:12px"><span style="color:#1a5c9e;font-weight:600">Posible reemplazo en su elemento:</span> ${String(h.posibleReemplazo).replace(/</g,'&lt;')}</div>`
+          : '';
+        const btnReemp = h.posibleReemplazo
+          ? `<button class="btn" style="padding:5px 12px;font-size:12px;background:#eef6ff;color:#1a5c9e;border:1px solid #cfe3f7;margin-bottom:4px" onclick="actualizarTextoSync('${h.id}', this)" data-nuevo="${String(h.posibleReemplazo).replace(/"/g,'&quot;')}">Usar este texto</button><br>`
+          : '';
         html+=`<tr style="border-bottom:1px solid var(--line)">
-          <td style="padding:8px 10px" title="${(h.ruta||'').replace(/"/g,'&quot;')}">${String(h.ind).replace(/</g,'&lt;')}</td>
+          <td style="padding:8px 10px" title="${(h.ruta||'').replace(/"/g,'&quot;')}">${String(h.ind).replace(/</g,'&lt;')}${reempHtml}</td>
           <td style="padding:8px 10px">${String(h.due||'—').replace(/</g,'&lt;')}</td>
-          <td style="padding:8px 10px;text-align:right"><button class="btn" style="padding:5px 12px;font-size:12px;background:#fde8e8;color:#c0392b;border:1px solid #f0c0c0" onclick="eliminarHuerfanoSync('${h.id}', this)">Eliminar</button></td>
+          <td style="padding:8px 10px;text-align:right;white-space:nowrap">${btnReemp}<button class="btn" style="padding:5px 12px;font-size:12px;background:#fde8e8;color:#c0392b;border:1px solid #f0c0c0" onclick="eliminarHuerfanoSync('${h.id}', this)">Eliminar</button></td>
         </tr>`;
       });
       html+='</tbody></table></div>';
