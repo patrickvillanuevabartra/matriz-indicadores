@@ -2415,10 +2415,10 @@ function renderSipocCardsForm(){
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
-        <div class="field"><label>Proveedores / Cliente</label><textarea oninput="SIPOC_FORM['${safe}'].prov=this.value">${d.prov||''}</textarea></div>
-        <div class="field"><label>Entrada / Insumo</label><textarea oninput="SIPOC_FORM['${safe}'].entr=this.value">${d.entr||''}</textarea></div>
-        <div class="field"><label>Producto</label><textarea oninput="SIPOC_FORM['${safe}'].prod=this.value">${d.prod||''}</textarea></div>
-        <div class="field"><label>Receptor final del producto</label><textarea oninput="SIPOC_FORM['${safe}'].recep=this.value">${d.recep||''}</textarea></div>
+        <div class="field"><label>Proveedores / Cliente</label>${_sipocListaHTML('fi',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
+        <div class="field"><label>Entrada / Insumo</label>${_sipocListaHTML('fi',safe,'entr',d.entr,'Entrada/Insumo')}</div>
+        <div class="field"><label>Producto</label>${_sipocListaHTML('fi',safe,'prod',d.prod,'Producto')}</div>
+        <div class="field"><label>Receptor final del producto</label>${_sipocListaHTML('fi',safe,'recep',d.recep,'Receptor final de producto')}</div>
       </div>
       <div class="ind-row">
         <div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span></label>
@@ -2430,6 +2430,47 @@ function renderSipocCardsForm(){
   }).join('');
 }
 // Añadir/quitar indicadores dentro de un componente (sirve para 'fi' y 'ed')
+// ===== Listas de ítems para los campos SIPOC (Proveedores, Entrada, Producto, Receptor) =====
+// Cada campo se maneja como ítems individuales (un input por ítem, con + Añadir y ✕ Quitar).
+// Internamente se guardan en UNA sola línea separados por "; " — así el formato
+// "[Componente] item1; item2" sobrevive al guardado/lectura por líneas de QuintaDB
+// (antes, con saltos de línea dentro del recuadro, solo se conservaba la primera línea).
+function _sipocItems(v){
+  const arr=String(v||'').split(/[;\n]+/).map(x=>x.trim()).filter(Boolean);
+  return arr.length?arr:[''];
+}
+function _sipocStore(prefijo){ return prefijo==='fi'?SIPOC_FORM:SIPOC_ED; }
+function sipocItemSet(prefijo, nombre, campo, j, val){
+  const store=_sipocStore(prefijo); if(!store[nombre]) return;
+  const arr=_sipocItems(store[nombre][campo]);
+  while(arr.length<=j) arr.push('');
+  arr[j]=String(val||'').replace(/[;\n]+/g,' ');
+  store[nombre][campo]=arr.join('; ');
+}
+function sipocItemAdd(prefijo, nombre, campo){
+  const store=_sipocStore(prefijo); if(!store[nombre]) return;
+  const arr=_sipocItems(store[nombre][campo]); arr.push('');
+  store[nombre][campo]=arr.join('; ');
+  prefijo==='fi'?renderSipocCardsForm():renderSipocModal();
+}
+function sipocItemDel(prefijo, nombre, campo, j){
+  const store=_sipocStore(prefijo); if(!store[nombre]) return;
+  const arr=_sipocItems(store[nombre][campo]);
+  arr.splice(j,1); if(!arr.length) arr.push('');
+  store[nombre][campo]=arr.join('; ');
+  prefijo==='fi'?renderSipocCardsForm():renderSipocModal();
+}
+window.sipocItemSet=sipocItemSet; window.sipocItemAdd=sipocItemAdd; window.sipocItemDel=sipocItemDel;
+// Genera el HTML de la lista de un campo SIPOC
+function _sipocListaHTML(prefijo, safe, campo, valor, etiqueta){
+  const items=_sipocItems(valor);
+  const filas=items.map((it,j)=>`<div style="display:flex;gap:8px;margin-bottom:6px">
+      <input style="flex:1" value="${(it||'').replace(/"/g,'&quot;')}" oninput="sipocItemSet('${prefijo}','${safe}','${campo}',${j},this.value)" placeholder="${etiqueta} ${j+1}…">
+      <button type="button" class="icon-btn" title="Quitar" onclick="sipocItemDel('${prefijo}','${safe}','${campo}',${j})" ${items.length<=1?'style="visibility:hidden"':''}>✕</button>
+    </div>`).join('');
+  return filas+`<button type="button" class="btn btn-ghost btn-sm" style="align-self:flex-start;margin-top:2px" onclick="sipocItemAdd('${prefijo}','${safe}','${campo}')">+ ${etiqueta}</button>`;
+}
+
 function anadirIndComp(prefijo, nombre){
   const store = prefijo==='fi'?SIPOC_FORM:SIPOC_ED;
   if(!store[nombre]) return;
@@ -2519,7 +2560,7 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
   // SIPOC general: concatenamos los SIPOC de cada componente en los campos de la ficha.
   const comps=Object.keys(SIPOC_FORM);
   if(comps.length){
-    const join=(k)=>comps.map(n=>{ const d=SIPOC_FORM[n]; return d[k]?('['+n+'] '+d[k]):''; }).filter(Boolean).join('\n');
+    const join=(k)=>comps.map(n=>{ const d=SIPOC_FORM[n]; const v=String(d[k]||'').split(/[;\n]+/).map(x=>x.trim()).filter(Boolean).join('; '); return v?('['+n+'] '+v):''; }).filter(Boolean).join('\n');
     put(F.proveedores, join('prov'));
     put(F.entrada, join('entr'));
     put(F.producto, join('prod'));
@@ -4935,10 +4976,10 @@ function renderSipocModal(){
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
-        <div class="field"><label>Proveedores / Cliente</label><textarea oninput="SIPOC_ED['${safe}'].prov=this.value">${d.prov||''}</textarea></div>
-        <div class="field"><label>Entrada / Insumo</label><textarea oninput="SIPOC_ED['${safe}'].entr=this.value">${d.entr||''}</textarea></div>
-        <div class="field"><label>Producto</label><textarea oninput="SIPOC_ED['${safe}'].prod=this.value">${d.prod||''}</textarea></div>
-        <div class="field"><label>Receptor final del producto</label><textarea oninput="SIPOC_ED['${safe}'].recep=this.value">${d.recep||''}</textarea></div>
+        <div class="field"><label>Proveedores / Cliente</label>${_sipocListaHTML('ed',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
+        <div class="field"><label>Entrada / Insumo</label>${_sipocListaHTML('ed',safe,'entr',d.entr,'Entrada/Insumo')}</div>
+        <div class="field"><label>Producto</label>${_sipocListaHTML('ed',safe,'prod',d.prod,'Producto')}</div>
+        <div class="field"><label>Receptor final del producto</label>${_sipocListaHTML('ed',safe,'recep',d.recep,'Receptor final de producto')}</div>
       </div>
       <div class="ind-row"><div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span></label>
         ${indsHtml}
@@ -4972,7 +5013,7 @@ async function guardarEdicion(){
   put(F.equipos, g('ed_equipos'));
   const comps=Object.keys(SIPOC_ED);
   if(comps.length){
-    const join=(k)=>comps.map(n=>{ const d=SIPOC_ED[n]; return d[k]?('['+n+'] '+d[k]):''; }).filter(Boolean).join('\n');
+    const join=(k)=>comps.map(n=>{ const d=SIPOC_ED[n]; const v=String(d[k]||'').split(/[;\n]+/).map(x=>x.trim()).filter(Boolean).join('; '); return v?('['+n+'] '+v):''; }).filter(Boolean).join('\n');
     put(F.proveedores, join('prov')); put(F.entrada, join('entr'));
     put(F.producto, join('prod')); put(F.receptor, join('recep'));
   }
