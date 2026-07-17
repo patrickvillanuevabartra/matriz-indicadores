@@ -802,6 +802,7 @@
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnNuevoProceso" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
+      <button class="btn" id="btnExportInv" onclick="exportarInventarioExcel()" style="white-space:nowrap" title="Descarga el inventario tal como se ve (con los filtros aplicados)">⬇️ Exportar a Excel</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:200px">
         <input id="invBuscar" placeholder="Buscar por proceso, actividad o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
       </div>
@@ -3334,12 +3335,49 @@ async function _npInsertar(def, idsPadres, codigo, nombre){
   return newId;
 }
 
+// Exporta el inventario de procesos a Excel TAL COMO SE VE en pantalla (respeta los
+// filtros y el modo de vista activos). Solo administradores. Técnica: se clona la tabla
+// pintada, se quita la columna Acciones y se descarga como .xls (Excel la abre como hoja).
+function exportarInventarioExcel(){
+  if(!esAdmin()){ toast('Solo el administrador puede exportar el inventario.', true); return; }
+  const tabla=document.getElementById('tablaInventarioTbl');
+  if(!tabla){ toast('No se encontró la tabla del inventario.', true); return; }
+  const clon=tabla.cloneNode(true);
+  // Quitar la cabecera "Acciones" (último th)
+  const ths=clon.querySelectorAll('thead th');
+  if(ths.length) ths[ths.length-1].remove();
+  // Quitar todas las celdas de acciones (contienen botones o el aviso "Solo lectura")
+  clon.querySelectorAll('td').forEach(td=>{
+    if(td.querySelector('.icon-btn') || /Solo lectura/.test(td.textContent||'')) td.remove();
+  });
+  // Quitar botones/elementos interactivos que hubieran quedado
+  clon.querySelectorAll('button,input').forEach(el=>el.remove());
+  const fecha=new Date().toISOString().slice(0,10);
+  const htmlDoc='<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8">'
+    +'<style>table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt}'
+    +'th{background:#1f7a4d;color:#fff;border:1px solid #999;padding:6px 8px;text-align:left}'
+    +'td{border:1px solid #bbb;padding:5px 8px;vertical-align:top}</style></head><body>'
+    +'<h3>Inventario de procesos — Facultad de Ingeniería URP (SGC ISO 21001)</h3>'
+    +'<p>Exportado el '+fecha+'</p>'
+    +clon.outerHTML+'</body></html>';
+  const blob=new Blob(['\ufeff'+htmlDoc],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Inventario_de_procesos_'+fecha+'.xls';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Inventario exportado. Si Excel pregunta por el formato al abrirlo, acepta: el contenido es correcto.');
+}
+window.exportarInventarioExcel=exportarInventarioExcel;
+
 async function renderInventario(){
   const tb=document.getElementById('tablaInventario');
   if(!tb) return;
   // Botón "+ Nuevo proceso" solo para quien puede gestionar el inventario (admin)
   const btnNP=document.getElementById('btnNuevoProceso');
   if(btnNP) btnNP.style.display = puedeGestionarInventario() ? '' : 'none';
+  // Botón "Exportar a Excel" solo para administradores
+  const btnEX=document.getElementById('btnExportInv');
+  if(btnEX) btnEX.style.display = esAdmin() ? '' : 'none';
   try{
     // Si STATE.inventario ya está poblado (p.ej. tras crear/borrar), usarlo tal cual:
     // volver a pedirlo aquí podría traer una respuesta cacheada del estado anterior.
@@ -5178,8 +5216,15 @@ async function renderTablero(){
       const tieneMeta=(m._progMetas||0)>0;
       const tieneSeg=(m._periodos||0)>0;
       const item={ ind, ofi, id:m.id };
-      if(!porOficina[ofi]) porOficina[ofi]={total:0,sinNada:0,soloMeta:0,metaYseg:0};
+      if(!porOficina[ofi]) porOficina[ofi]={total:0,sinNada:0,soloMeta:0,metaYseg:0,sumaPct:0};
       porOficina[ofi].total++;
+      // % de avance REAL del indicador: el informado en su último seguimiento (p.pct).
+      // Sin seguimiento no hay informe de avance → aporta 0. No se inventa ninguna fórmula.
+      {
+        const per=(m._avancePeriodos||[]).filter(p=>p.pct!==null&&p.pct!==undefined);
+        const pctInd = per.length ? Number(per[per.length-1].pct)||0 : 0;
+        porOficina[ofi].sumaPct += pctInd;
+      }
       // Etapas: con seguimiento = etapa más avanzada; solo meta = intermedia; nada = inicial
       if(tieneSeg){ metaYseg.push(item); porOficina[ofi].metaYseg++; }
       else if(tieneMeta){ soloMeta.push(item); porOficina[ofi].soloMeta++; }
@@ -5223,20 +5268,20 @@ async function renderTablero(){
     </div>
     <div style="font-size:12px;color:var(--mist);margin-bottom:20px">Total: ${total} indicador(es) en la matriz · haz clic en una tarjeta para ver su lista</div>`;
     // Tabla-resumen por oficina (Total / Sin nada / Solo meta / Meta+seg)
-    // % de avance por oficina (ponderado): cada indicador aporta 0% si no tiene nada,
-    // 50% si solo tiene meta programada y 100% si ya tiene meta + seguimiento.
-    const pctAvance = d => d.total ? Math.round(((d.soloMeta*0.5 + d.metaYseg*1)/d.total)*100) : 0;
+    // % de avance por oficina: PROMEDIO del % de avance real informado en los seguimientos
+    // (última medición de cada indicador). Los indicadores sin seguimiento aportan 0%.
+    const pctAvance = d => d.total ? Math.round((d.sumaPct||0)/d.total) : 0;
     // RANKING: de mayor a menor % de avance (empate → alfabético)
     const oficinasOrd=Object.keys(porOficina).sort((a,b)=>{
       const dif = pctAvance(porOficina[b]) - pctAvance(porOficina[a]);
       return dif!==0 ? dif : a.localeCompare(b);
     });
-    const tot={total:0,sinNada:0,soloMeta:0,metaYseg:0};
-    oficinasOrd.forEach(o=>{ const d=porOficina[o]; tot.total+=d.total; tot.sinNada+=d.sinNada; tot.soloMeta+=d.soloMeta; tot.metaYseg+=d.metaYseg; });
+    const tot={total:0,sinNada:0,soloMeta:0,metaYseg:0,sumaPct:0};
+    oficinasOrd.forEach(o=>{ const d=porOficina[o]; tot.total+=d.total; tot.sinNada+=d.sinNada; tot.soloMeta+=d.soloMeta; tot.metaYseg+=d.metaYseg; tot.sumaPct+=(d.sumaPct||0); });
     const celdaN=(n,color)=> n>0?`<span style="font-weight:700;color:${color}">${n}</span>`:`<span style="color:var(--mist)">—</span>`;
     html+=`<div id="tab-por-oficina" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px;scroll-margin-top:90px">
       <div style="font-weight:700;color:var(--brand);margin-bottom:4px;font-size:15px">Estado de indicadores por oficina</div>
-      <div style="font-size:12px;color:var(--mist);margin-bottom:14px">Ranking de oficinas por % de avance (de mayor a menor). El avance pondera: sin nada = 0%, solo meta = 50%, meta + seguimiento = 100%.</div>
+      <div style="font-size:12px;color:var(--mist);margin-bottom:14px">Ranking de oficinas por % de avance (de mayor a menor). El % de avance es el promedio del % informado en los seguimientos (última medición de cada indicador); los indicadores sin seguimiento cuentan como 0%.</div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>
           <th style="text-align:center;padding:8px 6px;color:var(--mist);font-size:11px;text-transform:uppercase">#</th>
