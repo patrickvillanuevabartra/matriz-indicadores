@@ -2436,7 +2436,12 @@ function renderSipocCardsForm(){
 // "[Componente] item1; item2" sobrevive al guardado/lectura por líneas de QuintaDB
 // (antes, con saltos de línea dentro del recuadro, solo se conservaba la primera línea).
 function _sipocItems(v){
-  const arr=String(v||'').split(/[;\n]+/).map(x=>x.trim()).filter(Boolean);
+  // OJO: aquí NO se filtran los vacíos — si se filtraran, al pulsar "+ Añadir" el casillero
+  // nuevo (vacío) se colapsaría al repintar y parecería que el botón no hace nada.
+  // Los vacíos se limpian recién al GUARDAR la ficha (en el join del guardado).
+  const s=String(v||'');
+  if(!s.trim()) return [''];
+  const arr=s.split(/[;\n]/).map(x=>x.trim());
   return arr.length?arr:[''];
 }
 function _sipocStore(prefijo){ return prefijo==='fi'?SIPOC_FORM:SIPOC_ED; }
