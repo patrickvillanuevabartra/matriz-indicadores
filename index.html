@@ -4651,7 +4651,7 @@ async function cargarIndsEnMatriz(){
   const set = new Set();
   try{
     const recs = await loadMatriz();
-    const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
     (recs||[]).forEach(m=>{
       const t = leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       const ru = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
@@ -4669,7 +4669,7 @@ function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; }
 // Recibe también la ruta de la ficha para un cruce preciso.
 function _indEnMatriz(elemento, indicador, rutaFichaTxt){
   if(!_INDS_EN_MATRIZ) return true; // aún no cargó: no marcar (se repinta cuando cargue)
-  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
   const texto = (elemento?elemento+' — ':'')+indicador;
   // La ruta que se guarda al agregar es: ruta de la ficha + " › " + componente(elemento).
   const rutaConComp = (rutaFichaTxt||'') + (elemento? ' › '+elemento : '');
@@ -5538,7 +5538,7 @@ async function abrirControlSync(){
   try{
     // Cargar todo lo necesario
     await Promise.all([loadMatriz(), (async()=>{ for(const n of ['N0','N1','N2','N3']) await loadFichas(n); })(), construirMapaIndicadores()]);
-    const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
 
     // Conjunto de TODOS los textos de indicador que existen HOY en las fichas.
     // IMPORTANTE: incluye también las fichas ARCHIVADAS — así sus indicadores en la
@@ -6105,7 +6105,7 @@ async function guardarIndicadoresMatriz(){
   try{
     // Evitar DUPLICADOS: cargar los indicadores que ya están en la matriz (texto + ruta) para
     // no volver a crear uno que ya existe. Un duplicado = mismo indicador bajo la misma ruta.
-    const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+    const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final
     const yaEnMatriz = new Set();
     try{
       const recsM = await loadMatriz();
