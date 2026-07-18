@@ -5712,6 +5712,21 @@ async function actualizarTextoSync(id, btn){
   if(!confirm('¿Actualizar el texto de este indicador en la matriz al de la ficha?\n\nNuevo texto:\n'+nuevo+'\n\nSus metas y mediciones se conservan.')) return;
   btn.disabled=true; btn.textContent='Actualizando…';
   try{
+    // ANTI-DUPLICADOS: si otro registro de la matriz ya tiene ese texto en la misma ruta,
+    // actualizar crearía un indicador trabajado dos veces. Se bloquea y se sugiere eliminar.
+    try{
+      const normD = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+      const recsM = await loadMatriz();
+      const yo=(recsM||[]).find(r=>r.id===id);
+      const miRuta = yo?normD(leerCampo(yo, MAT.proceso_ruta.id, 'Proceso (ruta)')):'';
+      const dup=(recsM||[]).find(r=> r.id!==id
+        && normD(leerCampo(r, MAT.indicador_txt.id, 'Indicador'))===normD(nuevo)
+        && normD(leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)'))===miRuta);
+      if(dup){
+        toast('Ya existe otro registro en la matriz con ese texto en esta ruta. Para no duplicar, elimina este registro (o el otro) en lugar de actualizar.', true);
+        btn.disabled=false; btn.textContent='Actualizar texto'; return;
+      }
+    }catch(_){ /* verificación falló por red: continuar */ }
     const campos={}; campos[MAT.indicador_txt.id]=nuevo;
     await API.saveForm(id, campos, CONFIG.ENTITIES.MATRIZ_IND);
     toast('Texto actualizado. Metas y mediciones conservadas.');
@@ -6263,6 +6278,19 @@ async function guardarEdicionMatriz(){
   if(!g('em_formula')){ toast('La Fórmula de cálculo es obligatoria.', true); document.getElementById('em_formula').focus(); return; }
   const campos={};
   if(g('em_indicador')) campos[MAT.indicador_txt.id]=g('em_indicador');
+  // ANTI-DUPLICADOS al EDITAR: si el texto quedó igual al de OTRO registro de la matriz
+  // bajo la MISMA ruta, se bloquea el guardado (un indicador no puede trabajarse dos veces).
+  if(g('em_indicador')){
+    try{
+      const normD = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+      const recsM = await loadMatriz();
+      const miRuta = (()=>{ const yo=(recsM||[]).find(r=>r.id===EM_ID); return yo?normD(leerCampo(yo, MAT.proceso_ruta.id, 'Proceso (ruta)')):''; })();
+      const dup=(recsM||[]).find(r=> r.id!==EM_ID
+        && normD(leerCampo(r, MAT.indicador_txt.id, 'Indicador'))===normD(g('em_indicador'))
+        && normD(leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)'))===miRuta);
+      if(dup){ toast('Ya existe otro registro en la matriz con este mismo indicador en esta ruta. No se puede duplicar: edita o elimina el otro registro.', true); return; }
+    }catch(_){ /* si la verificación falla por red, no bloquear el guardado */ }
+  }
   if(MAT.proposito_ind) campos[MAT.proposito_ind.id]=g('em_proposito');
   campos[MAT.formula.id]=g('em_formula');
   campos[MAT.fuente_info.id]=g('em_fuente');
