@@ -5264,14 +5264,26 @@ async function renderTablero(){
     });
     const total=recs.length;
     // Clasificar cada indicador en 3 etapas segun tenga meta programada y/o seguimiento
+    // (tarjetas y listas: SOLO lo del usuario, como siempre)
     const sinNada=[], soloMeta=[], metaYseg=[];
-    const porOficina={}; // { oficina: {total, sinNada, soloMeta, metaYseg} }
     recs.forEach(m=>{
       const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'(Sin oficina)';
       const tieneMeta=(m._progMetas||0)>0;
       const tieneSeg=(m._periodos||0)>0;
       const item={ ind, ofi, id:m.id };
+      if(tieneSeg){ metaYseg.push(item); }
+      else if(tieneMeta){ soloMeta.push(item); }
+      else { sinNada.push(item); }
+    });
+    // RANKING "Estado de indicadores por oficina": se construye con TODOS los registros de
+    // la facultad, para TODOS los usuarios. Un ranking solo tiene sentido si compara a todas
+    // las oficinas entre sí (decisión: transparencia del avance a nivel institucional).
+    const porOficina={}; // { oficina: {total, sinNada, soloMeta, metaYseg, sumaPct, ...} }
+    recsTodos.forEach(m=>{
+      const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'(Sin oficina)';
+      const tieneMeta=(m._progMetas||0)>0;
+      const tieneSeg=(m._periodos||0)>0;
       if(!porOficina[ofi]) porOficina[ofi]={total:0,sinNada:0,soloMeta:0,metaYseg:0,sumaPct:0,conSeg:0,cien:0,enCurso:0,sinAvance:0};
       porOficina[ofi].total++;
       // % de avance REAL del indicador: el informado en su último seguimiento (p.pct).
@@ -5289,9 +5301,9 @@ async function renderTablero(){
         }
       }
       // Etapas: con seguimiento = etapa más avanzada; solo meta = intermedia; nada = inicial
-      if(tieneSeg){ metaYseg.push(item); porOficina[ofi].metaYseg++; }
-      else if(tieneMeta){ soloMeta.push(item); porOficina[ofi].soloMeta++; }
-      else { sinNada.push(item); porOficina[ofi].sinNada++; }
+      if(tieneSeg){ porOficina[ofi].metaYseg++; }
+      else if(tieneMeta){ porOficina[ofi].soloMeta++; }
+      else { porOficina[ofi].sinNada++; }
     });
     const pct=n=>total?Math.round(n/total*100):0;
     // Tarjeta clickeable que ancla a su lista
