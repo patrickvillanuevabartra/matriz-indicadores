@@ -2487,6 +2487,9 @@ function _sipocListaHTML(prefijo, safe, campo, valor, etiqueta){
 }
 
 function anadirIndComp(prefijo, nombre){
+  // Crear indicadores NUEVOS en la ficha es exclusivo del Administrador (los demás roles
+  // no pueden desarrollarlos luego en la matriz, así que no tendría sentido permitirlo).
+  if(prefijo==='ed' && !esAdmin()){ toast('Solo el administrador puede añadir indicadores nuevos a la ficha.', true); return; }
   const store = prefijo==='fi'?SIPOC_FORM:SIPOC_ED;
   if(!store[nombre]) return;
   if(!Array.isArray(store[nombre].indicadores)) store[nombre].indicadores=[''];
@@ -4998,7 +5001,7 @@ function renderSipocModal(){
       </div>
       <div class="ind-row"><div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span></label>
         ${indsHtml}
-        <button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('ed','${safe}')">+ Añadir indicador</button>
+        ${esAdmin()?`<button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('ed','${safe}')">+ Añadir indicador</button>`:''}
         </div></div>
     </div>`;
   }).join('');
