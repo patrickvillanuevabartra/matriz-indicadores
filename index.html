@@ -5272,7 +5272,7 @@ async function renderTablero(){
       const tieneMeta=(m._progMetas||0)>0;
       const tieneSeg=(m._periodos||0)>0;
       const item={ ind, ofi, id:m.id };
-      if(!porOficina[ofi]) porOficina[ofi]={total:0,sinNada:0,soloMeta:0,metaYseg:0,sumaPct:0};
+      if(!porOficina[ofi]) porOficina[ofi]={total:0,sinNada:0,soloMeta:0,metaYseg:0,sumaPct:0,conSeg:0,cien:0,enCurso:0,sinAvance:0};
       porOficina[ofi].total++;
       // % de avance REAL del indicador: el informado en su último seguimiento (p.pct).
       // Sin seguimiento no hay informe de avance → aporta 0. No se inventa ninguna fórmula.
@@ -5280,6 +5280,13 @@ async function renderTablero(){
         const per=(m._avancePeriodos||[]).filter(p=>p.pct!==null&&p.pct!==undefined);
         const pctInd = per.length ? Number(per[per.length-1].pct)||0 : 0;
         porOficina[ofi].sumaPct += pctInd;
+        // Conteos para el tooltip (lectura justa del promedio)
+        if(per.length){
+          porOficina[ofi].conSeg++;
+          if(pctInd>=100) porOficina[ofi].cien++;
+          else if(pctInd>0) porOficina[ofi].enCurso++;
+          else porOficina[ofi].sinAvance++;   // tiene seguimiento pero informa 0%
+        }
       }
       // Etapas: con seguimiento = etapa más avanzada; solo meta = intermedia; nada = inicial
       if(tieneSeg){ metaYseg.push(item); porOficina[ofi].metaYseg++; }
@@ -5332,8 +5339,8 @@ async function renderTablero(){
       const dif = pctAvance(porOficina[b]) - pctAvance(porOficina[a]);
       return dif!==0 ? dif : a.localeCompare(b);
     });
-    const tot={total:0,sinNada:0,soloMeta:0,metaYseg:0,sumaPct:0};
-    oficinasOrd.forEach(o=>{ const d=porOficina[o]; tot.total+=d.total; tot.sinNada+=d.sinNada; tot.soloMeta+=d.soloMeta; tot.metaYseg+=d.metaYseg; tot.sumaPct+=(d.sumaPct||0); });
+    const tot={total:0,sinNada:0,soloMeta:0,metaYseg:0,sumaPct:0,conSeg:0,cien:0,enCurso:0,sinAvance:0};
+    oficinasOrd.forEach(o=>{ const d=porOficina[o]; tot.total+=d.total; tot.sinNada+=d.sinNada; tot.soloMeta+=d.soloMeta; tot.metaYseg+=d.metaYseg; tot.sumaPct+=(d.sumaPct||0); tot.conSeg+=d.conSeg; tot.cien+=d.cien; tot.enCurso+=d.enCurso; tot.sinAvance+=d.sinAvance; });
     const celdaN=(n,color)=> n>0?`<span style="font-weight:700;color:${color}">${n}</span>`:`<span style="color:var(--mist)">—</span>`;
     html+=`<div id="tab-por-oficina" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px;scroll-margin-top:90px">
       <div style="font-weight:700;color:var(--brand);margin-bottom:4px;font-size:15px">Estado de indicadores por oficina</div>
@@ -5352,6 +5359,10 @@ async function renderTablero(){
       const d=porOficina[o];
       const pct=pctAvance(d);
       const colorPct = pct>=70?'#1f7a3d': pct>=40?'#b8860b':'#c0392b';
+      // Tooltip: lectura justa del promedio (sobre cuántos indicadores se calcula el %)
+      const tip = d.conSeg
+        ? `Promedio de ${d.conSeg} de ${d.total} indicador(es) con seguimiento · ${d.cien} al 100% · ${d.enCurso} en curso · ${d.sinAvance} sin iniciar avance. Los ${d.total-d.conSeg} sin seguimiento cuentan como 0%.`
+        : `Ninguno de los ${d.total} indicador(es) tiene seguimiento aún, por eso el avance es 0%.`;
       html+=`<tr style="border-top:1px solid var(--line)">
         <td style="padding:9px 6px;text-align:center;font-weight:700;color:var(--mist)">${rk+1}</td>
         <td style="padding:9px 10px;color:var(--slate);font-weight:600">${String(o).replace(/</g,'&lt;')}</td>
@@ -5359,7 +5370,7 @@ async function renderTablero(){
         <td style="padding:9px 10px;text-align:center">${celdaN(d.sinNada,'#c0392b')}</td>
         <td style="padding:9px 10px;text-align:center">${celdaN(d.soloMeta,'#b8860b')}</td>
         <td style="padding:9px 10px;text-align:center">${celdaN(d.metaYseg,'#1f7a3d')}</td>
-        <td style="padding:9px 10px;min-width:130px">
+        <td style="padding:9px 10px;min-width:130px;cursor:help" title="${tip.replace(/"/g,'&quot;')}">
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;height:8px;background:var(--paper);border:1px solid var(--line);border-radius:5px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${colorPct}"></div></div>
             <span style="font-weight:800;color:${colorPct};min-width:38px;text-align:right">${pct}%</span>
@@ -5376,7 +5387,7 @@ async function renderTablero(){
         <td style="padding:10px;text-align:center;font-weight:800;color:#c0392b">${tot.sinNada}</td>
         <td style="padding:10px;text-align:center;font-weight:800;color:#b8860b">${tot.soloMeta}</td>
         <td style="padding:10px;text-align:center;font-weight:800;color:#1f7a3d">${tot.metaYseg}</td>
-        <td style="padding:10px;font-weight:800;color:${colorTot}">${pctTot}%</td>
+        <td style="padding:10px;font-weight:800;color:${colorTot};cursor:help" title="${(tot.conSeg?`Promedio de ${tot.conSeg} de ${tot.total} indicador(es) con seguimiento · ${tot.cien} al 100% · ${tot.enCurso} en curso · ${tot.sinAvance} sin iniciar avance. Los ${tot.total-tot.conSeg} sin seguimiento cuentan como 0%.`:`Ninguno de los ${tot.total} indicador(es) tiene seguimiento aún.`).replace(/"/g,'&quot;')}">${pctTot}%</td>
       </tr>`;
     html+=`</tbody></table></div></div>`;
 
