@@ -5753,18 +5753,21 @@ async function actualizarTextoSync(id, btn){
   if(!confirm('¿Actualizar el texto de este indicador en la matriz al de la ficha?\n\nNuevo texto:\n'+nuevo+'\n\nSus metas y mediciones se conservan.')) return;
   btn.disabled=true; btn.textContent='Actualizando…';
   try{
-    // ANTI-DUPLICADOS: si otro registro de la matriz ya tiene ese texto en la misma ruta,
-    // actualizar crearía un indicador trabajado dos veces. Se bloquea y se sugiere eliminar.
+    // ANTI-DUPLICADOS: dos oficinas pueden compartir un indicador, pero una MISMA oficina
+    // no puede tenerlo dos veces. Se bloquea solo si otro registro tiene el mismo texto en
+    // la misma ruta Y la misma oficina de medición.
     try{
       const normD = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
       const recsM = await loadMatriz();
       const yo=(recsM||[]).find(r=>r.id===id);
       const miRuta = yo?normD(leerCampo(yo, MAT.proceso_ruta.id, 'Proceso (ruta)')):'';
+      const miOfi = yo?normD(leerCampo(yo, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')):'';
       const dup=(recsM||[]).find(r=> r.id!==id
         && normD(leerCampo(r, MAT.indicador_txt.id, 'Indicador'))===normD(nuevo)
-        && normD(leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)'))===miRuta);
+        && normD(leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)'))===miRuta
+        && normD(leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición'))===miOfi);
       if(dup){
-        toast('Ya existe otro registro en la matriz con ese texto en esta ruta. Para no duplicar, elimina este registro (o el otro) en lugar de actualizar.', true);
+        toast('Esta oficina ya tiene otro registro con ese texto en esta ruta. Para no duplicar, elimina este registro (o el otro) en lugar de actualizar.', true);
         btn.disabled=false; btn.textContent='Actualizar texto'; return;
       }
     }catch(_){ /* verificación falló por red: continuar */ }
@@ -6180,8 +6183,9 @@ async function guardarIndicadoresMatriz(){
   if(!formula || !formula.trim()){ toast('La Fórmula de cálculo es obligatoria.', true); document.getElementById('ag_formula').focus(); return; }
   const btn=document.getElementById('ag_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Agregando…';
   try{
-    // Evitar DUPLICADOS: cargar los indicadores que ya están en la matriz (texto + ruta) para
-    // no volver a crear uno que ya existe. Un duplicado = mismo indicador bajo la misma ruta.
+    // Evitar DUPLICADOS: dos oficinas SÍ pueden compartir un mismo indicador; lo que no
+    // puede ser es que UNA MISMA oficina lo defina dos veces. Duplicado = mismo indicador +
+    // misma ruta + misma oficina de medición.
     const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final
     const yaEnMatriz = new Set();
     try{
@@ -6189,7 +6193,8 @@ async function guardarIndicadoresMatriz(){
       (recsM||[]).forEach(m=>{
         const t = leerCampo(m, MAT.indicador_txt.id, 'Indicador');
         const ru = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
-        if(t) yaEnMatriz.add(norm(t)+' ¦¦ '+norm(ru));
+        const of = leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+        if(t) yaEnMatriz.add(norm(t)+' ¦¦ '+norm(ru)+' ¦¦ '+norm(of));
       });
     }catch(_){}
 
@@ -6198,8 +6203,8 @@ async function guardarIndicadoresMatriz(){
       const ind=AG_INDS[i];
       const comp=(ind.texto.split(' — ')[0]||'').trim();
       const rutaCompleta = AG_CTX.ruta + (comp? ' › '+comp : '');
-      // ¿ya existe este indicador con esta misma ruta? → no duplicar
-      const clave = norm(ind.texto)+' ¦¦ '+norm(rutaCompleta);
+      // ¿esta oficina ya tiene este indicador en esta misma ruta? → no duplicar
+      const clave = norm(ind.texto)+' ¦¦ '+norm(rutaCompleta)+' ¦¦ '+norm(oficina);
       if(yaEnMatriz.has(clave)){ duplicados.push(ind.texto); continue; }
       const campos={};
       campos[MAT.indicador_txt.id]=ind.texto;
@@ -6319,17 +6324,22 @@ async function guardarEdicionMatriz(){
   if(!g('em_formula')){ toast('La Fórmula de cálculo es obligatoria.', true); document.getElementById('em_formula').focus(); return; }
   const campos={};
   if(g('em_indicador')) campos[MAT.indicador_txt.id]=g('em_indicador');
-  // ANTI-DUPLICADOS al EDITAR: si el texto quedó igual al de OTRO registro de la matriz
-  // bajo la MISMA ruta, se bloquea el guardado (un indicador no puede trabajarse dos veces).
+  // ANTI-DUPLICADOS al EDITAR: dos oficinas SÍ pueden compartir el mismo indicador; lo que
+  // no puede ser es que UNA MISMA oficina lo defina dos veces. Duplicado = mismo texto +
+  // misma ruta + misma oficina de medición, en OTRO registro.
   if(g('em_indicador')){
     try{
       const normD = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
       const recsM = await loadMatriz();
-      const miRuta = (()=>{ const yo=(recsM||[]).find(r=>r.id===EM_ID); return yo?normD(leerCampo(yo, MAT.proceso_ruta.id, 'Proceso (ruta)')):''; })();
+      const yo=(recsM||[]).find(r=>r.id===EM_ID);
+      const miRuta = yo?normD(leerCampo(yo, MAT.proceso_ruta.id, 'Proceso (ruta)')):'';
+      // Oficina que quedará tras guardar: la elegida en el formulario o, si no se cambió, la actual
+      const miOfi = normD(g('em_oficina') || (yo?leerCampo(yo, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición'):''));
       const dup=(recsM||[]).find(r=> r.id!==EM_ID
         && normD(leerCampo(r, MAT.indicador_txt.id, 'Indicador'))===normD(g('em_indicador'))
-        && normD(leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)'))===miRuta);
-      if(dup){ toast('Ya existe otro registro en la matriz con este mismo indicador en esta ruta. No se puede duplicar: edita o elimina el otro registro.', true); return; }
+        && normD(leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)'))===miRuta
+        && normD(leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición'))===miOfi);
+      if(dup){ toast('Esta oficina ya tiene este mismo indicador definido en esta ruta. Una oficina no puede definirlo dos veces: edita o elimina el otro registro. (Sí es válido que otra oficina lo comparta.)', true); return; }
     }catch(_){ /* si la verificación falla por red, no bloquear el guardado */ }
   }
   if(MAT.proposito_ind) campos[MAT.proposito_ind.id]=g('em_proposito');
