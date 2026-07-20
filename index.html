@@ -5222,6 +5222,12 @@ async function loadMatriz(forzar){
     STATE.matriz.forEach(m=>{
       const mias = progs.filter(p=>relMencionaMatriz(p, m.id, PM.rel_matriz.id));
       m._progMetas = mias.length;
+      // Detalle de cada meta programada: periodo, valor meta y valor de referencia
+      m._progMetasList = mias.map(p=>({
+        periodo: PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):'',
+        meta: leerCampo(p,PM.valor_meta.id,'Valor meta'),
+        ref: leerCampo(p,PM.valor_ref.id,'Valor de referencia')
+      }));
     });
   }catch(e){ STATE.matriz.forEach(m=>{ if(m._progMetas===undefined) m._progMetas=0; }); }
   // Precargar TODOS los seguimientos para calcular, por indicador, el último avance y nº de periodos
@@ -7098,6 +7104,29 @@ function _detRow(etq, val){
   if(contenido==='') return '';
   return `<div class="det-row"><div class="det-k">${etq}</div><div class="det-v">${contenido}</div></div>`;
 }
+// Detalle de las metas programadas de un indicador (periodo · meta · referencia)
+function _detMetasHTML(r){
+  const lista = r._progMetasList||[];
+  if(!lista.length) return '<span class="hint">Sin metas programadas</span>';
+  return '<ul style="margin:2px 0 0;padding-left:18px">'+lista.map(p=>{
+    const per=p.periodo && !/periodo/i.test(p.periodo) ? `<strong>${String(p.periodo).replace(/</g,'&lt;')}</strong>` : 'Meta';
+    const meta=(p.meta!==''&&p.meta!=null)?` · meta: ${String(p.meta).replace(/</g,'&lt;')}`:'';
+    const ref=(p.ref!==''&&p.ref!=null)?` · ref: ${String(p.ref).replace(/</g,'&lt;')}`:'';
+    return `<li style="margin-bottom:4px">${per}${meta}${ref}</li>`;
+  }).join('')+'</ul>';
+}
+// Detalle de los seguimientos de un indicador (periodo · % avance · fecha)
+function _detSegHTML(r){
+  const lista = r._avancePeriodos||[];
+  if(!lista.length) return '<span class="hint">Sin seguimientos registrados</span>';
+  return '<ul style="margin:2px 0 0;padding-left:18px">'+lista.map(s=>{
+    const per=s.periodo && !/periodo/i.test(s.periodo) ? `<strong>${String(s.periodo).replace(/</g,'&lt;')}</strong>` : 'Periodo';
+    const pct=(s.pct!==null&&s.pct!==undefined)?` · <span style="color:${s.pct>=70?'#1f7a3d':s.pct>=40?'#b8860b':'#c0392b'};font-weight:700">${s.pct}%</span>`:'';
+    const fecha=s.fecha?` · ${String(s.fecha).replace(/</g,'&lt;')}`:'';
+    return `<li style="margin-bottom:4px">${per}${pct}${fecha}</li>`;
+  }).join('')+'</ul>';
+}
+
 // Detalle de un indicador de la matriz
 async function verDetalleMatriz(matId){
   const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
@@ -7117,8 +7146,8 @@ async function verDetalleMatriz(matId){
     ['Correo del responsable', d.correo],
     ['Frecuencia de medición', d.frecuencia],
     ['Frecuencia de cálculo', d.frec_calculo],
-    ['Metas programadas', (r._progMetas||0)+''],
-    ['Periodos con seguimiento', (r._periodos||0)+'']
+    ['Metas programadas ('+(r._progMetas||0)+')', {__html: _detMetasHTML(r)}],
+    ['Seguimientos ('+(r._periodos||0)+')', {__html: _detSegHTML(r)}]
   ];
   const html=filas.map(([e,v])=>_detRow(e,v)).filter(Boolean).join('');
   const btns=[];
