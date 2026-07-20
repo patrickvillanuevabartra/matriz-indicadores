@@ -7090,8 +7090,13 @@ window.guardarPlantillas=guardarPlantillas;
 
 // === Ojito → modal con el detalle completo (matriz o ficha) ===
 function _detRow(etq, val){
+  // val puede ser texto plano (se escapa) o {__html:'...'} para contenido ya formateado
   if(val===undefined||val===null||val==='') return '';
-  return `<div class="det-row"><div class="det-k">${etq}</div><div class="det-v">${String(val).replace(/</g,'&lt;')}</div></div>`;
+  const contenido = (val && typeof val==='object' && '__html' in val)
+    ? val.__html
+    : String(val).replace(/</g,'&lt;');
+  if(contenido==='') return '';
+  return `<div class="det-row"><div class="det-k">${etq}</div><div class="det-v">${contenido}</div></div>`;
 }
 // Detalle de un indicador de la matriz
 async function verDetalleMatriz(matId){
@@ -7144,6 +7149,21 @@ async function verDetalleFicha(nivel, fichaId){
   if(!r) r=(STATE.fichas[nivel]||[]).find(x=>x.id===fichaId);   // respaldo: caché
   if(!r) return;
   const cur=(f,nombre)=> f?leerCampo(r,f.id,nombre):'';
+  // Lista de indicadores de la ficha (con su texto), no solo la cantidad.
+  // Se toma del caché desglosado _SUBIND_POR_FICHA (lectura individual y fiable); si aún no
+  // está, se intenta construir el mapa y, como último respaldo, se muestra la cantidad.
+  let indsHtml='';
+  try{
+    let items=_SUBIND_POR_FICHA[nivel+'_'+fichaId];
+    if(!items){ try{ await construirMapaIndicadores(); }catch(_){} items=_SUBIND_POR_FICHA[nivel+'_'+fichaId]; }
+    if(items && items.length){
+      indsHtml='<ol style="margin:2px 0 0;padding-left:20px">'+items.map(it=>{
+        const elem=it.elemento?`<span style="color:var(--brand);font-weight:600">${String(it.elemento).replace(/</g,'&lt;')}</span> — `:'';
+        return `<li style="margin-bottom:5px">${elem}${String(it.indicador||'').replace(/</g,'&lt;')}</li>`;
+      }).join('')+'</ol>';
+    }
+  }catch(_){}
+  const nInd=nIndFicha(r,nivel);
   const filas=[
     ['Nivel', nivel],
     ['Ruta del proceso', rutaFicha(r,nivel)],
@@ -7157,7 +7177,7 @@ async function verDetalleFicha(nivel, fichaId){
     ['Receptor / cliente', cur(F.receptor,'Receptor')],
     ['Controles', cur(F.controles,'Controles')],
     ['Registros', cur(F.registros,'Registros')],
-    ['N.º de indicadores', nIndFicha(r,nivel)+'']
+    ['Indicadores ('+nInd+')', {__html: indsHtml || (nInd+' indicador(es)')}]
   ];
   const html=filas.map(([e,v])=>_detRow(e,v)).filter(Boolean).join('');
   document.getElementById('det_titulo').textContent = (rutaFicha(r,nivel)||'Ficha').slice(0,80);
