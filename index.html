@@ -172,6 +172,12 @@
   .modal-close{background:transparent;border:0;font-size:24px;line-height:1;color:var(--mist);cursor:pointer;padding:2px 8px;border-radius:8px;transition:.15s}
   .modal-close:hover{background:var(--paper);color:var(--ink)}
   .modal-body{padding:8px 26px 4px}
+  /* Ayuda contextual (ícono ? junto a la etiqueta del campo) */
+  .fld-help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;background:var(--brand-2);color:#fff;font-size:11px;font-weight:700;cursor:help;position:relative;vertical-align:middle;user-select:none;flex:none}
+  .fld-help .fld-tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:min(280px,72vw);background:var(--ink);color:#fff;font-size:12px;font-weight:400;line-height:1.45;text-align:left;padding:10px 12px;border-radius:9px;box-shadow:0 8px 30px rgba(0,0,0,.28);z-index:1200;white-space:normal}
+  .fld-help .fld-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink)}
+  .fld-help .fld-tip b{color:#ffe08a}
+  .fld-help:hover .fld-tip, .fld-help.open .fld-tip{display:block}
   /* SIPOC por componente */
   .sipoc-check{display:flex;align-items:flex-start;gap:9px;font-size:14px;color:var(--slate);cursor:pointer;line-height:1.4}
   .sipoc-check input{width:auto;margin-top:3px;flex:none;cursor:pointer}
@@ -715,10 +721,10 @@
           <div class="field niv-n3" style="display:none"><label>Proceso nivel 3</label><select id="fi_n3" disabled></select></div>
           <select id="fi_proc" disabled class="hidden"></select>
           <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="fi_ruta">Selecciona la jerarquía arriba…</div></div>
-          <div class="field full"><label>Objetivo del proceso</label><textarea id="fi_objetivo"></textarea></div>
+          <div class="field full"><label data-help="objetivo">Objetivo del proceso</label><textarea id="fi_objetivo"></textarea></div>
           <div class="field"><label>Dueño del proceso (unidad orgánica) <span style="color:#c0392b">*</span></label><select id="fi_dueno"></select></div>
-          <div class="field"><label>Alcance</label><textarea id="fi_alcance"></textarea></div>
-          <div class="field full"><label>Base legal</label><textarea id="fi_base_legal"></textarea></div>
+          <div class="field"><label data-help="alcance">Alcance</label><textarea id="fi_alcance"></textarea></div>
+          <div class="field full"><label data-help="base_legal">Base legal</label><textarea id="fi_base_legal"></textarea></div>
         </div>
       </div>
 
@@ -736,14 +742,14 @@
         <div class="section-title"><span class="section-num">III</span>Recursos y control del desempeño</div>
         <div class="section-desc">Recursos del proceso. (Los indicadores se definen arriba, por cada componente del SIPOC.)</div>
         <div class="grid">
-          <div class="field"><label>Controles</label><textarea id="fi_controles"></textarea></div>
-          <div class="field"><label>Documentos internos</label><textarea id="fi_docs_int"></textarea></div>
-          <div class="field"><label>Documentos externos</label><textarea id="fi_docs_ext"></textarea></div>
-          <div class="field"><label>Recursos humanos</label><textarea id="fi_rrhh"></textarea></div>
-          <div class="field"><label>Sistemas informáticos</label><textarea id="fi_sistemas"></textarea></div>
-          <div class="field"><label>Registros</label><textarea id="fi_registros"></textarea></div>
-          <div class="field"><label>Instalaciones</label><textarea id="fi_instalaciones"></textarea></div>
-          <div class="field"><label>Equipos</label><textarea id="fi_equipos"></textarea></div>
+          <div class="field"><label data-help="controles">Controles</label><textarea id="fi_controles"></textarea></div>
+          <div class="field"><label data-help="docs_int">Documentos internos</label><textarea id="fi_docs_int"></textarea></div>
+          <div class="field"><label data-help="docs_ext">Documentos externos</label><textarea id="fi_docs_ext"></textarea></div>
+          <div class="field"><label data-help="rrhh">Recursos humanos</label><textarea id="fi_rrhh"></textarea></div>
+          <div class="field"><label data-help="sistemas">Sistemas informáticos</label><textarea id="fi_sistemas"></textarea></div>
+          <div class="field"><label data-help="registros">Registros</label><textarea id="fi_registros"></textarea></div>
+          <div class="field"><label data-help="instalaciones">Instalaciones</label><textarea id="fi_instalaciones"></textarea></div>
+          <div class="field"><label data-help="equipos">Equipos</label><textarea id="fi_equipos"></textarea></div>
         </div>
       </div>
 
@@ -1353,10 +1359,10 @@
           <div class="field" id="ed_w_n2"><label>Proceso nivel 2</label><select id="ed_n2" disabled></select></div>
           <div class="field" id="ed_w_n3"><label>Proceso nivel 3</label><select id="ed_n3" disabled></select></div>
           <div class="field full"><label>Ruta del proceso</label><div class="ruta-pill" id="ed_ruta">—</div></div>
-          <div class="field full"><label>Objetivo del proceso</label><textarea id="ed_objetivo"></textarea></div>
+          <div class="field full"><label data-help="objetivo">Objetivo del proceso</label><textarea id="ed_objetivo"></textarea></div>
           <div class="field"><label>Dueño del proceso (unidad orgánica) <span style="color:#c0392b">*</span></label><select id="ed_dueno"></select></div>
-          <div class="field"><label>Alcance</label><textarea id="ed_alcance"></textarea></div>
-          <div class="field full"><label>Base legal</label><textarea id="ed_base_legal"></textarea></div>
+          <div class="field"><label data-help="alcance">Alcance</label><textarea id="ed_alcance"></textarea></div>
+          <div class="field full"><label data-help="base_legal">Base legal</label><textarea id="ed_base_legal"></textarea></div>
         </div>
       </div>
 
@@ -1373,14 +1379,14 @@
       <div style="margin-bottom:8px">
         <div class="section-title" style="margin-bottom:6px"><span class="section-num">III</span>Recursos y control del desempeño</div>
         <div class="grid">
-          <div class="field"><label>Controles</label><textarea id="ed_controles"></textarea></div>
-          <div class="field"><label>Documentos internos</label><textarea id="ed_docs_int"></textarea></div>
-          <div class="field"><label>Documentos externos</label><textarea id="ed_docs_ext"></textarea></div>
-          <div class="field"><label>Recursos humanos</label><textarea id="ed_rrhh"></textarea></div>
-          <div class="field"><label>Sistemas informáticos</label><textarea id="ed_sistemas"></textarea></div>
-          <div class="field"><label>Registros</label><textarea id="ed_registros"></textarea></div>
-          <div class="field"><label>Instalaciones</label><textarea id="ed_instalaciones"></textarea></div>
-          <div class="field"><label>Equipos</label><textarea id="ed_equipos"></textarea></div>
+          <div class="field"><label data-help="controles">Controles</label><textarea id="ed_controles"></textarea></div>
+          <div class="field"><label data-help="docs_int">Documentos internos</label><textarea id="ed_docs_int"></textarea></div>
+          <div class="field"><label data-help="docs_ext">Documentos externos</label><textarea id="ed_docs_ext"></textarea></div>
+          <div class="field"><label data-help="rrhh">Recursos humanos</label><textarea id="ed_rrhh"></textarea></div>
+          <div class="field"><label data-help="sistemas">Sistemas informáticos</label><textarea id="ed_sistemas"></textarea></div>
+          <div class="field"><label data-help="registros">Registros</label><textarea id="ed_registros"></textarea></div>
+          <div class="field"><label data-help="instalaciones">Instalaciones</label><textarea id="ed_instalaciones"></textarea></div>
+          <div class="field"><label data-help="equipos">Equipos</label><textarea id="ed_equipos"></textarea></div>
         </div>
       </div>
     </div>
@@ -1571,6 +1577,52 @@ function entrarApp(){
 }
 
 // Helpers de permisos
+// ===== Ayuda contextual de los campos de la ficha (ícono ? con explicación + ejemplo) =====
+// Funciona con hover (escritorio) y con tap/clic (móvil). Los textos usan ejemplos del
+// ámbito de una facultad de ingeniería. RECORDATORIO CLAVE: el SIPOC y los indicadores se
+// definen POR CADA ELEMENTO/SUBPROCESO (componente), no para el proceso global.
+const AYUDA_FICHA = {
+  objetivo: ['Qué busca lograr el proceso, en una frase que empiece con un verbo.', 'Planificar y ejecutar la formación de los estudiantes de ingeniería para asegurar el logro del perfil de egreso.'],
+  alcance: ['Dónde empieza y dónde termina el proceso, y a qué áreas o actividades aplica.', 'Desde la planificación del semestre académico hasta la evaluación final de los cursos de las cinco escuelas profesionales de la Facultad.'],
+  base_legal: ['Normas, reglamentos o documentos que sustentan el proceso.', 'Ley Universitaria N° 30220, Estatuto de la URP, Reglamento de Estudios y modelo de acreditación del SINEACE.'],
+  prov: ['Quién entrega lo que ESTE elemento/subproceso necesita para funcionar (se define por cada componente, no para todo el proceso).', 'Para el subproceso de matrícula: Oficina de Admisión, Departamento Académico.'],
+  entr: ['Qué recibe ESTE elemento/subproceso para trabajar (por cada componente).', 'Estudiantes matriculados, plan de estudios, sílabos, carga docente.'],
+  prod: ['Qué genera o entrega ESTE elemento/subproceso (por cada componente).', 'Estudiantes evaluados del curso, actas de notas.'],
+  recep: ['Quién recibe el resultado de ESTE elemento/subproceso (por cada componente).', 'Estudiantes, Oficina de Grados y Títulos, empleadores.'],
+  indicador: ['Cada elemento/subproceso se mide con su PROPIO indicador; no es uno solo para todo el proceso. Escribe el que corresponde a ESTE elemento.', 'Para "Utilización de la infraestructura": Nivel de utilización de aulas = (horas usadas / horas disponibles) × 100.'],
+  controles: ['Cómo se vigila que el proceso funcione bien.', 'Encuestas de satisfacción estudiantil, evaluación del desempeño docente, comités de calidad.'],
+  registros: ['Qué evidencias o documentos deja el proceso.', 'Actas de notas, informes de rendimiento, registros de asistencia.'],
+  docs_int: ['Documentos propios de la Facultad o la universidad que usa el proceso.', 'Reglamento de evaluación de la Facultad, procedimientos internos del SGC.'],
+  docs_ext: ['Documentos de fuera de la universidad que usa el proceso.', 'Normas del SINEACE, Ley Universitaria, normas técnicas del sector.'],
+  rrhh: ['Personas que el proceso necesita para operar.', 'Docentes, jefes de práctica, personal administrativo de la Facultad.'],
+  sistemas: ['Sistemas informáticos o software que usa el proceso.', 'Sistema de matrícula, aula virtual, sistema de gestión académica.'],
+  registros_r: ['Registros o bases de datos que soportan el proceso.', 'Base de datos de estudiantes, historial académico.'],
+  instalaciones: ['Espacios físicos donde se ejecuta el proceso.', 'Aulas, laboratorios de cómputo, talleres, biblioteca.'],
+  equipos: ['Equipos o materiales que el proceso necesita.', 'Computadoras, proyectores, equipos de laboratorio.']
+};
+// Genera el ícono ? con su tooltip (explicación + ejemplo). Devuelve HTML.
+function ayudaFicha(clave){
+  const a=AYUDA_FICHA[clave]; if(!a) return '';
+  const esc=t=>String(t||'').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  return `<span class="fld-help" onclick="this.classList.toggle('open');event.stopPropagation()" title="Ayuda">?`
+    +`<span class="fld-tip">${esc(a[0])}<br><b>Ejemplo:</b> ${esc(a[1])}</span></span>`;
+}
+window.ayudaFicha=ayudaFicha;
+// Inserta el ícono de ayuda en los <label data-help="clave"> estáticos (campos globales).
+// Idempotente: no duplica si ya se insertó.
+function pintarAyudasFicha(){
+  document.querySelectorAll('label[data-help]').forEach(l=>{
+    if(l.querySelector('.fld-help')) return;
+    const clave=l.getAttribute('data-help');
+    const tmp=document.createElement('span'); tmp.innerHTML=ayudaFicha(clave);
+    const icono=tmp.firstChild; if(icono) l.appendChild(icono);
+  });
+}
+window.pintarAyudasFicha=pintarAyudasFicha;
+document.addEventListener('DOMContentLoaded', pintarAyudasFicha);
+// Cerrar tooltips abiertos (móvil) al tocar fuera
+document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('.fld-help')) document.querySelectorAll('.fld-help.open').forEach(x=>x.classList.remove('open')); });
+
 function esAdmin(){ return SESION && SESION.rol==='Administrador'; }
 function puedeCrear(){ return esAdmin(); }
 function puedeEliminar(){ return esAdmin(); }
@@ -2425,13 +2477,13 @@ function renderSipocCardsForm(){
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
-        <div class="field"><label>Proveedores / Cliente</label>${_sipocListaHTML('fi',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
-        <div class="field"><label>Entrada / Insumo</label>${_sipocListaHTML('fi',safe,'entr',d.entr,'Entrada/Insumo')}</div>
-        <div class="field"><label>Producto</label>${_sipocListaHTML('fi',safe,'prod',d.prod,'Producto')}</div>
-        <div class="field"><label>Receptor final del producto</label>${_sipocListaHTML('fi',safe,'recep',d.recep,'Receptor final de producto')}</div>
+        <div class="field"><label>Proveedores / Cliente ${ayudaFicha('prov')}</label>${_sipocListaHTML('fi',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
+        <div class="field"><label>Entrada / Insumo ${ayudaFicha('entr')}</label>${_sipocListaHTML('fi',safe,'entr',d.entr,'Entrada/Insumo')}</div>
+        <div class="field"><label>Producto ${ayudaFicha('prod')}</label>${_sipocListaHTML('fi',safe,'prod',d.prod,'Producto')}</div>
+        <div class="field"><label>Receptor final del producto ${ayudaFicha('recep')}</label>${_sipocListaHTML('fi',safe,'recep',d.recep,'Receptor final de producto')}</div>
       </div>
       <div class="ind-row">
-        <div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span></label>
+        <div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span> ${ayudaFicha('indicador')}</label>
         ${indsHtml}
         <button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('fi','${safe}')">+ Añadir indicador</button>
         </div>
@@ -4742,6 +4794,7 @@ async function editarFicha(nivel, id){
   document.getElementById('ed_nivel_lbl').textContent=nivel;
   const modalEl=document.getElementById('modalEdit');
   modalEl.classList.add('show'); document.body.style.overflow='hidden';
+  if(typeof pintarAyudasFicha==='function') pintarAyudasFicha();
   mostrarCargaEdit(true);
   // Lanzar EN PARALELO las cargas independientes (ficha individual, dueños, inventario).
   // Antes iban en serie; solaparlas reduce mucho el tiempo de apertura.
@@ -4994,12 +5047,12 @@ function renderSipocModal(){
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
-        <div class="field"><label>Proveedores / Cliente</label>${_sipocListaHTML('ed',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
-        <div class="field"><label>Entrada / Insumo</label>${_sipocListaHTML('ed',safe,'entr',d.entr,'Entrada/Insumo')}</div>
-        <div class="field"><label>Producto</label>${_sipocListaHTML('ed',safe,'prod',d.prod,'Producto')}</div>
-        <div class="field"><label>Receptor final del producto</label>${_sipocListaHTML('ed',safe,'recep',d.recep,'Receptor final de producto')}</div>
+        <div class="field"><label>Proveedores / Cliente ${ayudaFicha('prov')}</label>${_sipocListaHTML('ed',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
+        <div class="field"><label>Entrada / Insumo ${ayudaFicha('entr')}</label>${_sipocListaHTML('ed',safe,'entr',d.entr,'Entrada/Insumo')}</div>
+        <div class="field"><label>Producto ${ayudaFicha('prod')}</label>${_sipocListaHTML('ed',safe,'prod',d.prod,'Producto')}</div>
+        <div class="field"><label>Receptor final del producto ${ayudaFicha('recep')}</label>${_sipocListaHTML('ed',safe,'recep',d.recep,'Receptor final de producto')}</div>
       </div>
-      <div class="ind-row"><div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span></label>
+      <div class="ind-row"><div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span> ${ayudaFicha('indicador')}</label>
         ${indsHtml}
         ${esAdmin()?`<button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('ed','${safe}')">+ Añadir indicador</button>`:''}
         </div></div>
