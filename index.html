@@ -174,9 +174,10 @@
   .modal-body{padding:8px 26px 4px}
   /* Ayuda contextual (ícono ? junto a la etiqueta del campo) */
   .fld-help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;background:var(--brand-2);color:#fff;font-size:11px;font-weight:700;cursor:help;position:relative;vertical-align:middle;user-select:none;flex:none}
-  .fld-help .fld-tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:min(280px,72vw);background:var(--ink);color:#fff;font-size:12px;font-weight:400;line-height:1.45;text-align:left;padding:10px 12px;border-radius:9px;box-shadow:0 8px 30px rgba(0,0,0,.28);z-index:1200;white-space:normal}
-  .fld-help .fld-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink)}
-  .fld-help .fld-tip b{color:#ffe08a}
+  .fld-help .fld-tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:min(300px,74vw);background:#fdfaf3;color:#3a3a3a;font-size:12.5px;font-weight:400;line-height:1.5;text-align:left;padding:11px 13px;border:1px solid #e6ddc8;border-radius:10px;box-shadow:0 10px 34px rgba(60,50,20,.18);z-index:1200;white-space:normal}
+  .fld-help .fld-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:7px solid transparent;border-top-color:#fdfaf3}
+  .fld-help .fld-tip::before{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:8px solid transparent;border-top-color:#e6ddc8;margin-top:1px}
+  .fld-help .fld-tip b{color:#1f7a3d}
   .fld-help:hover .fld-tip, .fld-help.open .fld-tip{display:block}
   /* SIPOC por componente */
   .sipoc-check{display:flex;align-items:flex-start;gap:9px;font-size:14px;color:var(--slate);cursor:pointer;line-height:1.4}
