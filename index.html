@@ -5739,10 +5739,14 @@ async function abrirControlSync(){
     Object.keys(_SUBIND_POR_FICHA).forEach(k=>{
       const arch = !!fichaArchivadaPorKey[k];
       (_SUBIND_POR_FICHA[k]||[]).forEach(it=>{
+        // Comparar SIEMPRE por el texto completo "elemento — indicador": es lo que se guarda
+        // en la matriz y lo que distingue un indicador de otro. NO agregar el indicador suelto
+        // (sin elemento), porque dos elementos distintos pueden tener indicadores con el mismo
+        // nombre corto y eso hacía que un huérfano real se viera como "sincronizado" y NO se
+        // reportara (bug detectado en la presentación a dueños de proceso).
         const texto=(it.elemento?it.elemento+' — ':'')+it.indicador;
         enFichas.add(norm(texto));
-        enFichas.add(norm(it.indicador));
-        if(arch){ textosDeArchivadas.add(norm(texto)); textosDeArchivadas.add(norm(it.indicador)); }
+        if(arch){ textosDeArchivadas.add(norm(texto)); }
       });
     });
 
