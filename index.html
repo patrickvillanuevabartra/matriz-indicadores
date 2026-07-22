@@ -777,6 +777,7 @@
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer;white-space:nowrap">
         <input type="checkbox" id="listVerArchivadas" onchange="renderListado()" style="width:15px;height:15px;cursor:pointer"> Ver archivadas
       </label>
+      <button class="btn" onclick="exportarFichasExcel()" style="white-space:nowrap;padding:7px 12px;font-size:13px">⬇️ Descargar Excel</button>
       <div style="display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:4px">
         <button class="list-tab active" data-f="todos" onclick="setListFiltro('todos')" style="border:0;background:var(--brand);color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Todas</button>
         <button class="list-tab" data-f="N0" onclick="setListFiltro('N0')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:7px 14px;border-radius:7px;cursor:pointer">Nivel 0</button>
@@ -873,6 +874,7 @@
         <input id="matBuscar" placeholder="Buscar por indicador, proceso u oficina…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
       </div>
       <button class="btn btn-ghost" title="Configurar las plantillas de notificación" onclick="abrirEditorPlantillas()">⚙️ Plantillas</button>
+      <button class="btn" onclick="exportarMatrizExcel()" style="white-space:nowrap">⬇️ Descargar Excel</button>
     </div>
 
     <!-- Filtros avanzados (Matriz) -->
@@ -969,6 +971,7 @@
           <p style="margin:4px 0 0;font-size:13px;color:var(--mist)">Crea, edita, activa/desactiva o elimina usuarios.</p>
         </div>
         <button class="btn btn-primary" onclick="abrirFormUsuario()">+ Crear usuario</button>
+        <button class="btn" onclick="exportarUsuariosExcel()" style="white-space:nowrap">⬇️ Descargar Excel</button>
       </div>
       <div id="usuariosLista"><p class="hint">Cargando usuarios…</p></div>
     </div>
@@ -3452,6 +3455,58 @@ async function _npInsertar(def, idsPadres, codigo, nombre){
 // Exporta el inventario de procesos a Excel TAL COMO SE VE en pantalla (respeta los
 // filtros y el modo de vista activos). Solo administradores. Técnica: se clona la tabla
 // pintada, se quita la columna Acciones y se descarga como .xls (Excel la abre como hoja).
+// Exporta a Excel una tabla del DOM TAL COMO SE VE (respeta filtros y segmentación por
+// oficina, porque exporta lo ya pintado). Disponible para todos los roles.
+// - tabla: elemento <table> o su id. - titulo: encabezado del archivo. - nombreArch: base del archivo.
+// - quitarUltimaCol: si true, elimina la columna Acciones. - filtroCelda: fn(td)->bool para quitar celdas.
+function exportarTablaExcel(tabla, titulo, nombreArch, quitarUltimaCol){
+  const t = (typeof tabla==='string') ? document.getElementById(tabla) : tabla;
+  if(!t){ toast('No se encontró la tabla para exportar.', true); return; }
+  const clon=t.cloneNode(true);
+  if(quitarUltimaCol){
+    const ths=clon.querySelectorAll('thead th'); if(ths.length) ths[ths.length-1].remove();
+    clon.querySelectorAll('tbody tr').forEach(tr=>{ const tds=tr.querySelectorAll('td'); if(tds.length) tds[tds.length-1].remove(); });
+  }
+  // Quitar botones, inputs y barras de progreso (dejando el texto), y celdas de solo-acciones
+  clon.querySelectorAll('button,input,select,svg').forEach(el=>el.remove());
+  clon.querySelectorAll('td').forEach(td=>{ if(/Solo lectura/.test(td.textContent||'')) td.textContent=''; });
+  const fecha=new Date().toISOString().slice(0,10);
+  const htmlDoc='<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8">'
+    +'<style>table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt}'
+    +'th{background:#1f7a4d;color:#fff;border:1px solid #999;padding:6px 8px;text-align:left}'
+    +'td{border:1px solid #bbb;padding:5px 8px;vertical-align:top}</style></head><body>'
+    +'<h3>'+titulo+' — Facultad de Ingeniería URP (SGC ISO 21001)</h3>'
+    +'<p>Exportado el '+fecha+'</p>'+clon.outerHTML+'</body></html>';
+  const blob=new Blob(['\ufeff'+htmlDoc],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=nombreArch+'_'+fecha+'.xls';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Descargado. Si Excel pregunta por el formato al abrir, acepta: el contenido es correcto.');
+}
+window.exportarTablaExcel=exportarTablaExcel;
+
+// Exports específicos
+function exportarUsuariosExcel(){
+  const t=document.querySelector('#usuariosTablaCont table');
+  if(!t){ toast('No hay usuarios para exportar.', true); return; }
+  exportarTablaExcel(t, 'Usuarios', 'Usuarios', true);
+}
+function exportarRankingOficinasExcel(){
+  const t=document.querySelector('#tab-por-oficina table');
+  exportarTablaExcel(t, 'Estado de indicadores por oficina', 'Estado_por_oficina', false);
+}
+function exportarFichasExcel(){
+  const t=document.getElementById('tablaListado')?.closest('table');
+  exportarTablaExcel(t, 'Fichas registradas', 'Fichas_registradas', true);
+}
+function exportarMatrizExcel(){
+  exportarTablaExcel('tablaMatrizTbl', 'Matriz de indicadores', 'Matriz_de_indicadores', true);
+}
+window.exportarUsuariosExcel=exportarUsuariosExcel;
+window.exportarRankingOficinasExcel=exportarRankingOficinasExcel;
+window.exportarFichasExcel=exportarFichasExcel;
+window.exportarMatrizExcel=exportarMatrizExcel;
+
 function exportarInventarioExcel(){
   if(!esAdmin()){ toast('Solo el administrador puede exportar el inventario.', true); return; }
   const tabla=document.getElementById('tablaInventarioTbl');
@@ -5453,7 +5508,7 @@ async function renderTablero(){
         <span><span style="color:#1f7a3d">🟢 Meta + seg.:</span> programado y medido</span>
       </div>
       <div style="font-size:12px;color:var(--mist);margin-bottom:14px">Barra de % avance: <span style="color:#c0392b;font-weight:600">rojo &lt; 50%</span> · <span style="color:#b8860b;font-weight:600">ámbar 50–79%</span> · <span style="color:#1f7a3d;font-weight:600">verde ≥ 80%</span>.</div>
-      <div style="margin-bottom:10px"><input id="buscarOficinaEPO" placeholder="🔍 Buscar mi oficina (la resalta sin ocultar las demás)…" oninput="resaltarOficinaEPO()" style="width:100%;max-width:420px;padding:7px 11px;font-size:13px;border:1px solid var(--line);border-radius:8px"></div>
+      <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input id="buscarOficinaEPO" placeholder="🔍 Buscar mi oficina (la resalta sin ocultar las demás)…" oninput="resaltarOficinaEPO()" style="flex:1;min-width:220px;max-width:420px;padding:7px 11px;font-size:13px;border:1px solid var(--line);border-radius:8px"><button class="btn" onclick="exportarRankingOficinasExcel()" style="white-space:nowrap;padding:7px 12px;font-size:13px">⬇️ Descargar Excel</button></div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>
           <th style="text-align:center;padding:8px 6px;color:var(--mist);font-size:11px;text-transform:uppercase">#</th>
