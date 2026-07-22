@@ -5739,14 +5739,18 @@ async function abrirControlSync(){
     Object.keys(_SUBIND_POR_FICHA).forEach(k=>{
       const arch = !!fichaArchivadaPorKey[k];
       (_SUBIND_POR_FICHA[k]||[]).forEach(it=>{
-        // Comparar SIEMPRE por el texto completo "elemento — indicador": es lo que se guarda
-        // en la matriz y lo que distingue un indicador de otro. NO agregar el indicador suelto
-        // (sin elemento), porque dos elementos distintos pueden tener indicadores con el mismo
-        // nombre corto y eso hacía que un huérfano real se viera como "sincronizado" y NO se
-        // reportara (bug detectado en la presentación a dueños de proceso).
+        // Comparar por texto completo "elemento — indicador" + RUTA DE LA FICHA. Incluir la
+        // ruta es CLAVE: el mismo indicador existe en varias escuelas (Civil, Informática…),
+        // y sin la ruta, el registro de una escuela en la matriz encontraba coincidencia con
+        // la ficha de OTRA escuela y se daba por "sincronizado" aunque en SU propia ficha el
+        // texto hubiera cambiado (bug real: corrección en Informática no se reportaba porque
+        // el texto viejo seguía en la ficha de Civil).
         const texto=(it.elemento?it.elemento+' — ':'')+it.indicador;
-        enFichas.add(norm(texto));
-        if(arch){ textosDeArchivadas.add(norm(texto)); }
+        const info=_MAPA_IND[texto] || _MAPA_IND[it.indicador];
+        const ruta = info && info.fichaRuta ? norm(info.fichaRuta) : '';
+        const clave = norm(texto)+' ¦¦ '+ruta;
+        enFichas.add(clave);
+        if(arch){ textosDeArchivadas.add(clave); }
       });
     });
 
@@ -5796,18 +5800,22 @@ async function abrirControlSync(){
       const ofiMedSync = leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
       const ofiDueSync = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
       if(!_registroVisibleOficina(ofiMedSync) && !_registroVisibleOficina(ofiDueSync)) return;
-      if(enFichas.has(norm(ind))){
+      // Clave del registro de la matriz = texto + ruta de su FICHA. La ruta de la matriz es
+      // "rutaFicha › componente"; quitamos el último segmento para obtener la ruta de la ficha
+      // y comparar SOLO contra las fichas de la MISMA escuela/proceso (no contra otras).
+      const rutaMat = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
+      const partes = String(rutaMat||'').split(' › ');
+      const rutaBase = norm(partes.slice(0,-1).join(' › '));
+      const claveMat = norm(ind)+' ¦¦ '+rutaBase;
+      if(enFichas.has(claveMat)){
         // Sincronizado. Si su ficha está ARCHIVADA, se lista solo a título informativo.
-        if(textosDeArchivadas.has(norm(ind))){
+        if(textosDeArchivadas.has(claveMat)){
           const due = ofiDueSync;
           deArchivadas.push({ ind, due });
         }
         return;
       }
       const due = ofiDueSync;
-      const rutaMat = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
-      const partes = String(rutaMat||'').split(' › ');
-      const rutaBase = norm(partes.slice(0,-1).join(' › '));
       // El elemento del indicador viejo: la parte antes de " — "
       const elemViejo = norm((String(ind).split(' — ')[0]||''));
       // TABLA UNIFICADA: todo indicador desincronizado se muestra igual —
