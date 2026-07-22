@@ -5056,8 +5056,15 @@ function detectarSubprocesoModal(){
               || gp.comp;
       if(!SIPOC_ED[comp]) SIPOC_ED[comp]={prov:'',entr:'',prod:'',recep:'',indicadores:[], _sids:[], _sidPorInd:{}};
       if(!SIPOC_ED[comp]._sidPorInd) SIPOC_ED[comp]._sidPorInd={};
-      if(gp.ind){ SIPOC_ED[comp].indicadores.push(gp.ind); SIPOC_ED[comp]._sidPorInd[gp.ind]=gp.sid; }
-      SIPOC_ED[comp]._sids.push(gp.sid);
+      // Vincular indicador y su sid EN PARALELO (misma posición en ambos arrays). Antes se
+      // guardaba _sidPorInd[texto]=sid, pero si dos indicadores tenían el MISMO texto (p.ej.
+      // el mismo indicador repetido), se machacaban entre sí y se perdían sids → al guardar
+      // se recreaban/duplicaban. Guardar por posición evita esa colisión.
+      if(gp.ind){
+        SIPOC_ED[comp].indicadores.push(gp.ind);
+        SIPOC_ED[comp]._sids.push(gp.sid||null);
+        if(gp.sid && !(gp.ind in SIPOC_ED[comp]._sidPorInd)) SIPOC_ED[comp]._sidPorInd[gp.ind]=gp.sid;
+      }
       if(gp.sid) ED_SIDS_ORIGINALES.push(gp.sid);
     });
     Object.keys(SIPOC_ED).forEach(n=>{ if(!SIPOC_ED[n].indicadores || !SIPOC_ED[n].indicadores.length) SIPOC_ED[n].indicadores=['']; });
@@ -5167,12 +5174,16 @@ async function guardarEdicion(){
     comps.forEach(n=>{
       const comp=SIPOC_ED[n];
       const sidPorInd=comp._sidPorInd||{};
+      const sidsPos=(comp._sids||[]); // sids ORIGINALES en orden (por posición)
       const inds=(comp.indicadores||[]).map(x=>(x||'').trim()).filter(Boolean);
-      inds.forEach(ind=>{
+      inds.forEach((ind,idx)=>{
         const texto=n+' — '+ind;
-        // ¿existe un sid original para este indicador exacto (por texto)?
-        let sid = sidPorInd[ind];
-        if(sid && sidsUsados.has(sid)) sid=null; // no reutilizar el mismo sid dos veces
+        // Reutilizar el sid de la MISMA POSICIÓN (así, si se EDITA el texto de un indicador,
+        // se actualiza ese registro en vez de crear uno nuevo). Si esa posición no tiene sid
+        // libre, intentar por texto; si tampoco, es nuevo → id nuevo.
+        let sid = sidsPos[idx];
+        if(sid && sidsUsados.has(sid)) sid=null;
+        if(!sid){ const s2=sidPorInd[ind]; if(s2 && !sidsUsados.has(s2)) sid=s2; }
         const clave = (sid && !sidsUsados.has(sid)) ? sid : genId22();
         subforms[SUB][clave]={ [CONFIG.SUBIND_FICHA_FIELDS.indicador.id]: texto };
         if(sid) sidsUsados.add(sid);
@@ -5732,23 +5743,28 @@ async function abrirControlSync(){
     const enFichas = new Set();
     const textosDeArchivadas = new Set();
     const fichaArchivadaPorKey = {};
+    const duenoPorKey = {};   // nivel_fichaId → dueño (escuela) de esa ficha
     for(const n of ['N0','N1','N2','N3']){
       const fs = await loadFichas(n);
-      (fs||[]).forEach(fr=>{ fichaArchivadaPorKey[n+'_'+fr.id] = _fichaArchivada(fr,n); });
+      const Ff = (n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : n==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
+      (fs||[]).forEach(fr=>{
+        fichaArchivadaPorKey[n+'_'+fr.id] = _fichaArchivada(fr,n);
+        duenoPorKey[n+'_'+fr.id] = norm(leerDueno(fr, Ff)||'');
+      });
     }
     Object.keys(_SUBIND_POR_FICHA).forEach(k=>{
       const arch = !!fichaArchivadaPorKey[k];
+      const dueno = duenoPorKey[k] || '';
       (_SUBIND_POR_FICHA[k]||[]).forEach(it=>{
-        // Comparar por texto completo "elemento — indicador" + RUTA DE LA FICHA. Incluir la
-        // ruta es CLAVE: el mismo indicador existe en varias escuelas (Civil, Informática…),
-        // y sin la ruta, el registro de una escuela en la matriz encontraba coincidencia con
-        // la ficha de OTRA escuela y se daba por "sincronizado" aunque en SU propia ficha el
-        // texto hubiera cambiado (bug real: corrección en Informática no se reportaba porque
-        // el texto viejo seguía en la ficha de Civil).
+        // Clave = texto "elemento — indicador" + RUTA + DUEÑO (escuela). El dueño es
+        // IMPRESCINDIBLE: varias escuelas tienen el MISMO proceso con la MISMA ruta de texto,
+        // así que sin el dueño el registro de una escuela en la matriz coincidía con la ficha
+        // de OTRA escuela y se daba por "sincronizado" aunque en SU propia ficha el texto
+        // hubiera cambiado (bug real: Informática cambió el texto pero Civil aún tenía el viejo).
         const texto=(it.elemento?it.elemento+' — ':'')+it.indicador;
         const info=_MAPA_IND[texto] || _MAPA_IND[it.indicador];
         const ruta = info && info.fichaRuta ? norm(info.fichaRuta) : '';
-        const clave = norm(texto)+' ¦¦ '+ruta;
+        const clave = norm(texto)+' ¦¦ '+ruta+' ¦¦ '+dueno;
         enFichas.add(clave);
         if(arch){ textosDeArchivadas.add(clave); }
       });
@@ -5800,13 +5816,14 @@ async function abrirControlSync(){
       const ofiMedSync = leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
       const ofiDueSync = MAT.oficina_resp_ind?leerCampo(m,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
       if(!_registroVisibleOficina(ofiMedSync) && !_registroVisibleOficina(ofiDueSync)) return;
-      // Clave del registro de la matriz = texto + ruta de su FICHA. La ruta de la matriz es
-      // "rutaFicha › componente"; quitamos el último segmento para obtener la ruta de la ficha
-      // y comparar SOLO contra las fichas de la MISMA escuela/proceso (no contra otras).
+      // Clave del registro de la matriz = texto + ruta de su FICHA + DUEÑO (escuela). Incluir
+      // el dueño es imprescindible: varias escuelas comparten la misma ruta de texto, así que
+      // sin él, el registro de una escuela coincidía con la ficha de OTRA. La oficina dueña del
+      // indicador (oficina_resp_ind) es el equivalente al dueño de la ficha.
       const rutaMat = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
       const partes = String(rutaMat||'').split(' › ');
       const rutaBase = norm(partes.slice(0,-1).join(' › '));
-      const claveMat = norm(ind)+' ¦¦ '+rutaBase;
+      const claveMat = norm(ind)+' ¦¦ '+rutaBase+' ¦¦ '+norm(ofiDueSync||'');
       if(enFichas.has(claveMat)){
         // Sincronizado. Si su ficha está ARCHIVADA, se lista solo a título informativo.
         if(textosDeArchivadas.has(claveMat)){
