@@ -172,6 +172,19 @@
   .modal-close{background:transparent;border:0;font-size:24px;line-height:1;color:var(--mist);cursor:pointer;padding:2px 8px;border-radius:8px;transition:.15s}
   .modal-close:hover{background:var(--paper);color:var(--ink)}
   .modal-body{padding:8px 26px 4px}
+  /* Editor de texto enriquecido (Base legal y Parte III) */
+  .rte-wrap{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+  .rte-bar{display:flex;flex-wrap:wrap;gap:2px;padding:5px 6px;background:var(--paper);border-bottom:1px solid var(--line)}
+  .rte-bar button{border:1px solid transparent;background:transparent;width:30px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;color:var(--slate);display:inline-flex;align-items:center;justify-content:center}
+  .rte-bar button:hover{background:#fff;border-color:var(--line)}
+  .rte-bar button.on{background:var(--brand-2);color:#fff}
+  .rte-bar .rte-sep{width:1px;background:var(--line);margin:2px 3px}
+  .rte-area{min-height:80px;max-height:260px;overflow-y:auto;padding:9px 11px;font-size:15px;line-height:1.5;outline:none;color:var(--ink)}
+  .rte-area:empty::before{content:attr(data-ph);color:var(--mist)}
+  .rte-area a{color:var(--brand);text-decoration:underline}
+  .rte-area ul,.rte-area ol{margin:4px 0;padding-left:22px}
+  /* Enlaces clicables en vistas de detalle */
+  .det-v a{color:var(--brand);text-decoration:underline}
   /* Ayuda contextual (ícono ? junto a la etiqueta del campo) */
   .fld-help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;margin-left:6px;border-radius:50%;background:var(--brand-2);color:#fff;font-size:11px;font-weight:700;cursor:help;position:relative;vertical-align:middle;user-select:none;flex:none}
   .fld-help .fld-tip{display:none;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:min(300px,74vw);background:#fdfaf3;color:#3a3a3a;font-size:12.5px;font-weight:400;line-height:1.5;text-align:left;padding:11px 13px;border:1px solid #e6ddc8;border-radius:10px;box-shadow:0 10px 34px rgba(60,50,20,.18);z-index:1200;white-space:normal}
@@ -742,6 +755,10 @@
       <div class="section">
         <div class="section-title"><span class="section-num">III</span>Recursos y control del desempeño</div>
         <div class="section-desc">Recursos del proceso. (Los indicadores se definen arriba, por cada componente del SIPOC.)</div>
+        <div style="font-size:12.5px;color:var(--slate);background:#f0f7ff;border:1px solid #cfe3f7;border-radius:8px;padding:8px 11px;margin-bottom:10px">
+          🔗 <strong>Enlaces automáticos:</strong> si escribes una dirección web completa (que empiece con <code>https://</code>), al ver el detalle de la ficha se mostrará como enlace clicable.
+          <br><span style="color:var(--mist)">Ejemplo: escribe <code>Reglamento en https://www.gob.pe/normas/reglamento</code> y el enlace quedará activo automáticamente.</span>
+        </div>
         <div class="grid">
           <div class="field"><label data-help="controles">Controles</label><textarea id="fi_controles"></textarea></div>
           <div class="field"><label data-help="docs_int">Documentos internos</label><textarea id="fi_docs_int"></textarea></div>
@@ -1382,6 +1399,10 @@
 
       <div style="margin-bottom:8px">
         <div class="section-title" style="margin-bottom:6px"><span class="section-num">III</span>Recursos y control del desempeño</div>
+        <div style="font-size:12.5px;color:var(--slate);background:#f0f7ff;border:1px solid #cfe3f7;border-radius:8px;padding:8px 11px;margin-bottom:10px">
+          🔗 <strong>Enlaces automáticos:</strong> si escribes una dirección web completa (que empiece con <code>https://</code>), al ver el detalle de la ficha se mostrará como enlace clicable.
+          <br><span style="color:var(--mist)">Ejemplo: escribe <code>Reglamento en https://www.gob.pe/normas/reglamento</code> y el enlace quedará activo automáticamente.</span>
+        </div>
         <div class="grid">
           <div class="field"><label data-help="controles">Controles</label><textarea id="ed_controles"></textarea></div>
           <div class="field"><label data-help="docs_int">Documentos internos</label><textarea id="ed_docs_int"></textarea></div>
@@ -1581,6 +1602,102 @@ function entrarApp(){
 }
 
 // Helpers de permisos
+// ===== Editor de texto enriquecido (negrita, cursiva, viñetas, numeración, enlaces) =====
+// Se usa en Base legal y en los campos de la Parte III. Guarda HTML (QuintaDB lo acepta como
+// texto). Al leer, se carga el HTML; al mostrar en el detalle, se renderiza. Sanitizado.
+const RTE_CAMPOS = new Set(['fi_base_legal','ed_base_legal']);
+// Sanitiza HTML: permite solo etiquetas de formato seguras y enlaces http(s).
+function _rteSanitizar(html){
+  const tmp=document.createElement('div'); tmp.innerHTML=String(html||'');
+  const permitidas=new Set(['B','STRONG','I','EM','U','UL','OL','LI','BR','P','DIV','A','SPAN']);
+  (function limpiar(nodo){
+    [...nodo.childNodes].forEach(n=>{
+      if(n.nodeType===1){
+        if(!permitidas.has(n.tagName)){ // desenvolver etiqueta no permitida
+          while(n.firstChild) nodo.insertBefore(n.firstChild,n); nodo.removeChild(n); return;
+        }
+        // limpiar atributos, salvo href seguro en <a>
+        [...n.attributes].forEach(a=>{
+          if(n.tagName==='A' && a.name==='href' && /^https?:\/\//i.test(a.value)) return;
+          n.removeAttribute(a.name);
+        });
+        if(n.tagName==='A'){ n.setAttribute('target','_blank'); n.setAttribute('rel','noopener'); }
+        limpiar(n);
+      } else if(n.nodeType!==3){ nodo.removeChild(n); }
+    });
+  })(tmp);
+  return tmp.innerHTML;
+}
+window._rteSanitizar=_rteSanitizar;
+// ¿El contenido está vacío (sin texto real)? Para no guardar "<br>" o "<div></div>".
+function _rteVacio(html){ const t=document.createElement('div'); t.innerHTML=String(html||''); return !(t.textContent||'').trim(); }
+// Genera el HTML del editor para un campo. id = id lógico (ej. 'fi_base_legal').
+function _rteEditorHTML(id, valor, placeholder){
+  const cmd=(c,a)=>`document.execCommand('${c}'${a?",false,'"+a+"'":''});_rteSync('${id}');event.preventDefault()`;
+  return `<div class="rte-wrap">
+    <div class="rte-bar">
+      <button type="button" title="Negrita" onmousedown="${cmd('bold')}"><b>B</b></button>
+      <button type="button" title="Cursiva" onmousedown="${cmd('italic')}"><i>I</i></button>
+      <button type="button" title="Subrayado" onmousedown="${cmd('underline')}" style="text-decoration:underline">U</button>
+      <span class="rte-sep"></span>
+      <button type="button" title="Viñetas" onmousedown="${cmd('insertUnorderedList')}">•≡</button>
+      <button type="button" title="Numeración" onmousedown="${cmd('insertOrderedList')}">1.</button>
+      <span class="rte-sep"></span>
+      <button type="button" title="Insertar enlace" onmousedown="_rteEnlace('${id}');event.preventDefault()">🔗</button>
+      <button type="button" title="Quitar enlace" onmousedown="${cmd('unlink')}">⛓️‍💥</button>
+    </div>
+    <div class="rte-area" contenteditable="true" id="rte_${id}" data-ph="${(placeholder||'').replace(/"/g,'&quot;')}"
+         oninput="_rteSync('${id}')" onblur="_rteSync('${id}')">${_rteSanitizar(valor||'')}</div>
+    <input type="hidden" id="${id}"></div>`;
+}
+window._rteEditorHTML=_rteEditorHTML;
+// Sincroniza el contenido del editor al input oculto (que es el que leen las funciones de guardado).
+function _rteSync(id){
+  const area=document.getElementById('rte_'+id), inp=document.getElementById(id);
+  if(area&&inp){ const html=_rteSanitizar(area.innerHTML); inp.value=_rteVacio(html)?'':html; }
+}
+window._rteSync=_rteSync;
+// Insertar enlace sobre la selección
+function _rteEnlace(id){
+  const area=document.getElementById('rte_'+id); if(area) area.focus();
+  const url=prompt('Pega la dirección del enlace (debe empezar con https://):','https://');
+  if(!url) return;
+  if(!/^https?:\/\//i.test(url)){ toast('El enlace debe empezar con http:// o https://', true); return; }
+  const sel=window.getSelection();
+  if(sel && sel.toString()){ document.execCommand('createLink',false,url); }
+  else { // sin selección: insertar el propio URL como enlace
+    document.execCommand('insertHTML',false,'<a href="'+url.replace(/"/g,'%22')+'">'+url.replace(/</g,'&lt;')+'</a>');
+  }
+  _rteSync(id);
+}
+window._rteEnlace=_rteEnlace;
+// Escapa texto y convierte HTML enriquecido guardado para mostrarlo (ya viene sanitizado).
+function _rteMostrar(val){ return _rteSanitizar(val||''); }
+window._rteMostrar=_rteMostrar;
+// Monta el editor enriquecido reemplazando cada <textarea> de RTE_CAMPOS por el editor.
+// Conserva el valor actual del textarea. Idempotente (no re-monta si ya existe el editor).
+function montarEditoresRTE(prefijo){
+  RTE_CAMPOS.forEach(id=>{
+    if(prefijo && !id.startsWith(prefijo)) return;
+    const ta=document.getElementById(id);
+    if(!ta || ta.tagName!=='TEXTAREA') return; // ya montado o no existe
+    const ph=ta.getAttribute('placeholder')||'';
+    const valor=ta.value||'';
+    const cont=document.createElement('div');
+    cont.innerHTML=_rteEditorHTML(id, valor, ph);
+    ta.replaceWith(cont.firstElementChild);
+    _rteSync(id);
+  });
+}
+window.montarEditoresRTE=montarEditoresRTE;
+// Setter que funciona tanto si el campo es textarea como si ya es editor RTE.
+function setCampoFicha(id, valor){
+  const area=document.getElementById('rte_'+id);
+  if(area){ area.innerHTML=_rteSanitizar(valor||''); _rteSync(id); return; }
+  const el=document.getElementById(id); if(el) el.value=valor||'';
+}
+window.setCampoFicha=setCampoFicha;
+
 // ===== Ayuda contextual de los campos de la ficha (ícono ? con explicación + ejemplo) =====
 // Funciona con hover (escritorio) y con tap/clic (móvil). Los textos usan ejemplos del
 // ámbito de una facultad de ingeniería. RECORDATORIO CLAVE: el SIPOC y los indicadores se
@@ -1625,7 +1742,10 @@ function pintarAyudasFicha(){
   });
 }
 window.pintarAyudasFicha=pintarAyudasFicha;
-document.addEventListener('DOMContentLoaded', pintarAyudasFicha);
+document.addEventListener('DOMContentLoaded', function(){
+  pintarAyudasFicha();
+  if(typeof montarEditoresRTE==='function') montarEditoresRTE('fi_');
+});
 // Cerrar tooltips abiertos (móvil) al tocar fuera
 document.addEventListener('click',e=>{ if(!e.target.closest||!e.target.closest('.fld-help')) document.querySelectorAll('.fld-help.open').forEach(x=>x.classList.remove('open')); });
 
@@ -4853,6 +4973,7 @@ async function editarFicha(nivel, id){
   const modalEl=document.getElementById('modalEdit');
   modalEl.classList.add('show'); document.body.style.overflow='hidden';
   if(typeof pintarAyudasFicha==='function') pintarAyudasFicha();
+  if(typeof montarEditoresRTE==='function') montarEditoresRTE('ed_');
   mostrarCargaEdit(true);
   // Lanzar EN PARALELO las cargas independientes (ficha individual, dueños, inventario).
   // Antes iban en serie; solaparlas reduce mucho el tiempo de apertura.
@@ -4887,10 +5008,13 @@ async function editarFicha(nivel, id){
   { const w3=document.getElementById('ed_w_n3'); if(w3) w3.classList.toggle('hidden', nivel!=='N3'); }
   // Lectura robusta (igual que el listado)
   const cur=(def,nombre)=>{ if(!def) return ''; const cand=[v[def.id], nombre?v[nombre]:''].find(x=> x && x!==nombre && !esBasura(x)); return cand||''; };
-  const set=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=val||''; };
+  // Montar los editores enriquecidos ANTES de cargar valores, y usar el setter unificado
+  // (que escribe en el editor RTE si existe, o en el textarea si no).
+  if(typeof montarEditoresRTE==='function') montarEditoresRTE('ed_');
+  const set=(elid,val)=>{ if(typeof setCampoFicha==='function') setCampoFicha(elid,val||''); else { const el=document.getElementById(elid); if(el) el.value=val||''; } };
   // Para los campos de sección III, quitamos los subtítulos 【...】 al cargar;
   // se regeneran solos al marcar los componentes (sincronizarSubtitulos).
-  const setIII=(elid,val)=>{ const el=document.getElementById(elid); if(el) el.value=quitarSubtitulosTexto(val||''); };
+  const setIII=(elid,val)=>{ set(elid, quitarSubtitulosTexto(val||'')); };
   set('ed_objetivo', cur(F.objetivo,'Objetivo del proceso'));
   set('ed_alcance', cur(F.alcance,'Alcance'));
   set('ed_base_legal', cur(F.base_legal,'Base legal'));
@@ -5528,16 +5652,22 @@ async function renderTablero(){
           <th style="text-align:center;padding:8px 10px;color:#c0392b;font-size:11px;text-transform:uppercase">🔴 Sin nada</th>
           <th style="text-align:center;padding:8px 10px;color:#b8860b;font-size:11px;text-transform:uppercase">🟡 Solo meta</th>
           <th style="text-align:center;padding:8px 10px;color:#1f7a3d;font-size:11px;text-transform:uppercase">🟢 Meta + seg</th>
+          <th style="text-align:left;padding:8px 10px;color:#5a4bb8;font-size:11px;text-transform:uppercase" title="Porcentaje de indicadores de la oficina que ya tienen su meta programada (aunque aún no se midan)">📋 % con meta</th>
           <th style="text-align:left;padding:8px 10px;color:var(--brand);font-size:11px;text-transform:uppercase">% Avance</th>
         </tr></thead><tbody>`;
     oficinasOrd.forEach((o,rk)=>{
       const d=porOficina[o];
       const pct=pctAvance(d);
       const colorPct = pct>=80?'#1f7a3d': pct>=50?'#b8860b':'#c0392b'; // semáforo unificado: verde ≥80, ámbar 50-79, rojo <50
+      // % con meta programada: indicadores que ya tienen meta (solo meta + meta con seguimiento)
+      const conMeta = (d.soloMeta||0)+(d.metaYseg||0);
+      const pctMeta = d.total ? Math.round(conMeta/d.total*100) : 0;
+      const colorMeta = pctMeta>=80?'#1f7a3d': pctMeta>=50?'#b8860b':'#c0392b';
       // Tooltip: lectura justa del promedio (sobre cuántos indicadores se calcula el %)
       const tip = d.conSeg
         ? `Promedio de ${d.conSeg} de ${d.total} indicador(es) con seguimiento · ${d.cien} al 100% · ${d.enCurso} en curso · ${d.sinAvance} sin iniciar avance. Los ${d.total-d.conSeg} sin seguimiento cuentan como 0%.`
         : `Ninguno de los ${d.total} indicador(es) tiene seguimiento aún, por eso el avance es 0%.`;
+      const tipMeta = `${conMeta} de ${d.total} indicador(es) ya tienen su meta programada.`;
       html+=`<tr class="epo-fila" data-oficina="${String(o).toLowerCase().replace(/"/g,'')}" style="border-top:1px solid var(--line)">
         <td style="padding:9px 6px;text-align:center;font-weight:700;color:var(--mist)">${rk+1}</td>
         <td style="padding:9px 10px;color:var(--slate);font-weight:600">${String(o).replace(/</g,'&lt;')}</td>
@@ -5545,6 +5675,12 @@ async function renderTablero(){
         <td style="padding:9px 10px;text-align:center">${celdaN(d.sinNada,'#c0392b')}</td>
         <td style="padding:9px 10px;text-align:center">${celdaN(d.soloMeta,'#b8860b')}</td>
         <td style="padding:9px 10px;text-align:center">${celdaN(d.metaYseg,'#1f7a3d')}</td>
+        <td style="padding:9px 10px;min-width:120px;cursor:help" title="${tipMeta.replace(/"/g,'&quot;')}">
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:8px;background:var(--paper);border:1px solid var(--line);border-radius:5px;overflow:hidden"><div style="width:${pctMeta}%;height:100%;background:${colorMeta}"></div></div>
+            <span style="font-weight:800;color:${colorMeta};min-width:38px;text-align:right">${pctMeta}%</span>
+          </div>
+        </td>
         <td style="padding:9px 10px;min-width:130px;cursor:help" title="${tip.replace(/"/g,'&quot;')}">
           <div style="display:flex;align-items:center;gap:8px">
             <div style="flex:1;height:8px;background:var(--paper);border:1px solid var(--line);border-radius:5px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${colorPct}"></div></div>
@@ -5555,6 +5691,9 @@ async function renderTablero(){
     });
     const pctTot = pctAvance(tot);
     const colorTot = pctTot>=80?'#1f7a3d': pctTot>=50?'#b8860b':'#c0392b';
+    const conMetaTot = (tot.soloMeta||0)+(tot.metaYseg||0);
+    const pctMetaTot = tot.total ? Math.round(conMetaTot/tot.total*100) : 0;
+    const colorMetaTot = pctMetaTot>=80?'#1f7a3d': pctMetaTot>=50?'#b8860b':'#c0392b';
     html+=`<tr style="border-top:2px solid var(--brand-2);background:var(--paper)">
         <td style="padding:10px"></td>
         <td style="padding:10px;font-weight:800;color:var(--brand)">TOTAL</td>
@@ -5562,6 +5701,7 @@ async function renderTablero(){
         <td style="padding:10px;text-align:center;font-weight:800;color:#c0392b">${tot.sinNada}</td>
         <td style="padding:10px;text-align:center;font-weight:800;color:#b8860b">${tot.soloMeta}</td>
         <td style="padding:10px;text-align:center;font-weight:800;color:#1f7a3d">${tot.metaYseg}</td>
+        <td style="padding:10px;font-weight:800;color:${colorMetaTot};cursor:help" title="${conMetaTot} de ${tot.total} indicador(es) ya tienen su meta programada.">${pctMetaTot}%</td>
         <td style="padding:10px;font-weight:800;color:${colorTot};cursor:help" title="${(tot.conSeg?`Promedio de ${tot.conSeg} de ${tot.total} indicador(es) con seguimiento · ${tot.cien} al 100% · ${tot.enCurso} en curso · ${tot.sinAvance} sin iniciar avance. Los ${tot.total-tot.conSeg} sin seguimiento cuentan como 0%.`:`Ninguno de los ${tot.total} indicador(es) tiene seguimiento aún.`).replace(/"/g,'&quot;')}">${pctTot}%</td>
       </tr>`;
     html+=`</tbody></table></div></div>`;
@@ -6921,8 +7061,9 @@ function _periodosFactibles(){
   // Trimestres: del actual hasta Q4 del próximo año (se ubican al inicio de su primer mes, +2 para ir tras el mes)
   for(let q=qActual;q<=4;q++) lista.push({orden:anio*10000+((q-1)*3+1)*100+2,     txt:'Q'+q+' '+anio});
   for(let q=1;q<=4;q++)       lista.push({orden:(anio+1)*10000+((q-1)*3+1)*100+2, txt:'Q'+q+' '+(anio+1)});
-  // Semestres: del actual + ambos del próximo año (al inicio de su primer mes, +3 para ir tras mes y trimestre)
-  for(let s=semActual;s<=2;s++) lista.push({orden:anio*10000+((s-1)*6+1)*100+3,     txt:anio+'-'+(s===1?'I':'II')});
+  // Semestres: SIEMPRE ambos del año actual (I y II), aunque el I ya haya pasado, para poder
+  // registrar/programar sobre el semestre en curso o el anterior; y ambos del próximo año.
+  for(let s=1;s<=2;s++)         lista.push({orden:anio*10000+((s-1)*6+1)*100+3,     txt:anio+'-'+(s===1?'I':'II')});
   for(let s=1;s<=2;s++)         lista.push({orden:(anio+1)*10000+((s-1)*6+1)*100+3, txt:(anio+1)+'-'+(s===1?'I':'II')});
   // Años: el actual y el próximo (se ubican al inicio del año, orden 0 para que encabecen su año)
   lista.push({orden:anio*10000+0,     txt:'Año '+anio});
@@ -7241,13 +7382,24 @@ window.actualizarPreviewPlantilla=actualizarPreviewPlantilla;
 window.guardarPlantillas=guardarPlantillas;
 
 // === Ojito → modal con el detalle completo (matriz o ficha) ===
+// Convierte URLs sueltas (http/https) en enlaces clicables. Para campos de texto plano.
+function _autolink(texto){
+  const esc=String(texto||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return esc.replace(/(https?:\/\/[^\s<]+[^\s<.,;:)\]}"'])/g,
+    '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g,'<br>');
+}
+window._autolink=_autolink;
 function _detRow(etq, val){
-  // val puede ser texto plano (se escapa) o {__html:'...'} para contenido ya formateado
+  // val puede ser:
+  //  - {__html:'...'}  → contenido ya formateado (listas de metas, etc.)
+  //  - {__rte:'...'}   → HTML del editor enriquecido (Base legal): se sanitiza y se muestra
+  //  - texto plano     → se escapa y se auto-enlazan las URLs (Parte III y demás)
   if(val===undefined||val===null||val==='') return '';
-  const contenido = (val && typeof val==='object' && '__html' in val)
-    ? val.__html
-    : String(val).replace(/</g,'&lt;');
-  if(contenido==='') return '';
+  let contenido;
+  if(val && typeof val==='object' && '__html' in val) contenido=val.__html;
+  else if(val && typeof val==='object' && '__rte' in val) contenido=_rteSanitizar(val.__rte);
+  else contenido=_autolink(val);
+  if(contenido==='' || contenido==='<br>') return '';
   return `<div class="det-row"><div class="det-k">${etq}</div><div class="det-v">${contenido}</div></div>`;
 }
 // Detalle de las metas programadas de un indicador (periodo · meta · referencia)
@@ -7345,7 +7497,7 @@ async function verDetalleFicha(nivel, fichaId){
     ['Dueño del proceso', leerDueno(r,F)],
     ['Objetivo del proceso', objFicha(r,nivel)],
     ['Alcance', cur(F.alcance,'Alcance')],
-    ['Base legal', cur(F.base_legal,'Base legal')],
+    ['Base legal', {__rte: cur(F.base_legal,'Base legal')}],
     ['Proveedores', cur(F.proveedores,'Proveedores')],
     ['Entrada', cur(F.entrada,'Entrada')],
     ['Producto / salida', cur(F.producto,'Producto')],
