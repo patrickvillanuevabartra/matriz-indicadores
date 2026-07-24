@@ -2575,11 +2575,14 @@ function sincronizarSubtitulos(prefijo, componentes){
     } else {
       sinTitulo=texto.trim();
     }
-    // Reconstruir: un subtítulo por cada componente marcado, conservando su contenido previo
+    // Reconstruir: un subtítulo por cada componente marcado, conservando su contenido previo.
     if(!componentes.length){ return; } // sin componentes, no tocar
     let nuevo='';
-    componentes.forEach(n=>{
-      const contenido=bloques[n]!==undefined?bloques[n]:'';
+    componentes.forEach((n,idx)=>{
+      let contenido=bloques[n]!==undefined?bloques[n]:'';
+      // Si hay texto SIN subtítulo (ficha antigua en formato plano), adjuntarlo al primer
+      // componente para no perderlo.
+      if(idx===0 && sinTitulo){ contenido = sinTitulo + (contenido?'\n'+contenido:''); }
       nuevo += '【 '+n+' 】\n'+(contenido?contenido+'\n':'\n')+'\n';
     });
     el.value=nuevo.replace(/\n+$/,'\n');
@@ -5012,9 +5015,11 @@ async function editarFicha(nivel, id){
   // (que escribe en el editor RTE si existe, o en el textarea si no).
   if(typeof montarEditoresRTE==='function') montarEditoresRTE('ed_');
   const set=(elid,val)=>{ if(typeof setCampoFicha==='function') setCampoFicha(elid,val||''); else { const el=document.getElementById(elid); if(el) el.value=val||''; } };
-  // Para los campos de sección III, quitamos los subtítulos 【...】 al cargar;
-  // se regeneran solos al marcar los componentes (sincronizarSubtitulos).
-  const setIII=(elid,val)=>{ set(elid, quitarSubtitulosTexto(val||'')); };
+  // Para los campos de sección III: cargar el texto TAL COMO está guardado (con sus
+  // subtítulos 【Componente】 y su contenido). NO quitar los subtítulos aquí: si se quitan,
+  // la posterior llamada a sincronizarSubtitulos() no puede reubicar el contenido bajo su
+  // componente y el texto del usuario se PIERDE al reabrir la ficha (bug crítico).
+  const setIII=(elid,val)=>{ set(elid, val||''); };
   set('ed_objetivo', cur(F.objetivo,'Objetivo del proceso'));
   set('ed_alcance', cur(F.alcance,'Alcance'));
   set('ed_base_legal', cur(F.base_legal,'Base legal'));
