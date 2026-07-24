@@ -888,7 +888,7 @@
       <button class="btn btn-primary" id="btnAgregarInd" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
       <button class="btn" id="btnControlSync" onclick="abrirControlSync()" style="margin-left:8px" title="Detecta indicadores de la matriz desincronizados con las fichas">🔄 Control de sincronización</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
-        <input id="matBuscar" placeholder="Buscar por indicador, proceso u oficina…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderMatriz()">
+        <input id="matBuscar" placeholder="Buscar por indicador, proceso u oficina…" style="border:0;background:transparent;flex:1;padding:0" oninput="filtrarMatrizEnVivo()">
       </div>
       <button class="btn btn-ghost" title="Configurar las plantillas de notificación" onclick="abrirEditorPlantillas()">⚙️ Plantillas</button>
       <button class="btn" onclick="exportarMatrizExcel()" style="white-space:nowrap">⬇️ Descargar Excel</button>
@@ -6101,6 +6101,44 @@ async function eliminarHuerfanoSync(id, btn){
 }
 window.eliminarHuerfanoSync=eliminarHuerfanoSync;
 
+// Filtro EN VIVO del buscador de la Matriz (no recarga datos, no pierde el foco del cursor).
+// Muestra AMBOS: si el nombre de la oficina coincide → todas sus filas; y en cualquier grupo,
+// las filas individuales cuyo texto (data-buscar) coincida. Oculta cabeceras sin filas visibles.
+function filtrarMatrizEnVivo(){
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const inp=document.getElementById('matBuscar');
+  const q=norm(inp?inp.value:'');
+  const tbody=document.getElementById('tablaMatriz'); if(!tbody) return;
+  const filas=[...tbody.children]; // recorre en orden: grupos, subcabeceras y filas
+  let grupoActual=null, grupoCoincide=false, visEnGrupo=0;
+  let subcabActual=null, visEnSub=0;
+  const cerrarSub=()=>{ if(subcabActual) subcabActual.style.display = visEnSub>0 ? '' : 'none'; };
+  const cerrarGrupo=()=>{ cerrarSub(); if(grupoActual) grupoActual.style.display = visEnGrupo>0 ? '' : 'none'; };
+  filas.forEach(tr=>{
+    if(tr.classList.contains('matriz-grupo')){
+      cerrarGrupo();
+      grupoActual=tr; visEnGrupo=0; subcabActual=null; visEnSub=0;
+      const nombre=norm((tr.querySelector('.grupo-nombre')||{}).textContent||'');
+      grupoCoincide = !!q && nombre.includes(q);
+      return;
+    }
+    if(tr.classList.contains('matriz-subcab')){
+      cerrarSub();
+      subcabActual=tr; visEnSub=0;
+      return;
+    }
+    if(tr.classList.contains('matriz-fila')){
+      const txt=tr.getAttribute('data-buscar')||'';
+      const match = !q || grupoCoincide || txt.includes(q);
+      tr.style.display = match ? '' : 'none';
+      if(match){ visEnGrupo++; visEnSub++; }
+      return;
+    }
+  });
+  cerrarGrupo();
+}
+window.filtrarMatrizEnVivo=filtrarMatrizEnVivo;
+
 async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
   try{
@@ -6165,7 +6203,7 @@ async function renderMatriz(){
     nombresOrd.forEach(ofi=>{
       const items=grupos[ofi];
       // Cabecera nivel 1: OFICINA (ancla principal)
-      html+=`<tr style="background:var(--brand);"><td colspan="10" style="padding:11px 14px;font-weight:700;color:#fff;font-size:13px">▸ ${ofi.replace(/</g,'&lt;')} <span style="color:rgba(255,255,255,.8);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
+      html+=`<tr class="matriz-grupo" style="background:var(--brand);"><td colspan="10" style="padding:11px 14px;font-weight:700;color:#fff;font-size:13px">▸ <span class="grupo-nombre">${ofi.replace(/</g,'&lt;')}</span> <span style="color:rgba(255,255,255,.8);font-weight:500">· ${items.length} indicador(es)</span></td></tr>`;
       // Subagrupar por FICHA real dentro de la oficina
       const porFicha={};
       items.forEach(r=>{ const k=fichaKeyDe(r); (porFicha[k]=porFicha[k]||[]).push(r); });
@@ -6199,7 +6237,7 @@ async function renderMatriz(){
         }
         // Subcabecera nivel 2: badge de nivel de ficha (N1/N2) + ruta del proceso — una vez por ficha
         const badgeNivelFicha = nivelFicha?`<span class="badge-n ${nivelFicha.toLowerCase()}" style="margin-right:8px">${nivelFicha}</span>`:'';
-        html+=`<tr style="background:var(--card)"><td colspan="10" style="padding:8px 14px 8px 30px;border-top:1px dashed var(--line)">
+        html+=`<tr class="matriz-subcab" style="background:var(--card)"><td colspan="10" style="padding:8px 14px 8px 30px;border-top:1px dashed var(--line)">
           ${badgeNivelFicha}<span class="mono" style="font-size:13px;color:var(--slate)">${fichaRutaTxt.replace(/</g,'&lt;')}</span>
           <span style="color:var(--mist);font-size:12px;margin-left:6px">· ${inds.length} indicador(es)</span>
         </td></tr>`;
@@ -6225,7 +6263,8 @@ async function renderMatriz(){
               : (r._progMetas>0
                   ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
-        return `<tr>
+        const _dataBuscar = [indSolo, ind, proposito, formula, ofiMed, ofiDueno, rutaFull, elemento, resp].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        return `<tr class="matriz-fila" data-buscar="${_dataBuscar.replace(/"/g,'&quot;')}">
           <td style="vertical-align:top">${nivelAna?`<span style="display:inline-block;font-size:9px;font-weight:700;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:10px;padding:1px 7px;margin-bottom:3px">${nivelAna.replace(/</g,'&lt;')}</span><br>`:''}${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
           <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
           <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
@@ -6251,6 +6290,7 @@ async function renderMatriz(){
     });
     tb.innerHTML=html;
     setConn(true);
+    if(typeof filtrarMatrizEnVivo==='function') filtrarMatrizEnVivo();
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="10"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 window.renderMatriz=renderMatriz;
