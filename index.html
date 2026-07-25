@@ -788,8 +788,11 @@
       <p style="margin-top:2px;font-size:12px;color:var(--mist)">Los indicadores resaltados en <span style="background:#fff8e6;border:1px solid #f0c987;border-radius:4px;padding:0 5px;color:#b06a00;font-weight:600">ámbar</span> aún no se han desarrollado en la Matriz de indicadores.</p>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
-      <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
-        <input id="listBuscar" placeholder="Buscar por proceso, objetivo o dueño (oficina)…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderListado()">
+      <select id="listOficinaSel" onchange="filtrarFichasPorOficina()" style="flex:1;min-width:220px;padding:9px 11px;font-size:13px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--slate);font-family:inherit;cursor:pointer">
+        <option value="">📋 Todas las oficinas</option>
+      </select>
+      <div class="conn" style="margin-bottom:0;min-width:180px;flex:0 1 240px">
+        <input id="listBuscar" placeholder="🔍 Buscar por proceso u objetivo…" title="Busca dentro del proceso y el objetivo de las fichas. Se combina con la oficina elegida." style="border:0;background:transparent;flex:1;padding:0" oninput="filtrarFichasPorOficina()">
       </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer;white-space:nowrap">
         <input type="checkbox" id="listVerArchivadas" onchange="renderListado()" style="width:15px;height:15px;cursor:pointer"> Ver archivadas
@@ -4768,6 +4771,54 @@ function _eiActivarArrastre(){
   document.addEventListener('mouseup',up); document.addEventListener('touchend',up);
 }
 
+// Filtrado COMBINADO de Fichas registradas: el desplegable filtra por oficina (dueño, con
+// coincidencia EXACTA del grupo) y el texto filtra dentro de lo ya filtrado. Opera sobre las
+// filas ya renderizadas: no recarga datos ni hace perder el foco del cursor.
+function filtrarFichasPorOficina(){
+  const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const ofiSel = norm((document.getElementById('listOficinaSel')||{}).value||'');
+  const q = norm((document.getElementById('listBuscar')||{}).value||'');
+  const tb = document.getElementById('tablaListado');
+  if(!tb) return;
+  tb.querySelectorAll('tr.fichas-grupo').forEach(gr=>{
+    const ofiNombre = norm(((gr.querySelector('.grupo-nombre')||{}).textContent)||'');
+    const grupoPasa = !ofiSel || ofiNombre===ofiSel;
+    let vis=0, n=gr.nextElementSibling;
+    while(n && !n.classList.contains('fichas-grupo')){
+      if(n.classList.contains('fichas-fila')){
+        const txt = norm(n.getAttribute('data-buscar')||'');
+        const match = grupoPasa && (!q || txt.includes(q));
+        n.style.display = match ? '' : 'none';
+        if(match) vis++;
+      }
+      n=n.nextElementSibling;
+    }
+    gr.style.display = vis>0 ? '' : 'none';
+  });
+}
+window.filtrarFichasPorOficina = filtrarFichasPorOficina;
+
+// Puebla el desplegable de oficinas de Fichas registradas, con el conteo de fichas de cada una.
+// Conserva la selección previa si esa oficina sigue existiendo.
+function poblarDesplegableOficinasFichas(){
+  const sel = document.getElementById('listOficinaSel');
+  const tb = document.getElementById('tablaListado');
+  if(!sel || !tb) return;
+  const valorPrevio = sel.value;
+  const oficinas = [];
+  tb.querySelectorAll('tr.fichas-grupo').forEach(gr=>{
+    const nombre = (((gr.querySelector('.grupo-nombre')||{}).textContent)||'').trim();
+    if(!nombre) return;
+    let cnt=0, n=gr.nextElementSibling;
+    while(n && !n.classList.contains('fichas-grupo')){ if(n.classList.contains('fichas-fila')) cnt++; n=n.nextElementSibling; }
+    oficinas.push({nombre, cnt});
+  });
+  sel.innerHTML = '<option value="">📋 Todas las oficinas ('+oficinas.reduce((a,o)=>a+o.cnt,0)+' fichas)</option>'
+    + oficinas.map(o=>`<option value="${o.nombre.replace(/"/g,'&quot;')}">${o.nombre.replace(/</g,'&lt;')} (${o.cnt})</option>`).join('');
+  if(valorPrevio && oficinas.some(o=>o.nombre===valorPrevio)) sel.value=valorPrevio;
+}
+window.poblarDesplegableOficinasFichas = poblarDesplegableOficinasFichas;
+
 async function renderListado(){
   _GRP_DE_FICHA = {};
   const tb=document.getElementById('tablaListado');
@@ -4779,7 +4830,9 @@ async function renderListado(){
     // Cargar las fichas de todos los niveles de a 2 (no todas juntas: evita saturar el proxy).
     const listas = await _mapLimitado(niveles, 2, n=>loadFichas(n).then(fichas=>({n,fichas})).catch(()=>({n,fichas:[]})));
     listas.forEach(({n,fichas})=>fichas.forEach(r=>todas.push({r,nivel:n})));
-    const filtro=(document.getElementById('listBuscar').value||'').toLowerCase();
+    // NOTA: el filtrado por oficina (desplegable) y por texto se hace EN VIVO sobre las filas
+    // ya pintadas (filtrarFichasPorOficina), no aquí. Así el render construye siempre todas las
+    // filas y escribir en el buscador no recarga datos ni hace perder el foco del cursor.
     const filas = todas.filter(o=>{
       const {r,nivel}=o;
       // Fichas ARCHIVADAS: la vista normal muestra solo activas; con "Ver archivadas"
@@ -4789,12 +4842,6 @@ async function renderListado(){
       // Filtro por OFICINA: el rol "Oficina" solo ve las fichas cuyo Dueño del proceso
       // coincide con su oficina. Admin, Gestor y Usuario libre ven todo.
       if(!_registroVisibleOficina(leerDueno(r, EDF(nivel)))) return false;
-      // Buscar en ruta + objetivo + DUEÑO del proceso (para que "escuela" encuentre fichas
-      // cuyo dueño es una escuela, aunque la palabra no esté en la ruta ni el objetivo).
-      if(filtro){
-        const blob = (rutaFicha(r,nivel)+' '+objFicha(r,nivel)+' '+leerDueno(r, EDF(nivel))).toLowerCase();
-        if(!blob.includes(filtro)) return false;
-      }
       if(typeof pasaFiltrosList==='function' && !pasaFiltrosList(o)) return false;
       return true;
     });
@@ -4814,7 +4861,7 @@ async function renderListado(){
     nombresOrdenados.forEach((dueno, gi)=>{
       const items=grupos[dueno];
       const cabId='grp_'+gi;
-      html+=`<tr style="background:var(--paper)"><td colspan="5" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ ${dueno.replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)<span id="${cabId}"></span></span></td></tr>`;
+      html+=`<tr class="fichas-grupo" style="background:var(--paper)"><td colspan="5" style="padding:10px 14px;font-weight:700;color:var(--brand);font-size:13px;border-top:2px solid var(--brand-2)">▸ <span class="grupo-nombre">${dueno.replace(/</g,'&lt;')}</span> <span style="color:var(--mist);font-weight:500">· ${items.length} ficha(s)<span id="${cabId}"></span></span></td></tr>`;
       items.forEach(({r,nivel})=>{ _GRP_DE_FICHA[nivel+'_'+r.id]=cabId; });
       html+=items.map(({r,nivel})=>{
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
@@ -4822,7 +4869,8 @@ async function renderListado(){
         const archTag = arch.length ? `<div style="margin-top:4px"><span title="Proceso(s) archivado(s): ${arch.join(', ').replace(/"/g,'&quot;')}" style="display:inline-block;font-size:10px;font-weight:600;color:#b06a00;background:#fff3e0;border:1px solid #f0c987;border-radius:8px;padding:1px 7px">⚠️ Proceso archivado</span></div>` : '';
         const desagId='desag_'+nivel+'_'+r.id;
         _paraDesagregado.push({celdaId:desagId, r, nivel, nInd});
-        return `<tr>
+        const _dbFicha = [ruta, obj, dueno].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+        return `<tr class="fichas-fila" data-buscar="${_dbFicha.replace(/"/g,'&quot;')}">
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
           <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>60?ruta.slice(0,60)+'…':ruta}${archTag}</td>
           <td style="max-width:200px;vertical-align:top;font-size:12px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>80?obj.slice(0,80)+'…':obj):'<span class="hint">—</span>'}</td>
@@ -4838,6 +4886,11 @@ async function renderListado(){
     });
     tb.innerHTML=html;
     setConn(true);
+    // Tras reconstruir: repoblar el desplegable de oficinas (con conteo de fichas) y reaplicar
+    // los filtros si el usuario tenía una oficina elegida o texto escrito.
+    if(typeof poblarDesplegableOficinasFichas==='function') poblarDesplegableOficinasFichas();
+    const _selF=document.getElementById('listOficinaSel'), _busF=document.getElementById('listBuscar');
+    if(typeof filtrarFichasPorOficina==='function' && ((_selF&&_selF.value)||(_busF&&_busF.value))) filtrarFichasPorOficina();
     cargarDesagregadoIndicadores(_paraDesagregado);
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="5"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
