@@ -887,8 +887,11 @@
     <div style="display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnAgregarInd" onclick="abrirAgregarIndicador()">+ Agregar indicador desde ficha</button>
       <button class="btn" id="btnControlSync" onclick="abrirControlSync()" style="margin-left:8px" title="Detecta indicadores de la matriz desincronizados con las fichas">🔄 Control de sincronización</button>
-      <div class="conn" style="margin-bottom:0;flex:1;min-width:220px">
-        <input id="matBuscar" placeholder="Buscar por indicador, proceso u oficina…" style="border:0;background:transparent;flex:1;padding:0" oninput="filtrarMatrizEnVivo()">
+      <select id="indOficinaSel" onchange="filtrarPorOficina()" style="flex:1;min-width:220px;padding:9px 11px;font-size:13px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--slate);font-family:inherit;cursor:pointer">
+        <option value="">📋 Todas las oficinas</option>
+      </select>
+      <div class="conn" style="margin-bottom:0;min-width:180px;flex:0 1 240px">
+        <input id="indBuscar" placeholder="🔍 Buscar en indicador, proceso u origen…" title="Busca dentro del indicador, su propósito, fórmula y proceso. Se combina con la oficina elegida." style="border:0;background:transparent;flex:1;padding:0" oninput="filtrarPorOficina()">
       </div>
       <button class="btn btn-ghost" title="Configurar las plantillas de notificación" onclick="abrirEditorPlantillas()">⚙️ Plantillas</button>
       <button class="btn" onclick="exportarMatrizExcel()" style="white-space:nowrap">⬇️ Descargar Excel</button>
@@ -6101,43 +6104,61 @@ async function eliminarHuerfanoSync(id, btn){
 }
 window.eliminarHuerfanoSync=eliminarHuerfanoSync;
 
-// Filtro EN VIVO del buscador de la Matriz (no recarga datos, no pierde el foco del cursor).
-// Muestra AMBOS: si el nombre de la oficina coincide → todas sus filas; y en cualquier grupo,
-// las filas individuales cuyo texto (data-buscar) coincida. Oculta cabeceras sin filas visibles.
-function filtrarMatrizEnVivo(){
+// Filtrado COMBINADO de la Matriz: el desplegable filtra por oficina (coincidencia EXACTA del
+// grupo) y el campo de texto filtra dentro de lo ya filtrado. Opera sobre las filas ya
+// renderizadas: no recarga datos ni hace perder el foco del cursor.
+// Estructura: <tr class="matriz-grupo"> (oficina, con <span class="grupo-nombre">)
+//             <tr class="matriz-subcab"> (proceso/ruta, cabecera intermedia)
+//             <tr class="matriz-fila" data-buscar="…"> (indicador)
+function filtrarPorOficina(){
   const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-  const inp=document.getElementById('matBuscar');
-  const q=norm(inp?inp.value:'');
-  const tbody=document.getElementById('tablaMatriz'); if(!tbody) return;
-  const filas=[...tbody.children]; // recorre en orden: grupos, subcabeceras y filas
-  let grupoActual=null, grupoCoincide=false, visEnGrupo=0;
-  let subcabActual=null, visEnSub=0;
-  const cerrarSub=()=>{ if(subcabActual) subcabActual.style.display = visEnSub>0 ? '' : 'none'; };
-  const cerrarGrupo=()=>{ cerrarSub(); if(grupoActual) grupoActual.style.display = visEnGrupo>0 ? '' : 'none'; };
-  filas.forEach(tr=>{
-    if(tr.classList.contains('matriz-grupo')){
-      cerrarGrupo();
-      grupoActual=tr; visEnGrupo=0; subcabActual=null; visEnSub=0;
-      const nombre=norm((tr.querySelector('.grupo-nombre')||{}).textContent||'');
-      grupoCoincide = !!q && nombre.includes(q);
-      return;
+  const ofiSel = norm((document.getElementById('indOficinaSel')||{}).value||'');
+  const q = norm((document.getElementById('indBuscar')||{}).value||'');
+  const tb = document.getElementById('tablaMatriz');
+  if(!tb) return;
+  tb.querySelectorAll('tr.matriz-grupo').forEach(gr=>{
+    const ofiNombre = norm(((gr.querySelector('.grupo-nombre')||{}).textContent)||'');
+    const grupoPasa = !ofiSel || ofiNombre===ofiSel;
+    let vis=0, subActual=null, visSub=0;
+    const cerrarSub=()=>{ if(subActual) subActual.style.display = visSub>0 ? '' : 'none'; };
+    let n=gr.nextElementSibling;
+    while(n && !n.classList.contains('matriz-grupo')){
+      if(n.classList.contains('matriz-subcab')){
+        cerrarSub(); subActual=n; visSub=0;
+      } else if(n.classList.contains('matriz-fila')){
+        const txt = norm(n.getAttribute('data-buscar')||'');
+        const match = grupoPasa && (!q || txt.includes(q));
+        n.style.display = match ? '' : 'none';
+        if(match){ vis++; visSub++; }
+      }
+      n=n.nextElementSibling;
     }
-    if(tr.classList.contains('matriz-subcab')){
-      cerrarSub();
-      subcabActual=tr; visEnSub=0;
-      return;
-    }
-    if(tr.classList.contains('matriz-fila')){
-      const txt=tr.getAttribute('data-buscar')||'';
-      const match = !q || grupoCoincide || txt.includes(q);
-      tr.style.display = match ? '' : 'none';
-      if(match){ visEnGrupo++; visEnSub++; }
-      return;
-    }
+    cerrarSub();
+    gr.style.display = vis>0 ? '' : 'none';
   });
-  cerrarGrupo();
 }
-window.filtrarMatrizEnVivo=filtrarMatrizEnVivo;
+window.filtrarPorOficina = filtrarPorOficina;
+
+// Puebla el desplegable de oficinas leyendo los grupos ya pintados, con el conteo de cada una.
+// Conserva la selección previa si esa oficina sigue existiendo.
+function poblarDesplegableOficinas(){
+  const sel = document.getElementById('indOficinaSel');
+  const tb = document.getElementById('tablaMatriz');
+  if(!sel || !tb) return;
+  const valorPrevio = sel.value;
+  const oficinas = [];
+  tb.querySelectorAll('tr.matriz-grupo').forEach(gr=>{
+    const nombre = (((gr.querySelector('.grupo-nombre')||{}).textContent)||'').trim();
+    if(!nombre) return;
+    let cnt=0, n=gr.nextElementSibling;
+    while(n && !n.classList.contains('matriz-grupo')){ if(n.classList.contains('matriz-fila')) cnt++; n=n.nextElementSibling; }
+    oficinas.push({nombre, cnt});
+  });
+  sel.innerHTML = '<option value="">📋 Todas las oficinas ('+oficinas.reduce((a,o)=>a+o.cnt,0)+')</option>'
+    + oficinas.map(o=>`<option value="${o.nombre.replace(/"/g,'&quot;')}">${o.nombre.replace(/</g,'&lt;')} (${o.cnt})</option>`).join('');
+  if(valorPrevio && oficinas.some(o=>o.nombre===valorPrevio)) sel.value=valorPrevio;
+}
+window.poblarDesplegableOficinas = poblarDesplegableOficinas;
 
 async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
@@ -6151,7 +6172,9 @@ async function renderMatriz(){
       return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
     });
     pintarResumenMatriz(recsVisibles);
-    const filtro=(document.getElementById('matBuscar').value||'').toLowerCase();
+    // NOTA: el filtrado por oficina (desplegable) y por texto se hace EN VIVO sobre las filas
+    // ya pintadas (filtrarPorOficina), no aquí. Así el render construye siempre todas las filas
+    // y escribir en el buscador no recarga datos ni hace perder el foco del cursor.
     const filas = recs.filter(r=>{
       const ind=leerCampo(r, MAT.indicador_txt.id, 'Indicador');
       if(!ind) return false;
@@ -6161,16 +6184,6 @@ async function renderMatriz(){
         const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
         const ofiDue=MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
         if(!_registroVisibleOficina(ofiMed) && !_registroVisibleOficina(ofiDue)) return false;
-      }
-      // Buscar en varios campos, no solo el nombre del indicador: también la ruta del proceso
-      // y las oficinas (medición y dueña). Así "escuela" encuentra registros cuya escuela está
-      // en la ruta o en la oficina, aunque el nombre del indicador no la contenga.
-      if(filtro){
-        const ruta = leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)') || '';
-        const ofiMed2 = leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición') || '';
-        const ofiDue2 = MAT.oficina_resp_ind ? (leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador') || '') : '';
-        const blob = (ind+' '+ruta+' '+ofiMed2+' '+ofiDue2).toLowerCase();
-        if(!blob.includes(filtro)) return false;
       }
       if(typeof pasaFiltrosMat==='function' && !pasaFiltrosMat(r)) return false;
       return true;
@@ -6290,7 +6303,11 @@ async function renderMatriz(){
     });
     tb.innerHTML=html;
     setConn(true);
-    if(typeof filtrarMatrizEnVivo==='function') filtrarMatrizEnVivo();
+    // Tras reconstruir la tabla: repoblar el desplegable de oficinas (con sus conteos) y
+    // reaplicar los filtros si el usuario tenía una oficina elegida o texto escrito.
+    if(typeof poblarDesplegableOficinas==='function') poblarDesplegableOficinas();
+    const _sel=document.getElementById('indOficinaSel'), _bus=document.getElementById('indBuscar');
+    if(typeof filtrarPorOficina==='function' && ((_sel&&_sel.value)||(_bus&&_bus.value))) filtrarPorOficina();
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="10"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 window.renderMatriz=renderMatriz;
