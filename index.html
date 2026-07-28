@@ -785,7 +785,11 @@
       <h1>Fichas registradas</h1>
       <p>Fichas de proceso guardadas en los tres niveles. Edita o elimina según necesites.</p>
       <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="list_total_ficha">0</span> ficha(s) · <span id="list_total_ind">0</span> indicador(es) <span id="list_falta_matriz" style="font-weight:600"></span></p>
-      <p style="margin-top:2px;font-size:12px;color:var(--mist)">Los indicadores resaltados en <span style="background:#fff8e6;border:1px solid #f0c987;border-radius:4px;padding:0 5px;color:#b06a00;font-weight:600">ámbar</span> aún no se han desarrollado en la Matriz de indicadores.</p>
+      <p style="margin-top:2px;font-size:12px;color:var(--mist)">
+        <span style="background:#fff8e6;border:1px solid #f0c987;border-radius:4px;padding:0 5px;color:#b06a00;font-weight:600">⏳ Falta desarrollar</span> el indicador aún no existe en la Matriz → agrégalo con «+ Agregar indicador desde ficha».
+        &nbsp;·&nbsp;
+        <span style="background:#dbe7ff;border:1px solid #adc4ee;border-radius:4px;padding:0 5px;color:#2b4c9b;font-weight:600">✏️ Texto corregido</span> se editó aquí y en la Matriz sigue la versión anterior → actualízalo en «Control de sincronización» (conserva sus metas).
+      </p>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <select id="listOficinaSel" onchange="filtrarFichasPorOficina()" style="flex:1;min-width:220px;padding:9px 11px;font-size:13px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--slate);font-family:inherit;cursor:pointer">
@@ -4914,7 +4918,9 @@ async function cargarDesagregadoIndicadores(lista){
       // Subindicadores: del caché compartido (datos COMPLETOS, leídos por construirMapaIndicadores)
       const items = _SUBIND_POR_FICHA[nivel+'_'+r.id] || [];
       const rutaF = rutaFicha(r, nivel);
-      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items, rutaF, _fichaArchivada(r,nivel));
+      const F_n = (nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
+      const duenoF = leerDueno(r, F_n) || '';
+      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items, rutaF, _fichaArchivada(r,nivel), duenoF);
       const c2=document.getElementById(celdaId);
       if(c2) c2.innerHTML=_DESAG_CACHE[key];
     }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
@@ -4948,9 +4954,16 @@ async function cargarDesagregadoIndicadores(lista){
 // para que el cruce sea robusto: el texto completo "Elemento — Indicador" Y también con la
 // ruta, porque un mismo nombre de indicador puede repetirse en fichas distintas.
 let _INDS_EN_MATRIZ = null;
+// Textos de la matriz agrupados por "ruta con componente ¦¦ dueño". Sirve para saber POR QUÉ
+// un indicador de la ficha está en ámbar: si en ese mismo elemento y de esa misma escuela hay
+// un registro en la matriz que ya no coincide con ninguna casilla de la ficha, entonces el
+// ámbar es porque se EDITÓ el texto (y hay que actualizarlo desde Sincronización), no porque
+// sea un indicador nuevo sin desarrollar.
+let _MATRIZ_POR_ELEM = null;
 async function cargarIndsEnMatriz(){
   if(_INDS_EN_MATRIZ) return _INDS_EN_MATRIZ;
   const set = new Set();
+  const porElem = new Map();
   try{
     const recs = await loadMatriz();
     const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
@@ -4960,13 +4973,52 @@ async function cargarIndsEnMatriz(){
       if(t){
         set.add(norm(t));                    // texto del indicador ("Elemento — Indicador")
         if(ru) set.add(norm(t)+' ¦¦ '+norm(ru)); // con ruta (identifica el indicador exacto)
+        // Agrupar por ruta-con-componente + dueño (la escuela distingue registros de igual ruta)
+        const due = MAT.oficina_resp_ind ? leerCampo(m, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador') : '';
+        const k = norm(ru)+' ¦¦ '+norm(due||'');
+        if(!porElem.has(k)) porElem.set(k, []);
+        porElem.get(k).push(t);
       }
     });
     _INDS_EN_MATRIZ = set;   // solo se fija si la carga fue exitosa
+    _MATRIZ_POR_ELEM = porElem;
   }catch(_){ /* no fijar: se reintentará */ }
   return _INDS_EN_MATRIZ || set;
 }
-function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; }
+function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; _MATRIZ_POR_ELEM=null; }
+
+// Devuelve el MOTIVO por el que un indicador de la ficha aparece en ámbar:
+//   {tipo:'edicion', viejo:'…'}  → el texto se corrigió; en la matriz sigue la versión anterior
+//   {tipo:'nuevo'}               → aún no se ha desarrollado en la matriz
+// Empareja por similitud dentro del MISMO elemento y la MISMA escuela (dueño), igual que el
+// panel de sincronización, para no cruzar indicadores de otras escuelas.
+function _motivoAmbar(elemento, indicador, rutaFichaTxt, dueno, itemsFicha){
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+  if(!_MATRIZ_POR_ELEM) return {tipo:'nuevo'};
+  const rutaConComp = (rutaFichaTxt||'') + (elemento? ' › '+elemento : '');
+  const enMatriz = _MATRIZ_POR_ELEM.get(norm(rutaConComp)+' ¦¦ '+norm(dueno||'')) || [];
+  if(!enMatriz.length) return {tipo:'nuevo'};
+  // Textos que la ficha tiene HOY para ese mismo elemento
+  const textosFicha = new Set((itemsFicha||[])
+    .filter(x=>norm(x.elemento)===norm(elemento))
+    .map(x=>norm((x.elemento?x.elemento+' — ':'')+x.indicador)));
+  // Registros de la matriz que ya no corresponden a ninguna casilla de la ficha → candidatos
+  const sobrantes = enMatriz.filter(t=>!textosFicha.has(norm(t)));
+  if(!sobrantes.length) return {tipo:'nuevo'};
+  // Elegir el más parecido comparando solo la parte del indicador (tras " — ")
+  const soloInd = t => norm(String(t).split(' — ').slice(1).join(' — ') || t);
+  const tokens = t => new Set(soloInd(t).split(/\s+/).filter(w=>w.length>3));
+  const miTok = tokens((elemento?elemento+' — ':'')+indicador);
+  let mejor=null, mejorSim=0;
+  sobrantes.forEach(t=>{
+    const tk=tokens(t);
+    let comunes=0; miTok.forEach(w=>{ if(tk.has(w)) comunes++; });
+    const sim = comunes / Math.max(1, Math.min(miTok.size, tk.size));
+    if(sim>mejorSim){ mejorSim=sim; mejor=t; }
+  });
+  if(mejor && mejorSim>=0.3) return {tipo:'edicion', viejo:mejor};
+  return {tipo:'nuevo'};
+}
 // ¿Este indicador de ficha ya está desarrollado en la matriz?
 // Recibe también la ruta de la ficha para un cruce preciso.
 function _indEnMatriz(elemento, indicador, rutaFichaTxt){
@@ -4982,7 +5034,7 @@ function _indEnMatriz(elemento, indicador, rutaFichaTxt){
 
 // Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
 // sub-tabla con una fila por indicador (Elemento del nivel | Indicador).
-function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada){
+function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada, dueno){
   if(!items.length) return '<span class="hint">Sin indicadores</span>';
   const esc=s=>String(s||'').replace(/</g,'&lt;');
   const attr=s=>String(s||'').replace(/"/g,'&quot;');
@@ -4996,9 +5048,22 @@ function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada){
   const filas = items.map((it,i)=>{
     // En fichas ARCHIVADAS no se marca el ámbar de "falta en matriz": no aplica.
     const enMatriz = esArchivada ? true : _indEnMatriz(it.elemento, it.indicador, rutaFichaTxt);
-    // Los que AÚN NO están en la matriz se resaltan en ámbar, con una etiqueta "Falta en matriz".
-    const bgFila = enMatriz ? '' : 'background:#fff8e6;';
-    const pend = enMatriz ? '' : ' <span style="display:inline-block;font-size:10px;font-weight:700;color:#b06a00;background:#ffe9b8;border:1px solid #f0c987;border-radius:8px;padding:0 6px;margin-left:4px;white-space:nowrap">⏳ Falta en matriz</span>';
+    // Los que AÚN NO están en la matriz se resaltan en ámbar, indicando el MOTIVO:
+    //  · "Texto corregido" → en la matriz sigue la redacción anterior: se arregla desde
+    //    Control de sincronización con "Actualizar texto" (conserva metas y seguimientos).
+    //  · "Falta desarrollar" → indicador nuevo: se agrega con "+ Agregar indicador desde ficha".
+    let bgFila='', pend='';
+    if(!enMatriz){
+      const motivo = _motivoAmbar(it.elemento, it.indicador, rutaFichaTxt, dueno, items);
+      if(motivo.tipo==='edicion'){
+        const viejo = String(motivo.viejo||'').split(' — ').slice(1).join(' — ') || motivo.viejo;
+        bgFila = 'background:#eef4ff;';
+        pend = ` <span title="${attr('En la matriz sigue la versión anterior: “'+viejo+'”. Corrígelo en Control de sincronización con «Actualizar texto» para conservar sus metas y seguimientos.')}" style="display:inline-block;font-size:10px;font-weight:700;color:#2b4c9b;background:#dbe7ff;border:1px solid #adc4ee;border-radius:8px;padding:0 6px;margin-left:4px;white-space:nowrap;cursor:help">✏️ Texto corregido · actualizar en sincronización</span>`;
+      } else {
+        bgFila = 'background:#fff8e6;';
+        pend = ` <span title="${attr('Este indicador todavía no existe en la Matriz de indicadores. Agrégalo desde Matriz → «+ Agregar indicador desde ficha».')}" style="display:inline-block;font-size:10px;font-weight:700;color:#b06a00;background:#ffe9b8;border:1px solid #f0c987;border-radius:8px;padding:0 6px;margin-left:4px;white-space:nowrap;cursor:help">⏳ Falta desarrollar en la matriz</span>`;
+      }
+    }
     return `
     <tr style="${bgFila}">
       <td style="padding:4px 8px 4px 0;font-size:13px;color:var(--mist);text-align:right;white-space:nowrap;vertical-align:top">${i+1}.</td>
