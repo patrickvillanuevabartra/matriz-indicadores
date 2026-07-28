@@ -4933,7 +4933,9 @@ async function cargarDesagregadoIndicadores(lista){
       const rutaF = rutaFicha(r, nivel);
       totalInd+=its.length;
       // No exigir desarrollo de indicadores de fichas ARCHIVADAS (no cuentan como faltantes)
-      if(!_fichaArchivada(r,nivel)) its.forEach(it=>{ if(!_indEnMatriz(it.elemento, it.indicador, rutaF)) totalFalta++; });
+      const _F = (nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
+      const _due = leerDueno(r, _F) || '';
+      if(!_fichaArchivada(r,nivel)) its.forEach(it=>{ if(!_indEnMatriz(it.elemento, it.indicador, rutaF, _due)) totalFalta++; });
       const cabId=_GRP_DE_FICHA[nivel+'_'+r.id];
       if(cabId) porGrupo[cabId]=(porGrupo[cabId]||0)+its.length;
     }
@@ -4971,10 +4973,18 @@ async function cargarIndsEnMatriz(){
       const t = leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       const ru = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
       if(t){
-        set.add(norm(t));                    // texto del indicador ("Elemento — Indicador")
-        if(ru) set.add(norm(t)+' ¦¦ '+norm(ru)); // con ruta (identifica el indicador exacto)
-        // Agrupar por ruta-con-componente + dueño (la escuela distingue registros de igual ruta)
+        // IMPORTANTE: las claves incluyen la ESCUELA (dueño / oficina de medición). Varias
+        // escuelas tienen el MISMO proceso con la MISMA ruta de texto, así que sin la escuela
+        // el indicador de una encontraba coincidencia con el registro de OTRA y no se marcaba
+        // el ámbar (mismo bug que tuvimos en el panel de sincronización).
         const due = MAT.oficina_resp_ind ? leerCampo(m, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador') : '';
+        const med = leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+        [due, med].forEach(of=>{
+          if(!of) return;
+          set.add(norm(t)+' ¦¦¦ '+norm(of));                       // texto + escuela
+          if(ru) set.add(norm(t)+' ¦¦ '+norm(ru)+' ¦¦ '+norm(of)); // texto + ruta + escuela
+        });
+        // Agrupar por ruta-con-componente + dueño (la escuela distingue registros de igual ruta)
         const k = norm(ru)+' ¦¦ '+norm(due||'');
         if(!porElem.has(k)) porElem.set(k, []);
         porElem.get(k).push(t);
@@ -5021,15 +5031,17 @@ function _motivoAmbar(elemento, indicador, rutaFichaTxt, dueno, itemsFicha){
 }
 // ¿Este indicador de ficha ya está desarrollado en la matriz?
 // Recibe también la ruta de la ficha para un cruce preciso.
-function _indEnMatriz(elemento, indicador, rutaFichaTxt){
+function _indEnMatriz(elemento, indicador, rutaFichaTxt, dueno){
   if(!_INDS_EN_MATRIZ) return true; // aún no cargó: no marcar (se repinta cuando cargue)
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
   const texto = (elemento?elemento+' — ':'')+indicador;
   // La ruta que se guarda al agregar es: ruta de la ficha + " › " + componente(elemento).
   const rutaConComp = (rutaFichaTxt||'') + (elemento? ' › '+elemento : '');
-  const claveConRuta = norm(texto)+' ¦¦ '+norm(rutaConComp);
-  // Preferimos el match por ruta (preciso). Como respaldo, el match por texto solo.
-  return _INDS_EN_MATRIZ.has(claveConRuta) || _INDS_EN_MATRIZ.has(norm(texto));
+  const of = norm(dueno||'');
+  if(!of) return true; // sin escuela no se puede comparar con seguridad: no marcar
+  // Se compara SIEMPRE dentro de la MISMA escuela (ver nota en cargarIndsEnMatriz).
+  return _INDS_EN_MATRIZ.has(norm(texto)+' ¦¦ '+norm(rutaConComp)+' ¦¦ '+of)  // texto + ruta + escuela
+      || _INDS_EN_MATRIZ.has(norm(texto)+' ¦¦¦ '+of);                          // respaldo: texto + escuela
 }
 
 // Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
@@ -5047,7 +5059,7 @@ function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada, dueno){
     </div>`;
   const filas = items.map((it,i)=>{
     // En fichas ARCHIVADAS no se marca el ámbar de "falta en matriz": no aplica.
-    const enMatriz = esArchivada ? true : _indEnMatriz(it.elemento, it.indicador, rutaFichaTxt);
+    const enMatriz = esArchivada ? true : _indEnMatriz(it.elemento, it.indicador, rutaFichaTxt, dueno);
     // Los que AÚN NO están en la matriz se resaltan en ámbar, indicando el MOTIVO:
     //  · "Texto corregido" → en la matriz sigue la redacción anterior: se arregla desde
     //    Control de sincronización con "Actualizar texto" (conserva metas y seguimientos).
