@@ -6356,6 +6356,33 @@ function _alertaMatriz(textoMat, rutaMat, dueno){
   return {tipo:'huerfano'};
 }
 
+// Pinta las alertas sobre las filas YA renderizadas de la matriz. Se llama cuando el cruce
+// con las fichas está disponible (puede llegar después del render, en segundo plano).
+function pintarAlertasMatriz(){
+  const tb=document.getElementById('tablaMatriz'); if(!tb) return;
+  if(!_INDS_EN_FICHAS || !_INDS_EN_FICHAS.size) return;
+  tb.querySelectorAll('tr.matriz-fila').forEach(tr=>{
+    const celda=tr.querySelector('td.celda-ind'); if(!celda) return;
+    const previo=celda.querySelector('.alerta-ind'); if(previo) previo.remove();
+    tr.style.background='';
+    let al=null;
+    try{ al=_alertaMatriz(tr.getAttribute('data-ind'), tr.getAttribute('data-rutaind'), tr.getAttribute('data-due')); }catch(_){}
+    if(!al) return;
+    const cont=document.createElement('div');
+    cont.className='alerta-ind'; cont.style.marginTop='3px';
+    if(al.tipo==='cambio'){
+      const nuevo=String(al.nuevo||'').split(' — ').slice(1).join(' — ') || al.nuevo;
+      tr.style.background='#eef4ff';
+      cont.innerHTML='<span title="En la ficha este indicador quedó como: “'+String(nuevo).replace(/"/g,'&quot;').replace(/</g,'&lt;')+'”. Actualízalo desde «Control de sincronización» para conservar sus metas y seguimientos." style="display:inline-block;font-size:9px;font-weight:700;color:#2b4c9b;background:#dbe7ff;border:1px solid #adc4ee;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">✏️ Cambió en la ficha</span>';
+    } else {
+      tr.style.background='#fdeceb';
+      cont.innerHTML='<span title="Este indicador ya no existe en la ficha de proceso: se quitó del formulario. Revísalo en «Control de sincronización»; si corresponde, elimínalo de la matriz." style="display:inline-block;font-size:9px;font-weight:700;color:#c0392b;background:#fadbd8;border:1px solid #f0b3ac;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">⚠️ Ya no está en la ficha</span>';
+    }
+    celda.appendChild(cont);
+  });
+}
+window.pintarAlertasMatriz=pintarAlertasMatriz;
+
 async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
   try{
@@ -6388,9 +6415,6 @@ async function renderMatriz(){
     // Asegurar fichas cargadas (para resolver a qué ficha pertenece cada indicador) y
     // cargar el orden de subformularios SOLO de las fichas presentes, en paralelo.
     try{ await _mapLimitado(['N0','N1','N2','N3'], 2, n=>loadFichas(n)); }catch(_){}
-    // Con las fichas ya cargadas, preparar el cruce para avisar en cada fila si su indicador
-    // cambió de texto o desapareció de la ficha (espejo del ámbar/azul de Fichas registradas).
-    try{ if(!_INDS_EN_FICHAS) _construirIndsEnFichas(); }catch(_){}
     try{ await loadInventario(); }catch(_){}
     try{ await construirMapaIndicadores(); }catch(_){}
     // Agrupar por OFICINA de medición (ancla principal, igual que antes y que "Fichas registradas").
@@ -6476,22 +6500,9 @@ async function renderMatriz(){
                   ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         const _dataBuscar = [indSolo, ind, proposito, formula, ofiMed, ofiDueno, rutaFull, elemento, resp].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-        // Aviso si este registro ya no coincide con la ficha de su escuela
-        let _alertaHTML = '', _bgAlerta = '';
-        try{
-          const _al = _alertaMatriz(ind, rutaFull, ofiDueno || ofiMed);
-          if(_al && _al.tipo==='cambio'){
-            const _nuevo = String(_al.nuevo||'').split(' — ').slice(1).join(' — ') || _al.nuevo;
-            _bgAlerta = 'background:#eef4ff;';
-            _alertaHTML = `<div style="margin-top:3px"><span title="${attr('En la ficha este indicador quedó como: “'+_nuevo+'”. Actualízalo desde «Control de sincronización» para conservar sus metas y seguimientos.')}" style="display:inline-block;font-size:9px;font-weight:700;color:#2b4c9b;background:#dbe7ff;border:1px solid #adc4ee;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">✏️ Cambió en la ficha</span></div>`;
-          } else if(_al && _al.tipo==='huerfano'){
-            _bgAlerta = 'background:#fdeceb;';
-            _alertaHTML = `<div style="margin-top:3px"><span title="${attr('Este indicador ya no existe en la ficha de proceso: se quitó del formulario. Revísalo en «Control de sincronización»; si corresponde, elimínalo de la matriz.')}" style="display:inline-block;font-size:9px;font-weight:700;color:#c0392b;background:#fadbd8;border:1px solid #f0b3ac;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">⚠️ Ya no está en la ficha</span></div>`;
-          }
-        }catch(_){}
-        return `<tr class="matriz-fila" data-buscar="${_dataBuscar.replace(/"/g,'&quot;')}" style="${_bgAlerta}">
+        return `<tr class="matriz-fila" data-buscar="${_dataBuscar.replace(/"/g,'&quot;')}" data-ind="${String(ind||'').replace(/"/g,'&quot;')}" data-rutaind="${String(rutaFull||'').replace(/"/g,'&quot;')}" data-due="${String(ofiDueno||ofiMed||'').replace(/"/g,'&quot;')}">
           <td style="vertical-align:top">${nivelAna?`<span style="display:inline-block;font-size:9px;font-weight:700;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:10px;padding:1px 7px;margin-bottom:3px">${nivelAna.replace(/</g,'&lt;')}</span><br>`:''}${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
-          <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span>${_alertaHTML}</td>
+          <td class="celda-ind" style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
           <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(ofiMed||'').replace(/"/g,'&quot;')}">${ofiMed?`<div class="clip2">${ofiMed.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
@@ -6520,6 +6531,16 @@ async function renderMatriz(){
     if(typeof poblarDesplegableOficinas==='function') poblarDesplegableOficinas();
     const _sel=document.getElementById('indOficinaSel'), _bus=document.getElementById('indBuscar');
     if(typeof filtrarPorOficina==='function' && ((_sel&&_sel.value)||(_bus&&_bus.value))) filtrarPorOficina();
+    // Avisos por fila (indicador que cambió o que ya no está en la ficha). El cruce necesita
+    // los indicadores de las fichas, que se leen aparte: si ya están, se pinta al instante;
+    // si no, se leen en segundo plano y se pinta cuando lleguen, sin frenar el render.
+    (async()=>{
+      try{
+        if(!_MAPA_IND_LISTO) await construirMapaIndicadores();
+        if(!_INDS_EN_FICHAS) _construirIndsEnFichas();
+        pintarAlertasMatriz();
+      }catch(_){}
+    })();
   }catch(e){ setConn(false,e.message); tb.innerHTML=`<tr><td colspan="10"><div class="empty"><h3>No se pudo cargar</h3><p>${e.message}</p></div></td></tr>`; }
 }
 window.renderMatriz=renderMatriz;
