@@ -887,6 +887,11 @@
       <div class="eyebrow">Desempeño</div>
       <h1>Matriz de indicadores</h1>
       <p>Define indicadores jalados de las fichas, su fórmula y frecuencia, y gestiona sus metas (programación y seguimiento).</p>
+      <p style="margin-top:2px;font-size:12px;color:var(--mist)">
+        <span style="background:#dbe7ff;border:1px solid #adc4ee;border-radius:4px;padding:0 5px;color:#2b4c9b;font-weight:600">✏️ Cambió en la ficha</span> el texto se corrigió en la ficha y aquí sigue el anterior → actualízalo en «Control de sincronización» (conserva sus metas).
+        &nbsp;·&nbsp;
+        <span style="background:#fadbd8;border:1px solid #f0b3ac;border-radius:4px;padding:0 5px;color:#c0392b;font-weight:600">⚠️ Ya no está en la ficha</span> el indicador se quitó del formulario → revísalo antes de eliminarlo.
+      </p>
     </div>
 
     <!-- Resumen de avance: cuántos indicadores se vienen completando -->
@@ -2339,7 +2344,7 @@ function invalidarCacheIndicadores(){
   for(const k in _IDX_SUBIND) delete _IDX_SUBIND[k];
   if(typeof _DESAG_CACHE!=='undefined'){ for(const k in _DESAG_CACHE) delete _DESAG_CACHE[k]; }
   if(typeof _NIVEL_ANALISIS_CACHE!=='undefined'){ for(const k in _NIVEL_ANALISIS_CACHE) delete _NIVEL_ANALISIS_CACHE[k]; }
-  if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz();
+  if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz(); if(typeof _invalidarIndsEnFichas==='function') _invalidarIndsEnFichas();
 }
 window.invalidarCacheIndicadores=invalidarCacheIndicadores;
 // Ejecuta tareas async con CONCURRENCIA LIMITADA (máx N a la vez). Evita saturar la API
@@ -6207,7 +6212,7 @@ async function actualizarTextoSync(id, btn){
     toast('Texto actualizado. Metas y mediciones conservadas.');
     const tr=btn.closest('tr'); if(tr){ tr.style.opacity='.5'; }
     btn.textContent='✓ Actualizado';
-    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz();
+    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz(); if(typeof _invalidarIndsEnFichas==='function') _invalidarIndsEnFichas();
     // Refrescar TAMBIÉN el listado de Fichas registradas y su caché de pintado, para que
     // el marcado ámbar refleje el cambio sin recargar el sistema.
     if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
@@ -6226,7 +6231,7 @@ async function eliminarHuerfanoSync(id, btn){
     toast('Indicador huérfano eliminado.');
     const tr=btn.closest('tr'); if(tr){ tr.style.opacity='.4'; tr.style.textDecoration='line-through'; }
     btn.textContent='Eliminado';
-    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz();
+    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz(); if(typeof _invalidarIndsEnFichas==='function') _invalidarIndsEnFichas();
     if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
     // Refrescar la tabla de la matriz en vivo (el registro eliminado desaparece sin cambiar de pestaña)
     if(typeof renderMatriz==='function'){ try{ renderMatriz(); }catch(_){} }
@@ -6291,6 +6296,66 @@ function poblarDesplegableOficinas(){
 }
 window.poblarDesplegableOficinas = poblarDesplegableOficinas;
 
+// ===== Alerta en la MATRIZ: indicadores que cambiaron o desaparecieron de su ficha =====
+// Es el espejo del ámbar/azul de Fichas registradas. Aquí se avisa al revés: sobre el
+// registro de la matriz, si su indicador ya no coincide con la ficha de su escuela.
+let _INDS_EN_FICHAS = null;   // Set de "texto ¦¦ rutaConComp ¦¦ dueño"
+let _FICHAS_POR_ELEM = null;  // Map "rutaConComp ¦¦ dueño" → [textos de la ficha]
+let _ESCUELAS_CON_FICHA = null; // Set de dueños que sí tienen indicadores cargados
+function _construirIndsEnFichas(){
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+  const set = new Set(), porElem = new Map(), escuelas = new Set();
+  ['N0','N1','N2','N3'].forEach(n=>{
+    const F = (n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : n==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
+    (STATE.fichas[n]||[]).forEach(fr=>{
+      const dueno = norm(leerDueno(fr, F)||'');
+      const rutaF = rutaFicha(fr, n);
+      (_SUBIND_POR_FICHA[n+'_'+fr.id]||[]).forEach(it=>{
+        const texto = (it.elemento?it.elemento+' — ':'')+it.indicador;
+        const rutaConComp = rutaF + (it.elemento? ' › '+it.elemento : '');
+        const k = norm(rutaConComp)+' ¦¦ '+dueno;
+        set.add(norm(texto)+' ¦¦ '+k);
+        if(dueno) escuelas.add(dueno);
+        if(!porElem.has(k)) porElem.set(k, []);
+        porElem.get(k).push(texto);
+      });
+    });
+  });
+  _INDS_EN_FICHAS = set; _FICHAS_POR_ELEM = porElem; _ESCUELAS_CON_FICHA = escuelas;
+}
+function _invalidarIndsEnFichas(){ _INDS_EN_FICHAS=null; _FICHAS_POR_ELEM=null; _ESCUELAS_CON_FICHA=null; }
+window._invalidarIndsEnFichas=_invalidarIndsEnFichas;
+// Devuelve la alerta de un registro de la matriz respecto a su ficha:
+//   null                      → todo coincide
+//   {tipo:'cambio', nuevo:''} → en la ficha el texto se corrigió
+//   {tipo:'huerfano'}         → el indicador ya no está en la ficha
+function _alertaMatriz(textoMat, rutaMat, dueno){
+  if(!_INDS_EN_FICHAS || !_INDS_EN_FICHAS.size) return null;   // fichas no cargadas: no alarmar
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+  const of = norm(dueno||'');
+  if(!of) return null;                                          // sin escuela no se puede comparar
+  // Si no hay NINGÚN indicador cargado de esa escuela, no alarmar: probablemente sus fichas
+  // aún no se han leído. Evita marcar como huérfanos registros que sí tienen respaldo.
+  if(_ESCUELAS_CON_FICHA && !_ESCUELAS_CON_FICHA.has(of)) return null;
+  const k = norm(rutaMat)+' ¦¦ '+of;
+  if(_INDS_EN_FICHAS.has(norm(textoMat)+' ¦¦ '+k)) return null;  // coincide: sin alerta
+  // Buscar en la MISMA ruta y MISMA escuela un texto de ficha parecido → es una corrección
+  const enFicha = (_FICHAS_POR_ELEM && _FICHAS_POR_ELEM.get(k)) || [];
+  if(enFicha.length){
+    const soloInd = t => norm(String(t).split(' — ').slice(1).join(' — ') || t);
+    const tokens = t => new Set(soloInd(t).split(/\s+/).filter(w=>w.length>3));
+    const miTok = tokens(textoMat);
+    let mejor=null, mejorSim=0;
+    enFicha.forEach(t=>{
+      const tk=tokens(t); let comunes=0; miTok.forEach(w=>{ if(tk.has(w)) comunes++; });
+      const sim = comunes / Math.max(1, Math.min(miTok.size, tk.size));
+      if(sim>mejorSim){ mejorSim=sim; mejor=t; }
+    });
+    if(mejor && mejorSim>=0.3) return {tipo:'cambio', nuevo:mejor};
+  }
+  return {tipo:'huerfano'};
+}
+
 async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
   try{
@@ -6323,6 +6388,9 @@ async function renderMatriz(){
     // Asegurar fichas cargadas (para resolver a qué ficha pertenece cada indicador) y
     // cargar el orden de subformularios SOLO de las fichas presentes, en paralelo.
     try{ await _mapLimitado(['N0','N1','N2','N3'], 2, n=>loadFichas(n)); }catch(_){}
+    // Con las fichas ya cargadas, preparar el cruce para avisar en cada fila si su indicador
+    // cambió de texto o desapareció de la ficha (espejo del ámbar/azul de Fichas registradas).
+    try{ if(!_INDS_EN_FICHAS) _construirIndsEnFichas(); }catch(_){}
     try{ await loadInventario(); }catch(_){}
     try{ await construirMapaIndicadores(); }catch(_){}
     // Agrupar por OFICINA de medición (ancla principal, igual que antes y que "Fichas registradas").
@@ -6408,9 +6476,22 @@ async function renderMatriz(){
                   ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         const _dataBuscar = [indSolo, ind, proposito, formula, ofiMed, ofiDueno, rutaFull, elemento, resp].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-        return `<tr class="matriz-fila" data-buscar="${_dataBuscar.replace(/"/g,'&quot;')}">
+        // Aviso si este registro ya no coincide con la ficha de su escuela
+        let _alertaHTML = '', _bgAlerta = '';
+        try{
+          const _al = _alertaMatriz(ind, rutaFull, ofiDueno || ofiMed);
+          if(_al && _al.tipo==='cambio'){
+            const _nuevo = String(_al.nuevo||'').split(' — ').slice(1).join(' — ') || _al.nuevo;
+            _bgAlerta = 'background:#eef4ff;';
+            _alertaHTML = `<div style="margin-top:3px"><span title="${attr('En la ficha este indicador quedó como: “'+_nuevo+'”. Actualízalo desde «Control de sincronización» para conservar sus metas y seguimientos.')}" style="display:inline-block;font-size:9px;font-weight:700;color:#2b4c9b;background:#dbe7ff;border:1px solid #adc4ee;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">✏️ Cambió en la ficha</span></div>`;
+          } else if(_al && _al.tipo==='huerfano'){
+            _bgAlerta = 'background:#fdeceb;';
+            _alertaHTML = `<div style="margin-top:3px"><span title="${attr('Este indicador ya no existe en la ficha de proceso: se quitó del formulario. Revísalo en «Control de sincronización»; si corresponde, elimínalo de la matriz.')}" style="display:inline-block;font-size:9px;font-weight:700;color:#c0392b;background:#fadbd8;border:1px solid #f0b3ac;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">⚠️ Ya no está en la ficha</span></div>`;
+          }
+        }catch(_){}
+        return `<tr class="matriz-fila" data-buscar="${_dataBuscar.replace(/"/g,'&quot;')}" style="${_bgAlerta}">
           <td style="vertical-align:top">${nivelAna?`<span style="display:inline-block;font-size:9px;font-weight:700;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:10px;padding:1px 7px;margin-bottom:3px">${nivelAna.replace(/</g,'&lt;')}</span><br>`:''}${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
-          <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
+          <td style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span>${_alertaHTML}</td>
           <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(ofiMed||'').replace(/"/g,'&quot;')}">${ofiMed?`<div class="clip2">${ofiMed.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
