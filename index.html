@@ -7005,7 +7005,23 @@ async function abrirEditarMatriz(matId){
     set('em_celular', (dCont&&dCont.celular) || leerCampo(r, MAT.resp_celular.id, 'Celular responsable'));
     set('em_correo', (dCont&&dCont.correo) || leerCampo(r, MAT.resp_correo.id, 'Correo responsable'));
     set('em_resp_tec', _respTecActivo() ? _respTecTexto(r) : '');
-    { const b=document.getElementById('em_resp_tec'); if(b) b.closest('.field').style.display = _respTecActivo() ? '' : 'none'; }
+    { const b=document.getElementById('em_resp_tec');
+      if(b){
+        b.closest('.field').style.display = _respTecActivo() ? '' : 'none';
+        // Asignar responsables técnicos es una decisión de permisos: SOLO el Administrador.
+        // Los demás lo ven (para saber de quién es el indicador) pero no pueden cambiarlo:
+        // si pudieran, un especialista podría asignarse indicadores o quitar a otro.
+        const soloAdmin = !esAdmin();
+        b.readOnly = soloAdmin;
+        b.style.background = soloAdmin ? 'var(--paper)' : '';
+        b.style.cursor = soloAdmin ? 'not-allowed' : '';
+        b.title = soloAdmin ? 'Solo el administrador puede asignar o cambiar los responsables técnicos.' : '';
+        b.placeholder = soloAdmin ? 'Sin asignar' : 'nombre.apellido@urp.edu.pe, otro@urp.edu.pe';
+        const et = b.closest('.field').querySelector('.hint');
+        if(et) et.textContent = soloAdmin
+          ? '— solo el administrador puede modificar este campo'
+          : '— correos separados por coma; solo ellos podrán editar e informar este indicador. Si se deja vacío, puede hacerlo cualquiera de la oficina.';
+      } }
   }catch(e){ toast('Error al abrir: '+e.message, true); }
 }
 window.abrirEditarMatriz=abrirEditarMatriz;
@@ -7085,7 +7101,9 @@ async function guardarEdicionMatriz(){
   campos[MAT.resp_med_txt.id]=respLimpio;
   campos[MAT.resp_celular.id]=celVal;
   campos[MAT.resp_correo.id]=corVal;
-  if(_respTecActivo()) campos[_respTecId()]=(g('em_resp_tec')||'').trim();
+  // Solo el administrador puede modificar los responsables técnicos. Para el resto, el campo
+  // ni siquiera se envía, así que conserva su valor actual en la base.
+  if(_respTecActivo() && esAdmin()) campos[_respTecId()]=(g('em_resp_tec')||'').trim();
   const btn=document.getElementById('em_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(EM_ID, campos);
