@@ -1152,6 +1152,7 @@
         <div class="field"><label>Responsable de la medición</label><input id="em_responsable" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Celular del responsable</label><input id="em_celular" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Correo del responsable</label><input id="em_correo" readonly style="background:var(--paper)"></div>
+        <div class="field full"><label>Responsables técnicos <span class="hint" style="font-weight:400">— correos separados por coma; solo ellos podrán editar e informar este indicador. Si se deja vacío, puede hacerlo cualquiera de la oficina.</span></label><input id="em_resp_tec" placeholder="nombre.apellido@urp.edu.pe, otro@urp.edu.pe"></div>
         <div class="field"><label>Frecuencia de medición</label><select id="em_frec_med"></select></div>
         <div class="field"><label>Frecuencia de cálculo</label><select id="em_frec_calc"></select></div>
       </div>
@@ -1202,7 +1203,10 @@
                 <div id="pm_meta_grid" class="grid"></div>
               </div>
             </div>
-            <div class="field full"><label>Plan de acción (enlace a Drive/SharePoint)</label><input type="url" id="pm_plan" placeholder="https://…"></div>
+            <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
+              <div class="ev-wrap" id="pm_plan_wrap" data-target="pm_plan"></div>
+              <input type="hidden" id="pm_plan">
+            </div>
             <div class="field full"><label>Observación</label><textarea id="pm_obs"></textarea></div>
           </div>
           <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
@@ -1233,8 +1237,11 @@
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
             <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
             <div class="field full"><div style="font-size:11px;color:var(--mist);background:var(--paper);border-radius:8px;padding:8px 12px;line-height:1.5">📐 <strong>Fórmula del % de avance:</strong> (valor alcanzado − referencia) ÷ (meta − referencia) × 100. Funciona para indicadores donde subir es mejor y donde bajar es mejor. 100% = se alcanzó la meta; 0% = sin avance respecto a la línea base.</div></div>
-            <div class="field full"><label>Evidencias (enlace a Drive/SharePoint)</label><input type="url" id="sm_evid" placeholder="https://…"></div>
-            <div class="field full hidden" id="sm_remed_box"><label>Plan de acción / mejora (enlace) <span class="hint" style="font-weight:400">— opcional; sugerido cuando una medición de cierre queda por debajo de la meta</span></label><input type="url" id="sm_remed" placeholder="https://…"><div id="sm_remed_nota" style="font-size:11px;color:var(--mist);margin-top:5px;line-height:1.5"></div></div>
+            <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
+              <div class="ev-wrap" id="sm_evid_wrap" data-target="sm_evid"></div>
+              <input type="hidden" id="sm_evid">
+            </div>
+            <div class="field full hidden" id="sm_remed_box"><label>Plan de acción / mejora (enlaces) <span class="hint" style="font-weight:400">— opcional; sugerido cuando una medición de cierre queda por debajo de la meta</span></label><div class="ev-wrap" id="sm_remed_wrap" data-target="sm_remed"></div><input type="hidden" id="sm_remed"><div id="sm_remed_nota" style="font-size:11px;color:var(--mist);margin-top:5px;line-height:1.5"></div></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
           </div>
           <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="sm_cancelar" onclick="cancelarEdicionSeg()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
@@ -5546,6 +5553,45 @@ window.eliminarFicha=eliminarFicha;
    MATRIZ DE INDICADORES
    ============================================================ */
 const MAT = CONFIG.MATRIZ_IND_FIELDS, PM = CONFIG.PROG_METAS_FIELDS, SM = CONFIG.SEG_METAS_FIELDS;
+
+// ===== Responsables técnicos por indicador =====
+// Permite que dentro de una misma oficina cada persona VEA todos los indicadores de su
+// escuela, pero solo pueda EDITAR e INFORMAR los que tiene a su cargo.
+// Field-id del campo «Responsables técnicos» de la tabla Matriz de Indicadores (QuintaDB).
+// Si se dejara vacío, la función queda desactivada y todo se comporta como antes.
+const RESP_TEC_FIELD_ID = 'dcI1xdOGDdK5P2i8k5y8of';
+function _respTecActivo(){ return !!(RESP_TEC_FIELD_ID || (MAT.resp_tecnico && MAT.resp_tecnico.id)); }
+function _respTecId(){ return (MAT.resp_tecnico && MAT.resp_tecnico.id) || RESP_TEC_FIELD_ID; }
+// Texto crudo del campo (correos separados por coma, punto y coma o salto de línea)
+function _respTecTexto(r){
+  if(!_respTecActivo()) return '';
+  return leerCampo(r, _respTecId(), 'Responsables técnicos') || '';
+}
+function _respTecLista(r){
+  return _respTecTexto(r).split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
+}
+// ¿Este indicador está a cargo del usuario en sesión?
+//  · Administrador y Gestor: siempre pueden (gestionan todo).
+//  · Si el indicador NO tiene responsables técnicos asignados: puede cualquiera de la oficina,
+//    para no dejar indicadores bloqueados sin que nadie pueda reportarlos.
+//  · Si los tiene: solo quienes figuren ahí (por correo o por nombre).
+function _esMiIndicador(r){
+  if(!SESION) return false;
+  if(SESION.rol==='Administrador' || SESION.rol==='Gestor') return true;
+  if(!_respTecActivo()) return true;
+  const lista=_respTecLista(r);
+  if(!lista.length) return true;
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
+  return lista.some(x=>yo.includes(norm(x)));
+}
+// ¿Tiene responsables asignados y NO soy yo? (para atenuar y explicar de quién es)
+function _aCargoDeOtro(r){
+  if(!_respTecActivo()) return false;
+  if(SESION && (SESION.rol==='Administrador' || SESION.rol==='Gestor')) return false;
+  return _respTecLista(r).length>0 && !_esMiIndicador(r);
+}
+window._esMiIndicador=_esMiIndicador;
 // Campo para guardar los valores de las variables de la fórmula (JSON en texto).
 // ⬇️ PEGA AQUÍ el id del campo "Variables de cálculo" que creaste en QuintaDB (tabla de seguimiento).
 const VARIABLES_CALCULO_FIELD_ID = "bhWOfdWQfhWR7cVIJdK8od"; // campo "Variables de cálculo" (SEG_METAS)
@@ -6500,9 +6546,18 @@ async function renderMatriz(){
                   ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         const _dataBuscar = [indSolo, ind, proposito, formula, ofiMed, ofiDueno, rutaFull, elemento, resp].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-        return `<tr class="matriz-fila" data-buscar="${_dataBuscar.replace(/"/g,'&quot;')}" data-ind="${String(ind||'').replace(/"/g,'&quot;')}" data-rutaind="${String(rutaFull||'').replace(/"/g,'&quot;')}" data-due="${String(ofiDueno||ofiMed||'').replace(/"/g,'&quot;')}">
+        // ¿Este indicador está a mi cargo? (responsables técnicos). Define si puedo editarlo.
+        const _mio = _esMiIndicador(r);
+        const _ajeno = _aCargoDeOtro(r);
+        // Se resalta solo cuando hay responsables asignados y yo soy uno de ellos
+        const _acargo = _respTecActivo() && _respTecLista(r).length>0 && _mio
+          && SESION && SESION.rol!=='Administrador' && SESION.rol!=='Gestor';
+        const _estiloFila = _acargo ? 'box-shadow:inset 3px 0 0 var(--brand);' : (_ajeno ? 'opacity:.72;' : '');
+        const _badgeCargo = _acargo
+          ? ` <span title="${attr('Estás registrado como responsable técnico de este indicador: puedes editarlo e informar sus avances.')}" style="display:inline-block;font-size:9px;font-weight:700;color:#1f7a3d;background:#e3f3ea;border:1px solid #a8d5bd;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">★ A tu cargo</span>` : '';
+        return `<tr class="matriz-fila" style="${_estiloFila}" data-buscar="${_dataBuscar.replace(/"/g,'&quot;')}" data-ind="${String(ind||'').replace(/"/g,'&quot;')}" data-rutaind="${String(rutaFull||'').replace(/"/g,'&quot;')}" data-due="${String(ofiDueno||ofiMed||'').replace(/"/g,'&quot;')}">
           <td style="vertical-align:top">${nivelAna?`<span style="display:inline-block;font-size:9px;font-weight:700;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:10px;padding:1px 7px;margin-bottom:3px">${nivelAna.replace(/</g,'&lt;')}</span><br>`:''}${elemento?`<span style="font-size:11px;font-weight:600;color:var(--brand)" title="${elemento.replace(/"/g,'&quot;')}"><div class="clip2">${elemento.replace(/</g,'&lt;')}</div></span>`:'<span class=hint>—</span>'}</td>
-          <td class="celda-ind" style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span></td>
+          <td class="celda-ind" style="vertical-align:top" title="${(indSolo||'').replace(/"/g,'&quot;')}"><span style="font-size:12px;color:var(--ink)"><div class="clip2">${(indSolo||'').replace(/</g,'&lt;')}</div></span>${_badgeCargo}</td>
           <td style="font-size:11px" title="${(proposito||'').replace(/"/g,'&quot;')}">${proposito?`<div class="clip2">${proposito.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(formula||'').replace(/"/g,'&quot;')}">${formula?`<div class="clip2">${formula.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
           <td style="font-size:11px" title="${(ofiMed||'').replace(/"/g,'&quot;')}">${ofiMed?`<div class="clip2">${ofiMed.replace(/</g,'&lt;')}</div>`:'<span class=hint>—</span>'}</td>
@@ -6512,11 +6567,13 @@ async function renderMatriz(){
           <td>${avance}</td>
           <td style="text-align:right;white-space:nowrap">
             <div style="display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-            <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
+            ${_mio
+              ? `<button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>`
+              : `<button class="btn btn-accent btn-sm" disabled title="${attr('Este indicador está a cargo de: '+_respTecLista(r).join(', ')+'. Puedes consultarlo, pero no editarlo ni informarlo.')}" style="opacity:.45;cursor:not-allowed">Metas</button>`}
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleMatriz('${r.id}')">👁</button>
             ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por WhatsApp" onclick="notificarWhatsApp('${r.id}')">📱</button>`:''}
             ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por correo" onclick="notificarCorreo('${r.id}')">✉️</button>`:''}
-            ${puedeEditar()?`<button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>`:''}
+            ${puedeEditar() && _mio ? `<button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>`:''}
             </div>
           </td>
@@ -6837,6 +6894,9 @@ window.guardarIndicadoresMatriz=guardarIndicadoresMatriz;
 // ===== EDITAR DEFINICIÓN DE INDICADOR EN LA MATRIZ =====
 let EM_ID=null;
 async function abrirEditarMatriz(matId){
+  // Solo el/los responsables técnicos (o Admin/Gestor) pueden gestionar este indicador.
+  { const _r=(STATE.matriz||[]).find(x=>x.id===matId);
+    if(_r && !_esMiIndicador(_r)){ toast('Este indicador está a cargo de: '+_respTecLista(_r).join(', ')+'. Puedes consultarlo, pero no editarlo.', true); return; } }
   EM_ID=matId;
   const modal=document.getElementById('modalEditMat');
   modal.classList.add('show'); document.body.style.overflow='hidden';
@@ -6874,6 +6934,8 @@ async function abrirEditarMatriz(matId){
     set('em_responsable', (dCont&&dCont.responsable) || leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición'));
     set('em_celular', (dCont&&dCont.celular) || leerCampo(r, MAT.resp_celular.id, 'Celular responsable'));
     set('em_correo', (dCont&&dCont.correo) || leerCampo(r, MAT.resp_correo.id, 'Correo responsable'));
+    set('em_resp_tec', _respTecActivo() ? _respTecTexto(r) : '');
+    { const b=document.getElementById('em_resp_tec'); if(b) b.closest('.field').style.display = _respTecActivo() ? '' : 'none'; }
   }catch(e){ toast('Error al abrir: '+e.message, true); }
 }
 window.abrirEditarMatriz=abrirEditarMatriz;
@@ -6953,6 +7015,7 @@ async function guardarEdicionMatriz(){
   campos[MAT.resp_med_txt.id]=respLimpio;
   campos[MAT.resp_celular.id]=celVal;
   campos[MAT.resp_correo.id]=corVal;
+  if(_respTecActivo()) campos[_respTecId()]=(g('em_resp_tec')||'').trim();
   const btn=document.getElementById('em_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(EM_ID, campos);
@@ -7137,7 +7200,96 @@ function calcularValorMeta(which){
 window.toggleCalcMeta=toggleCalcMeta;
 window.calcularValorMeta=calcularValorMeta;
 
+// ===== Evidencias: varios enlaces con su etiqueta =====
+// Se usa en DOS formularios: la programación de metas (pm_plan) y el seguimiento (sm_evid).
+// Se guardan en el MISMO campo de texto, una por línea, con el formato:  Etiqueta | https://…
+// Un input oculto conserva ese texto, así el guardado y la carga siguen igual que antes.
+// Compatible con lo ya registrado: una línea que sea solo una URL se lee como enlace sin etiqueta.
+function _evParse(txt){
+  return String(txt||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(linea=>{
+    const i = linea.search(/https?:\/\//i);
+    if(i<0) return { etq: linea.replace(/\s*\|\s*$/,'').trim(), url: '' };
+    const etq = linea.slice(0,i).replace(/\s*\|\s*$/,'').trim();
+    return { etq, url: linea.slice(i).trim() };
+  });
+}
+function _evEsUrl(u){ return /^https?:\/\/\S+$/i.test(String(u||'').trim()); }
+// Lee las filas visibles de un bloque y actualiza su input oculto
+function _evSync(el){
+  const wrap = el && el.closest ? el.closest('.ev-wrap') : null;
+  if(!wrap) return;
+  const hid = document.getElementById(wrap.getAttribute('data-target'));
+  if(!hid) return;
+  const lineas=[];
+  wrap.querySelectorAll('.ev-fila').forEach(f=>{
+    const etq=((f.querySelector('.ev-etq')||{}).value||'').trim();
+    const url=((f.querySelector('.ev-url')||{}).value||'').trim();
+    if(!etq && !url) return;
+    lineas.push(etq ? etq+' | '+url : url);
+    // Aviso visual si no parece una dirección válida (no bloquea el guardado)
+    const inpU=f.querySelector('.ev-url'), av=f.querySelector('.ev-aviso');
+    const malo = url && !_evEsUrl(url);
+    if(inpU) inpU.style.borderColor = malo ? '#e0a800' : '';
+    if(av) av.style.display = malo ? '' : 'none';
+  });
+  hid.value = lineas.join('\n');
+}
+window._evSync=_evSync;
+function _evAbrir(btn){
+  const f=btn.closest('.ev-fila'); if(!f) return;
+  const url=((f.querySelector('.ev-url')||{}).value||'').trim();
+  if(!_evEsUrl(url)){ toast('Escribe primero una dirección válida que empiece con https://', true); return; }
+  window.open(url,'_blank','noopener');
+}
+window._evAbrir=_evAbrir;
+function _evQuitar(btn){
+  const wrap=btn.closest('.ev-wrap'); const f=btn.closest('.ev-fila');
+  if(f) f.remove();
+  if(wrap && !wrap.querySelector('.ev-fila')) _evAgregarEn(wrap);   // dejar siempre una fila vacía
+  if(wrap) _evSync(wrap.querySelector('.ev-fila') || wrap);
+}
+window._evQuitar=_evQuitar;
+function _evFilaHTML(etq, url){
+  const e=String(etq||'').replace(/"/g,'&quot;'), u=String(url||'').replace(/"/g,'&quot;');
+  return `<div class="ev-fila" style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;flex-wrap:wrap">
+    <input class="ev-etq" value="${e}" placeholder="Etiqueta (ej. Informe de prácticas)" oninput="_evSync(this)" style="flex:0 1 210px;min-width:150px">
+    <div style="flex:1 1 260px;min-width:200px">
+      <input class="ev-url" value="${u}" placeholder="https://…" oninput="_evSync(this)" style="width:100%">
+      <div class="ev-aviso" style="display:none;font-size:11px;color:#b06a00;margin-top:3px">Debe ser una dirección completa que empiece con https://</div>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm" title="Abrir el enlace en una pestaña nueva" onclick="_evAbrir(this)">Abrir</button>
+    <button type="button" class="icon-btn" title="Quitar este enlace" onclick="_evQuitar(this)">✕</button>
+  </div>`;
+}
+function _evAgregarEn(wrap){
+  if(!wrap) return;
+  const btn = wrap.querySelector('.ev-add');
+  if(btn) btn.insertAdjacentHTML('beforebegin', _evFilaHTML('',''));
+  else wrap.insertAdjacentHTML('beforeend', _evFilaHTML('',''));
+}
+function _evAgregar(btn){ _evAgregarEn(btn && btn.closest ? btn.closest('.ev-wrap') : null); }
+window._evAgregar=_evAgregar;
+// Repinta las filas de UN bloque a partir del valor de su input oculto.
+// Sin argumento, repinta todos los bloques presentes.
+function _evSyncDesdeInput(target){
+  const wraps = target
+    ? [document.querySelector('.ev-wrap[data-target="'+target+'"]')]
+    : [...document.querySelectorAll('.ev-wrap')];
+  wraps.forEach(wrap=>{
+    if(!wrap) return;
+    const hid=document.getElementById(wrap.getAttribute('data-target'));
+    if(!hid) return;
+    const lista=_evParse(hid.value);
+    wrap.innerHTML = (lista.length?lista:[{etq:'',url:''}]).map(x=>_evFilaHTML(x.etq,x.url)).join('')
+      + `<button type="button" class="btn btn-ghost btn-sm ev-add" style="margin-top:2px" onclick="_evAgregar(this)">+ Añadir enlace</button>`;
+  });
+}
+window._evSyncDesdeInput=_evSyncDesdeInput;
+
 async function abrirMetas(matId){
+  // Solo el/los responsables técnicos (o Admin/Gestor) pueden gestionar este indicador.
+  { const _r=(STATE.matriz||[]).find(x=>x.id===matId);
+    if(_r && !_esMiIndicador(_r)){ toast('Este indicador está a cargo de: '+_respTecLista(_r).join(', ')+'. Puedes consultarlo, pero no editarlo.', true); return; } }
   const recs=await loadMatriz();
   const r=recs.find(x=>x.id===matId);
   if(!r){ toast('No se encontró el indicador.', true); return; }
@@ -7149,6 +7301,7 @@ async function abrirMetas(matId){
   const bp=document.getElementById('pm_guardar'); if(bp) bp.textContent='+ Guardar programación';
   const bs=document.getElementById('sm_guardar'); if(bs) bs.textContent='+ Guardar seguimiento';
   ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
   const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
   const ep=document.getElementById('sm_periodo'); if(ep){ ep.value=''; delete ep.dataset.touched; }
@@ -7240,7 +7393,10 @@ async function cargarProgMetas(){
       const meta=leerCampo(r,PM.valor_meta.id,'Valor meta');
       const obs=limpiarEtiqueta(leerCampo(r,PM.observacion.id,'Observación'));
       const plan=leerCampo(r,PM.plan_accion.id,'Plan de acción');
-      const planLink=plan?` · <a href="${plan}" target="_blank" style="color:var(--brand);font-size:11px">plan ↗</a>`:'';
+      // Puede haber varias evidencias (una por línea, con formato "Etiqueta | url")
+      const planLink=(typeof _evParse==='function'?_evParse(plan):[]).filter(x=>x.url).map(x=>
+        ` · <a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" style="color:var(--brand);font-size:11px">${(x.etq||'evidencia').replace(/</g,'&lt;')} ↗</a>`
+      ).join('');
       return `<tr><td>${fmtFecha(f)||'—'}</td><td><strong style="color:var(--brand);font-size:12px">${per?per.replace(/</g,'&lt;'):'—'}</strong></td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="icon-btn" title="Ver detalle" onclick="_verDetalleProg('${r.id}')">👁️</button>
@@ -7317,6 +7473,7 @@ function _mostrarBtnCancelarSeg(v){ const b=document.getElementById('sm_cancelar
 function cancelarEdicionMeta(){
   PM_EDIT_ID=null;
   ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   const ep=document.getElementById('pm_periodo'); if(ep){ delete ep.dataset.touched; ep.style.display='none'; } _llenarPeriodoSel('pm','');
   _limpiarVarsMeta();
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
@@ -7327,6 +7484,7 @@ window.cancelarEdicionMeta=cancelarEdicionMeta;
 function cancelarEdicionSeg(){
   SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
   ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  if(typeof _evSyncDesdeInput==='function'){ _evSyncDesdeInput('sm_evid'); _evSyncDesdeInput('sm_remed'); }
   const ep=document.getElementById('sm_periodo'); if(ep) delete ep.dataset.touched;
   const selP=document.getElementById('sm_prog'); if(selP) selP.value='';
   const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
@@ -7401,6 +7559,7 @@ function editarProgMeta(progId){
   set('pm_ref', leerCampo(p,PM.valor_ref.id,'Valor de referencia'));
   set('pm_meta', leerCampo(p,PM.valor_meta.id,'Valor meta'));
   set('pm_plan', leerCampo(p,PM.plan_accion.id,'Plan de acción'));
+  if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   set('pm_obs', limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación')));
   const ep=document.getElementById('pm_periodo'); if(ep){ const perVal=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; ep.value=perVal; ep.dataset.touched='1'; _llenarPeriodoSel('pm', perVal); }
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='✓ Actualizar programación';
@@ -7469,6 +7628,7 @@ async function guardarProgMeta(){
     PM_EDIT_ID=null;
     const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
     const ep=document.getElementById('pm_periodo'); if(ep){ delete ep.dataset.touched; ep.style.display='none'; } _llenarPeriodoSel('pm','');
     _limpiarVarsMeta();   // dejar las variables de referencia y meta en blanco
     _mostrarBtnCancelarMeta(false);
@@ -7934,7 +8094,12 @@ async function cargarSegMetas(){
         const obs=limpiarEtiqueta(leerCampo(r,SM.observacion.id,'Observación'));
         const evid=leerCampo(r,SM.evidencias.id,'Evidencias');
         const remed=leerCampo(r,SM.plan_remediacion.id,'Plan de remediación');
-        const links=[evid?`<a href="${evid}" target="_blank" style="color:var(--brand);font-size:11px">evid ↗</a>`:'', remed?`<a href="${remed}" target="_blank" style="color:var(--bad);font-size:11px">remed ↗</a>`:''].filter(Boolean).join(' · ');
+        // Puede haber varias evidencias (una por línea, con formato "Etiqueta | url")
+        const evLinks=(typeof _evParse==='function'?_evParse(evid):[]).filter(x=>x.url).map(x=>
+          `<a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" style="color:var(--brand);font-size:11px">${(x.etq||'evidencia').replace(/</g,'&lt;')} ↗</a>`);
+        const rmLinks=(typeof _evParse==='function'?_evParse(remed):[]).filter(x=>x.url).map(x=>
+          `<a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" style="color:var(--bad);font-size:11px">${(x.etq||'plan de mejora').replace(/</g,'&lt;')} ↗</a>`);
+        const links=[...evLinks, ...rmLinks].filter(Boolean).join(' · ');
         return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(refN)?'—':refN}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="icon-btn" title="Ver detalle" onclick="_verDetalleSeg('${r.id}')">👁️</button>
@@ -7959,7 +8124,9 @@ function editarSegMeta(segId){
   set('sm_fecha', leerCampo(s,SM.fecha_eval.id,'Fecha evaluación'));
   set('sm_real', leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
   set('sm_evid', leerCampo(s,SM.evidencias.id,'Evidencias'));
+  if(typeof _evSyncDesdeInput==='function'){ _evSyncDesdeInput('sm_evid'); _evSyncDesdeInput('sm_remed'); }
   set('sm_remed', leerCampo(s,SM.plan_remediacion.id,'Plan de remediación'));
+  if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput('sm_remed');
   // Tipo de medición guardado (por defecto Parcial si no hay)
   if(SM.tipo_medicion){ const tm=leerCampo(s, SM.tipo_medicion.id, 'Tipo de medición'); const selTm=document.getElementById('sm_tipo_med'); if(selTm) selTm.value=(tm==='Cierre'?'Cierre':'Parcial'); }
   set('sm_obs', limpiarEtiqueta(leerCampo(s,SM.observacion.id,'Observación')));
@@ -8063,6 +8230,7 @@ async function guardarSegMeta(){
     toast(SM_EDIT_ID?'Seguimiento actualizado.':'Seguimiento guardado.');
     SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
     ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  if(typeof _evSyncDesdeInput==='function'){ _evSyncDesdeInput('sm_evid'); _evSyncDesdeInput('sm_remed'); }
     const elPer=document.getElementById('sm_periodo'); if(elPer) delete elPer.dataset.touched;
     const selP=document.getElementById('sm_prog'); if(selP) selP.value='';
     const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
