@@ -5575,26 +5575,42 @@ function _respTecTexto(r){
 function _respTecLista(r){
   return _respTecTexto(r).split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
 }
+// ¿El usuario en sesión figura como responsable técnico de ALGÚN indicador?
+// Si es así, se le considera "especialista": solo podrá editar los que tiene asignados,
+// aunque haya otros sin responsable. Quien no figura en ninguno conserva el acceso
+// completo de su oficina, para no bloquear a las áreas que aún no designan especialistas.
+let _SOY_RESP_TEC = null;
+function _soyRespTecnico(){
+  if(_SOY_RESP_TEC!==null) return _SOY_RESP_TEC;
+  if(!SESION || !_respTecActivo()){ _SOY_RESP_TEC=false; return false; }
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
+  _SOY_RESP_TEC = (STATE.matriz||[]).some(r=>_respTecLista(r).some(x=>yo.includes(norm(x))));
+  return _SOY_RESP_TEC;
+}
+function _invalidarSoyRespTec(){ _SOY_RESP_TEC=null; }
+window._invalidarSoyRespTec=_invalidarSoyRespTec;
+
 // ¿Este indicador está a cargo del usuario en sesión?
 //  · Administrador y Gestor: siempre pueden (gestionan todo).
-//  · Si el indicador NO tiene responsables técnicos asignados: puede cualquiera de la oficina,
-//    para no dejar indicadores bloqueados sin que nadie pueda reportarlos.
-//  · Si los tiene: solo quienes figuren ahí (por correo o por nombre).
+//  · Si el indicador tiene responsables técnicos: solo quienes figuren ahí.
+//  · Si NO tiene responsables: puede editarlo quien no sea especialista; un especialista
+//    (que ya tiene indicadores asignados) queda limitado a los suyos.
 function _esMiIndicador(r){
   if(!SESION) return false;
   if(SESION.rol==='Administrador' || SESION.rol==='Gestor') return true;
   if(!_respTecActivo()) return true;
   const lista=_respTecLista(r);
-  if(!lista.length) return true;
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
-  return lista.some(x=>yo.includes(norm(x)));
+  if(lista.length) return lista.some(x=>yo.includes(norm(x)));
+  return !_soyRespTecnico();
 }
-// ¿Tiene responsables asignados y NO soy yo? (para atenuar y explicar de quién es)
+// ¿No puedo editarlo? (para atenuar la fila y explicar de quién es)
 function _aCargoDeOtro(r){
   if(!_respTecActivo()) return false;
   if(SESION && (SESION.rol==='Administrador' || SESION.rol==='Gestor')) return false;
-  return _respTecLista(r).length>0 && !_esMiIndicador(r);
+  return !_esMiIndicador(r);
 }
 window._esMiIndicador=_esMiIndicador;
 // Campo para guardar los valores de las variables de la fórmula (JSON en texto).
@@ -6263,7 +6279,7 @@ async function actualizarTextoSync(id, btn){
     toast('Texto actualizado. Metas y mediciones conservadas.');
     const tr=btn.closest('tr'); if(tr){ tr.style.opacity='.5'; }
     btn.textContent='✓ Actualizado';
-    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz(); if(typeof _invalidarIndsEnFichas==='function') _invalidarIndsEnFichas();
+    STATE.matriz=[]; if(typeof _invalidarSoyRespTec==='function') _invalidarSoyRespTec(); if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz(); if(typeof _invalidarIndsEnFichas==='function') _invalidarIndsEnFichas();
     // Refrescar TAMBIÉN el listado de Fichas registradas y su caché de pintado, para que
     // el marcado ámbar refleje el cambio sin recargar el sistema.
     if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
@@ -6282,7 +6298,7 @@ async function eliminarHuerfanoSync(id, btn){
     toast('Indicador huérfano eliminado.');
     const tr=btn.closest('tr'); if(tr){ tr.style.opacity='.4'; tr.style.textDecoration='line-through'; }
     btn.textContent='Eliminado';
-    STATE.matriz=[]; if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz(); if(typeof _invalidarIndsEnFichas==='function') _invalidarIndsEnFichas();
+    STATE.matriz=[]; if(typeof _invalidarSoyRespTec==='function') _invalidarSoyRespTec(); if(typeof _invalidarIndsEnMatriz==='function') _invalidarIndsEnMatriz(); if(typeof _invalidarIndsEnFichas==='function') _invalidarIndsEnFichas();
     if(typeof invalidarCacheIndicadores==='function') invalidarCacheIndicadores();
     // Refrescar la tabla de la matriz en vivo (el registro eliminado desaparece sin cambiar de pestaña)
     if(typeof renderMatriz==='function'){ try{ renderMatriz(); }catch(_){} }
@@ -6446,6 +6462,9 @@ async function renderMatriz(){
       return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
     });
     pintarResumenMatriz(recsVisibles);
+    // Recalcular si el usuario es "especialista" (responsable técnico de algún indicador),
+    // porque de eso depende si puede editar los indicadores sin responsable asignado.
+    if(typeof _invalidarSoyRespTec==='function') _invalidarSoyRespTec();
     // NOTA: el filtrado por oficina (desplegable) y por texto se hace EN VIVO sobre las filas
     // ya pintadas (filtrarPorOficina), no aquí. Así el render construye siempre todas las filas
     // y escribir en el buscador no recarga datos ni hace perder el foco del cursor.
@@ -6574,7 +6593,7 @@ async function renderMatriz(){
             <div style="display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             ${_mio
               ? `<button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>`
-              : `<button class="btn btn-accent btn-sm" disabled title="${attr('Este indicador está a cargo de: '+_respTecLista(r).join(', ')+'. Puedes consultarlo, pero no editarlo ni informarlo.')}" style="opacity:.45;cursor:not-allowed">Metas</button>`}
+              : `<button class="btn btn-accent btn-sm" disabled title="${attr(_respTecLista(r).length ? 'Este indicador está a cargo de: '+_respTecLista(r).join(', ')+'. Puedes consultarlo, pero no editarlo ni informarlo.' : 'Este indicador no está a tu cargo. Tú eres responsable técnico de otros indicadores; puedes consultarlo, pero no editarlo ni informarlo.')}" style="opacity:.45;cursor:not-allowed">Metas</button>`}
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleMatriz('${r.id}')">👁</button>
             ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por WhatsApp" onclick="notificarWhatsApp('${r.id}')">📱</button>`:''}
             ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por correo" onclick="notificarCorreo('${r.id}')">✉️</button>`:''}
@@ -6901,7 +6920,7 @@ let EM_ID=null;
 async function abrirEditarMatriz(matId){
   // Solo el/los responsables técnicos (o Admin/Gestor) pueden gestionar este indicador.
   { const _r=(STATE.matriz||[]).find(x=>x.id===matId);
-    if(_r && !_esMiIndicador(_r)){ toast('Este indicador está a cargo de: '+_respTecLista(_r).join(', ')+'. Puedes consultarlo, pero no editarlo.', true); return; } }
+    if(_r && !_esMiIndicador(_r)){ const _l=_respTecLista(_r); toast(_l.length ? 'Este indicador está a cargo de: '+_l.join(', ')+'. Puedes consultarlo, pero no editarlo.' : 'Este indicador no está a tu cargo. Puedes consultarlo, pero no editarlo.', true); return; } }
   EM_ID=matId;
   const modal=document.getElementById('modalEditMat');
   modal.classList.add('show'); document.body.style.overflow='hidden';
@@ -7294,7 +7313,7 @@ window._evSyncDesdeInput=_evSyncDesdeInput;
 async function abrirMetas(matId){
   // Solo el/los responsables técnicos (o Admin/Gestor) pueden gestionar este indicador.
   { const _r=(STATE.matriz||[]).find(x=>x.id===matId);
-    if(_r && !_esMiIndicador(_r)){ toast('Este indicador está a cargo de: '+_respTecLista(_r).join(', ')+'. Puedes consultarlo, pero no editarlo.', true); return; } }
+    if(_r && !_esMiIndicador(_r)){ const _l=_respTecLista(_r); toast(_l.length ? 'Este indicador está a cargo de: '+_l.join(', ')+'. Puedes consultarlo, pero no editarlo.' : 'Este indicador no está a tu cargo. Puedes consultarlo, pero no editarlo.', true); return; } }
   const recs=await loadMatriz();
   const r=recs.find(x=>x.id===matId);
   if(!r){ toast('No se encontró el indicador.', true); return; }
