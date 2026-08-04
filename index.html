@@ -5554,6 +5554,11 @@ window.eliminarFicha=eliminarFicha;
    ============================================================ */
 const MAT = CONFIG.MATRIZ_IND_FIELDS, PM = CONFIG.PROG_METAS_FIELDS, SM = CONFIG.SEG_METAS_FIELDS;
 
+// Escapa comillas para poder meter texto dentro de un atributo HTML (title="…").
+// Es global porque se usa en varias vistas; antes existía solo dentro de una función.
+function attr(s){ return String(s||'').replace(/"/g,'&quot;'); }
+window.attr=attr;
+
 // ===== Responsables técnicos por indicador =====
 // Permite que dentro de una misma oficina cada persona VEA todos los indicadores de su
 // escuela, pero solo pueda EDITAR e INFORMAR los que tiene a su cargo.
