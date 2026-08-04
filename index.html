@@ -6514,8 +6514,8 @@ async function renderMatriz(){
             <div style="display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             <button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleMatriz('${r.id}')">👁</button>
-            <button class="icon-btn" title="Notificar por WhatsApp" onclick="notificarWhatsApp('${r.id}')">📱</button>
-            <button class="icon-btn" title="Notificar por correo" onclick="notificarCorreo('${r.id}')">✉️</button>
+            ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por WhatsApp" onclick="notificarWhatsApp('${r.id}')">📱</button>`:''}
+            ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por correo" onclick="notificarCorreo('${r.id}')">✉️</button>`:''}
             ${puedeEditar()?`<button class="icon-btn" title="Editar definición" onclick="abrirEditarMatriz('${r.id}')">✏️</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarMatriz('${r.id}')">🗑️</button>`:''}
             </div>
@@ -7604,6 +7604,8 @@ async function _datosNotifIndConFallback(r){
 }
 
 async function notificarWhatsApp(matId){
+  // Las notificaciones son de Administrador/Gestor; el rol Oficina no las envía.
+  if(!puedeVerTodo()){ toast('Las notificaciones las envía el administrador o el gestor.', true); return; }
   const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
   const d=await _datosNotifIndConFallback(r);
   const tel=_telWaInd(d.celular);
@@ -7614,6 +7616,8 @@ async function notificarWhatsApp(matId){
   if(win){ win.location.href=url; } else { window.location.href=url; }
 }
 async function notificarCorreo(matId){
+  // Las notificaciones son de Administrador/Gestor; el rol Oficina no las envía.
+  if(!puedeVerTodo()){ toast('Las notificaciones las envía el administrador o el gestor.', true); return; }
   const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
   const d=await _datosNotifIndConFallback(r);
   if(!d.correo){ toast('Este indicador no tiene correo del responsable registrado.', true); return; }
@@ -7744,8 +7748,8 @@ async function verDetalleMatriz(matId){
   ];
   const html=filas.map(([e,v])=>_detRow(e,v)).filter(Boolean).join('');
   const btns=[];
-  if(_telWaInd(d.celular)) btns.push(`<button class="btn btn-primary" style="padding:8px 14px;font-size:13px" onclick="notificarWhatsApp('${r.id}')">📱 Notificar por WhatsApp</button>`);
-  if(d.correo) btns.push(`<button class="btn btn-ghost" style="padding:8px 14px;font-size:13px" onclick="notificarCorreo('${r.id}')">✉️ Notificar por correo</button>`);
+  if(puedeVerTodo() && _telWaInd(d.celular)) btns.push(`<button class="btn btn-primary" style="padding:8px 14px;font-size:13px" onclick="notificarWhatsApp('${r.id}')">📱 Notificar por WhatsApp</button>`);
+  if(puedeVerTodo() && d.correo) btns.push(`<button class="btn btn-ghost" style="padding:8px 14px;font-size:13px" onclick="notificarCorreo('${r.id}')">✉️ Notificar por correo</button>`);
   const notifHTML = btns.length ? `<div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--line);display:flex;gap:8px;flex-wrap:wrap">${btns.join('')}</div>` : '';
   document.getElementById('det_titulo').textContent = (d.indicador||'Indicador').slice(0,80);
   document.getElementById('det_cuerpo').innerHTML = (html||'<p class="hint">Sin datos.</p>') + notifHTML;
