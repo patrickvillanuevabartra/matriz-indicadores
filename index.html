@@ -4980,6 +4980,10 @@ let _INDS_EN_MATRIZ = null;
 // ámbar es porque se EDITÓ el texto (y hay que actualizarlo desde Sincronización), no porque
 // sea un indicador nuevo sin desarrollar.
 let _MATRIZ_POR_ELEM = null;
+// Responsables técnicos que tiene cada FICHA, deducidos de los indicadores de esa ficha en la
+// matriz. Clave: "rutaDeLaFicha ¦¦ dueño". Permite que en Fichas registradas cada especialista
+// solo pueda editar las fichas de los procesos que tiene a su cargo.
+let _RESP_POR_FICHA = null;
 async function cargarIndsEnMatriz(){
   if(_INDS_EN_MATRIZ) return _INDS_EN_MATRIZ;
   const set = new Set();
