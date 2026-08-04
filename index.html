@@ -4886,16 +4886,21 @@ async function renderListado(){
         const archTag = arch.length ? `<div style="margin-top:4px"><span title="Proceso(s) archivado(s): ${arch.join(', ').replace(/"/g,'&quot;')}" style="display:inline-block;font-size:10px;font-weight:600;color:#b06a00;background:#fff3e0;border:1px solid #f0c987;border-radius:8px;padding:1px 7px">⚠️ Proceso archivado</span></div>` : '';
         const desagId='desag_'+nivel+'_'+r.id;
         _paraDesagregado.push({celdaId:desagId, r, nivel, nInd});
+        // ¿Puedo editar esta ficha? (según los responsables técnicos de sus indicadores)
+        const _miFicha = _esMiFicha(r, nivel);
+        const _respFic = _respDeFicha(r, nivel);
+        const _fichaACargo = _respTecActivo() && _respFic.length>0 && _miFicha
+          && SESION && SESION.rol!=='Administrador' && SESION.rol!=='Gestor';
         const _dbFicha = [ruta, obj, dueno].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-        return `<tr class="fichas-fila" data-buscar="${_dbFicha.replace(/"/g,'&quot;')}">
+        return `<tr class="fichas-fila" style="${_fichaACargo?'box-shadow:inset 3px 0 0 var(--brand);':(_miFicha?'':'opacity:.72;')}" data-buscar="${_dbFicha.replace(/"/g,'&quot;')}">
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
           <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>60?ruta.slice(0,60)+'…':ruta}${archTag}</td>
           <td style="max-width:200px;vertical-align:top;font-size:12px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>80?obj.slice(0,80)+'…':obj):'<span class="hint">—</span>'}</td>
           <td id="${desagId}" style="vertical-align:top"><span class="hint">Cargando…</span></td>
           <td style="text-align:right;white-space:nowrap;vertical-align:top">
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleFicha('${nivel}','${r.id}')">👁</button>
-            ${puedeEditar()?`<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>`:''}
-            ${puedeEditar()?`<button class="icon-btn" title="${_fichaArchivada(r,nivel)?'Reactivar':'Archivar'}" onclick="archivarFicha('${nivel}','${r.id}', ${_fichaArchivada(r,nivel)?'false':'true'})">📦</button>`:''}
+            ${puedeEditar()? (_miFicha ? `<button class="icon-btn" title="Editar" onclick="editarFicha('${nivel}','${r.id}')">✏️</button>` : `<button class="icon-btn" disabled title="${attr(_respFic.length ? 'Los indicadores de este proceso están a cargo de: '+_respFic.join(', ')+'. Puedes consultar la ficha, pero no editarla.' : 'Este proceso no está a tu cargo. Puedes consultar la ficha, pero no editarla.')}" style="opacity:.35;cursor:not-allowed">✏️</button>`):''}
+            ${puedeEditar() && _miFicha?`<button class="icon-btn" title="${_fichaArchivada(r,nivel)?'Reactivar':'Archivar'}" onclick="archivarFicha('${nivel}','${r.id}', ${_fichaArchivada(r,nivel)?'false':'true'})">📦</button>`:''}
             ${puedeEliminar()?`<button class="icon-btn" title="Eliminar" onclick="eliminarFicha('${nivel}','${r.id}')">🗑️</button>`:''}
           </td>
         </tr>`;
@@ -4979,6 +4984,7 @@ async function cargarIndsEnMatriz(){
   if(_INDS_EN_MATRIZ) return _INDS_EN_MATRIZ;
   const set = new Set();
   const porElem = new Map();
+  const respFicha = new Map();
   try{
     const recs = await loadMatriz();
     const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
@@ -5001,14 +5007,50 @@ async function cargarIndsEnMatriz(){
         const k = norm(ru)+' ¦¦ '+norm(due||'');
         if(!porElem.has(k)) porElem.set(k, []);
         porElem.get(k).push(t);
+        // Responsables técnicos de este indicador → se acumulan por FICHA (la ruta sin su
+        // último segmento, que es el componente) para el control en Fichas registradas.
+        if(_respTecActivo()){
+          const partes=String(ru||'').split(' › ');
+          const kf = norm(partes.slice(0,-1).join(' › '))+' ¦¦ '+norm(due||med||'');
+          if(!respFicha.has(kf)) respFicha.set(kf, new Set());
+          _respTecLista(m).forEach(x=>respFicha.get(kf).add(norm(x)));
+        }
       }
     });
     _INDS_EN_MATRIZ = set;   // solo se fija si la carga fue exitosa
     _MATRIZ_POR_ELEM = porElem;
+    _RESP_POR_FICHA = respFicha;
   }catch(_){ /* no fijar: se reintentará */ }
   return _INDS_EN_MATRIZ || set;
 }
-function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; _MATRIZ_POR_ELEM=null; }
+function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; _MATRIZ_POR_ELEM=null; _RESP_POR_FICHA=null; }
+
+// ¿Puedo editar esta FICHA? Cada proceso tiene su ficha, y sus indicadores pueden tener
+// responsables técnicos asignados en la matriz. Regla:
+//  · Administrador y Gestor: siempre.
+//  · Si los indicadores de la ficha tienen responsables: solo si soy uno de ellos.
+//  · Si no tienen: puede quien no sea especialista (mismo criterio que en la matriz).
+function _esMiFicha(r, nivel){
+  if(!SESION) return false;
+  if(SESION.rol==='Administrador' || SESION.rol==='Gestor') return true;
+  if(!_respTecActivo() || !_RESP_POR_FICHA) return true;   // sin datos aún: no bloquear
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const F = (nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
+  const k = norm(rutaFicha(r,nivel))+' ¦¦ '+norm(leerDueno(r,F)||'');
+  const resp = _RESP_POR_FICHA.get(k);
+  if(!resp || !resp.size) return !_soyRespTecnico();
+  const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
+  return yo.some(x=>resp.has(x));
+}
+// Lista de responsables de la ficha (para el aviso)
+function _respDeFicha(r, nivel){
+  if(!_RESP_POR_FICHA) return [];
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const F = (nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
+  const resp=_RESP_POR_FICHA.get(norm(rutaFicha(r,nivel))+' ¦¦ '+norm(leerDueno(r,F)||''));
+  return resp ? [...resp] : [];
+}
+window._esMiFicha=_esMiFicha;
 
 // Devuelve el MOTIVO por el que un indicador de la ficha aparece en ámbar:
 //   {tipo:'edicion', viejo:'…'}  → el texto se corrigió; en la matriz sigue la versión anterior
@@ -7923,6 +7965,9 @@ async function verDetalleMatriz(matId){
     ['Fuente de información', d.fuente],
     ['Oficina responsable de la medición', d.oficina],
     ['Responsable de la medición', d.responsable],
+    ['Responsable(s) técnico(s)', _respTecActivo()
+      ? (_respTecLista(r).length ? _respTecLista(r).join(' · ') : 'Sin asignar (puede editarlo cualquiera de la oficina que no sea responsable técnico de otros indicadores)')
+      : ''],
     ['Celular del responsable', d.celular],
     ['Correo del responsable', d.correo],
     ['Frecuencia de medición', d.frecuencia],
