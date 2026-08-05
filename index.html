@@ -661,7 +661,7 @@
   <div class="bar">
     <div class="logo">
       <div class="logo-mark">I</div>
-      <div><b>Matriz de Indicadores</b><span>Facultad de Ingeniería · URP — Sistema de Gestión ISO 21001</span></div>
+      <div><b>Matriz de Indicadores</b><span>Facultad de Ingeniería · URP — Sistema de Gestión para Organizaciones Educativas (SGOE)<br>ISO 21001</span></div>
     </div>
     <nav>
       <button data-view="tablero" id="navTablero" class="active">Tablero</button>
@@ -3621,7 +3621,7 @@ function exportarTablaExcel(tabla, titulo, nombreArch, quitarUltimaCol){
     +'<style>table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt}'
     +'th{background:#1f7a4d;color:#fff;border:1px solid #999;padding:6px 8px;text-align:left}'
     +'td{border:1px solid #bbb;padding:5px 8px;vertical-align:top}</style></head><body>'
-    +'<h3>'+titulo+' — Facultad de Ingeniería URP (SGC ISO 21001)</h3>'
+    +'<h3>'+titulo+' — Facultad de Ingeniería URP<br>Sistema de Gestión para Organizaciones Educativas (SGOE) · ISO 21001</h3>'
     +'<p>Exportado el '+fecha+'</p>'+clon.outerHTML+'</body></html>';
   const blob=new Blob(['\ufeff'+htmlDoc],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
@@ -3672,7 +3672,7 @@ function exportarInventarioExcel(){
     +'<style>table{border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt}'
     +'th{background:#1f7a4d;color:#fff;border:1px solid #999;padding:6px 8px;text-align:left}'
     +'td{border:1px solid #bbb;padding:5px 8px;vertical-align:top}</style></head><body>'
-    +'<h3>Inventario de procesos — Facultad de Ingeniería URP (SGC ISO 21001)</h3>'
+    +'<h3>Inventario de procesos — Facultad de Ingeniería URP<br>Sistema de Gestión para Organizaciones Educativas (SGOE) · ISO 21001</h3>'
     +'<p>Exportado el '+fecha+'</p>'
     +clon.outerHTML+'</body></html>';
   const blob=new Blob(['\ufeff'+htmlDoc],{type:'application/vnd.ms-excel;charset=utf-8'});
@@ -7798,9 +7798,9 @@ function aplicarPlantilla(txt, datos){
 }
 
 // Plantillas por defecto (si no hay nada configurado en QuintaDB)
-const PLANTILLA_WA_DEFECTO = 'Estimado/a {responsable},\n\nLe notificamos sobre el siguiente indicador de gestión bajo su responsabilidad:\n\n• Indicador: {indicador}\n• Proceso: {proceso}\n• Fórmula: {formula}\n• Frecuencia de medición: {frecuencia}\n\nPor favor registrar la medición correspondiente y dar seguimiento.\n\n— Sistema de Gestión ISO 21001, Facultad de Ingeniería URP';
-const PLANTILLA_ASUNTO_DEFECTO = 'Notificación de indicador — Sistema de Gestión ISO 21001 URP';
-const PLANTILLA_CORREO_DEFECTO = 'Estimado/a {responsable},\n\nLe notificamos sobre el siguiente indicador de gestión bajo su responsabilidad:\n\n• Indicador: {indicador}\n• Proceso: {proceso}\n• Fórmula: {formula}\n• Frecuencia de medición: {frecuencia}\n• Oficina responsable: {oficina}\n\nPor favor registrar la medición correspondiente y dar seguimiento.\n\nSaludos cordiales,\nSistema de Gestión ISO 21001 — Facultad de Ingeniería URP';
+const PLANTILLA_WA_DEFECTO = 'Estimado/a {responsable},\n\nLe notificamos sobre el siguiente indicador de gestión bajo su responsabilidad:\n\n• Indicador: {indicador}\n• Proceso: {proceso}\n• Fórmula: {formula}\n• Frecuencia de medición: {frecuencia}\n\nPor favor registrar la medición correspondiente y dar seguimiento.\n\n— Sistema de Gestión para Organizaciones Educativas (SGOE)\\nISO 21001 — Facultad de Ingeniería URP';
+const PLANTILLA_ASUNTO_DEFECTO = 'Notificación de indicador — SGOE ISO 21001 · Facultad de Ingeniería URP';
+const PLANTILLA_CORREO_DEFECTO = 'Estimado/a {responsable},\n\nLe notificamos sobre el siguiente indicador de gestión bajo su responsabilidad:\n\n• Indicador: {indicador}\n• Proceso: {proceso}\n• Fórmula: {formula}\n• Frecuencia de medición: {frecuencia}\n• Oficina responsable: {oficina}\n\nPor favor registrar la medición correspondiente y dar seguimiento.\n\nSaludos cordiales,\nSistema de Gestión para Organizaciones Educativas (SGOE)\\nISO 21001 — Facultad de Ingeniería URP';
 
 // Cache de plantillas cargadas desde QuintaDB
 let PLANTILLAS_IND = null;        // {wa, asunto, correo}
