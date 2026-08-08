@@ -1152,7 +1152,7 @@
         <div class="field"><label>Responsable de la medición</label><input id="em_responsable" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Celular del responsable</label><input id="em_celular" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Correo del responsable</label><input id="em_correo" readonly style="background:var(--paper)"></div>
-        <div class="field full"><label>Responsables técnicos <span class="hint" style="font-weight:400">— correos separados por coma; solo ellos podrán editar e informar este indicador. Si se deja vacío, puede hacerlo cualquiera de la oficina.</span></label><input id="em_resp_tec" placeholder="nombre.apellido@urp.edu.pe, otro@urp.edu.pe"></div>
+        <div class="field full"><label>Responsables técnicos <span class="hint" style="font-weight:400">— se eligen de la lista del responsable del proceso; solo ellos podrán editar e informar este indicador. Si se deja vacío, puede hacerlo cualquiera de la oficina.</span></label><div id="em_resp_tec_wrap"></div><input type="hidden" id="em_resp_tec"></div>
         <div class="field"><label>Frecuencia de medición</label><select id="em_frec_med"></select></div>
         <div class="field"><label>Frecuencia de cálculo</label><select id="em_frec_calc"></select></div>
       </div>
@@ -5611,6 +5611,11 @@ window.attr=attr;
 // Field-id del campo «Responsables técnicos» de la tabla Matriz de Indicadores (QuintaDB).
 // Si se dejara vacío, la función queda desactivada y todo se comporta como antes.
 const RESP_TEC_FIELD_ID = 'dcI1xdOGDdK5P2i8k5y8of';
+// Campos espejo en la Matriz: los llena AUTOMÁTICAMENTE el selector, a partir del correo
+// elegido. Sirven para que el nombre y el celular queden legibles en QuintaDB y en los
+// reportes; el permiso sigue basándose únicamente en el correo.
+const RESP_TEC_NOMBRE_FIELD_ID  = 'dcLSkFydvdL4kiW67dOLeu';
+const RESP_TEC_CELULAR_FIELD_ID = 'c1ySoQW6joEykIW7zAwq46';
 function _respTecActivo(){ return !!(RESP_TEC_FIELD_ID || (MAT.resp_tecnico && MAT.resp_tecnico.id)); }
 function _respTecId(){ return (MAT.resp_tecnico && MAT.resp_tecnico.id) || RESP_TEC_FIELD_ID; }
 // Texto crudo del campo (correos separados por coma, punto y coma o salto de línea)
@@ -7005,22 +7010,15 @@ async function abrirEditarMatriz(matId){
     set('em_celular', (dCont&&dCont.celular) || leerCampo(r, MAT.resp_celular.id, 'Celular responsable'));
     set('em_correo', (dCont&&dCont.correo) || leerCampo(r, MAT.resp_correo.id, 'Correo responsable'));
     set('em_resp_tec', _respTecActivo() ? _respTecTexto(r) : '');
+    // Selector de responsables técnicos (la restricción a Administrador la aplica _rtSyncDesdeInput)
+    if(typeof _rtSyncDesdeInput==='function') _rtSyncDesdeInput();
     { const b=document.getElementById('em_resp_tec');
       if(b){
         b.closest('.field').style.display = _respTecActivo() ? '' : 'none';
-        // Asignar responsables técnicos es una decisión de permisos: SOLO el Administrador.
-        // Los demás lo ven (para saber de quién es el indicador) pero no pueden cambiarlo:
-        // si pudieran, un especialista podría asignarse indicadores o quitar a otro.
-        const soloAdmin = !esAdmin();
-        b.readOnly = soloAdmin;
-        b.style.background = soloAdmin ? 'var(--paper)' : '';
-        b.style.cursor = soloAdmin ? 'not-allowed' : '';
-        b.title = soloAdmin ? 'Solo el administrador puede asignar o cambiar los responsables técnicos.' : '';
-        b.placeholder = soloAdmin ? 'Sin asignar' : 'nombre.apellido@urp.edu.pe, otro@urp.edu.pe';
         const et = b.closest('.field').querySelector('.hint');
-        if(et) et.textContent = soloAdmin
-          ? '— solo el administrador puede modificar este campo'
-          : '— correos separados por coma; solo ellos podrán editar e informar este indicador. Si se deja vacío, puede hacerlo cualquiera de la oficina.';
+        if(et) et.textContent = !esAdmin()
+          ? '— solo el administrador puede asignar los responsables técnicos'
+          : '— se eligen de la lista del responsable del proceso; solo ellos podrán editar e informar este indicador. Si se deja vacío, puede hacerlo cualquiera de la oficina.';
       } }
   }catch(e){ toast('Error al abrir: '+e.message, true); }
 }
@@ -7033,6 +7031,125 @@ function selectByText(selId, txt){
   const opt=[...sel.options].find(o=>norm(o.text)===norm(txt) || norm(o.value)===norm(txt));
   if(opt) sel.value=opt.value;
 }
+
+// ===== Tabla «Responsable técnico» (QuintaDB) =====
+// Cada técnico pertenece a un Líder (el responsable del proceso) y a una Unidad responsable.
+// El desplegable del indicador se filtra por esa dependencia.
+// Se guarda SOLO el correo en el campo «Responsables técnicos»: el nombre y el celular se
+// resuelven desde esta tabla, así un cambio de teléfono se corrige en un solo lugar.
+const RESP_TEC_ENTITY = 'ddOCoDW51dSikTWP3dVSoL';
+let _RESP_TEC_LISTA = null;
+async function cargarRespTecnicos(forzar){
+  if(_RESP_TEC_LISTA && !forzar) return _RESP_TEC_LISTA;
+  const limpio = v => { const t=String(v==null?'':v).replace(/\s+/g,' ').trim(); return (!t||/^(Field_|Seleccione$)/.test(t))?'':t; };
+  const out=[];
+  try{
+    const data = await API.records(RESP_TEC_ENTITY);
+    (data.records||[]).forEach(r=>{
+      const v=r.values||{};
+      const nombre = limpio(v['Responsable técnico']);
+      const correo = limpio(v['Correo electrónico responsable técnico']);
+      if(!nombre && !correo) return;
+      out.push({
+        id: r.id, nombre, correo,
+        celular: limpio(v['Celular responsable técnico']),
+        lider:   limpio(v['Líder']),
+        unidad:  limpio(v['Unidad responsable'])
+      });
+    });
+  }catch(e){ /* si falla, el desplegable queda vacío */ }
+  _RESP_TEC_LISTA = out;
+  return out;
+}
+window.cargarRespTecnicos=cargarRespTecnicos;
+// Busca los datos de un técnico por su correo (para mostrar nombre y celular)
+function _respTecPorCorreo(correo){
+  const k = String(correo||'').replace(/\s+/g,' ').trim().toLowerCase();
+  if(!k || !_RESP_TEC_LISTA) return null;
+  return _RESP_TEC_LISTA.find(x=>String(x.correo||'').toLowerCase()===k) || null;
+}
+window._respTecPorCorreo=_respTecPorCorreo;
+
+// ===== Selector de responsables técnicos (varios, con «+ Añadir») =====
+// Guarda los CORREOS en el input oculto #em_resp_tec, que es el que se graba en QuintaDB.
+// Las opciones se filtran por el responsable del proceso (Líder) o por la oficina (Unidad).
+function _rtOpciones(){
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const oficina = norm((document.getElementById('em_oficina')||{}).value||'');
+  const lider   = norm((document.getElementById('em_responsable')||{}).value||'');
+  const todos = _RESP_TEC_LISTA||[];
+  // Filtro por dependencia: mismo Líder o misma Unidad responsable.
+  let lista = todos.filter(x=> (lider && norm(x.lider)===lider) || (oficina && norm(x.unidad)===oficina));
+  // Si el filtro no arroja nada (datos incompletos), se ofrecen todos para no bloquear.
+  if(!lista.length) lista = todos;
+  return lista.filter(x=>x.correo);
+}
+function _rtFilaHTML(correoSel){
+  const ops=_rtOpciones();
+  const hay=ops.some(x=>String(x.correo).toLowerCase()===String(correoSel||'').toLowerCase());
+  const info=_respTecPorCorreo(correoSel);
+  const opciones = ['<option value="">— elige un responsable técnico —</option>']
+    .concat(ops.map(x=>`<option value="${attr(x.correo)}" ${String(x.correo).toLowerCase()===String(correoSel||'').toLowerCase()?'selected':''}>${String(x.nombre||x.correo).replace(/</g,'&lt;')}</option>`));
+  // Si el valor guardado ya no está en la tabla, se conserva como opción para no perderlo
+  if(correoSel && !hay){
+    const otro=_respTecPorCorreo(correoSel);
+    const etq = otro ? (otro.nombre||correoSel)+' (de otra unidad)' : correoSel+' (ya no figura en la tabla)';
+    opciones.push(`<option value="${attr(correoSel)}" selected>${String(etq).replace(/</g,'&lt;')}</option>`);
+  }
+  const datos = info ? `${info.correo}${info.celular?' · '+info.celular:''}` : (correoSel||'');
+  return `<div class="rt-fila" style="display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;flex-wrap:wrap">
+    <div style="flex:1 1 260px;min-width:220px">
+      <select class="rt-sel" onchange="_rtSync()" style="width:100%">${opciones.join('')}</select>
+      <div class="rt-datos" style="font-size:11px;color:var(--mist);margin-top:3px">${String(datos).replace(/</g,'&lt;')}</div>
+    </div>
+    <button type="button" class="icon-btn" title="Quitar" onclick="_rtQuitar(this)">✕</button>
+  </div>`;
+}
+function _rtSync(){
+  const wrap=document.getElementById('em_resp_tec_wrap'), hid=document.getElementById('em_resp_tec');
+  if(!wrap||!hid) return;
+  const correos=[];
+  wrap.querySelectorAll('.rt-fila').forEach(f=>{
+    const v=((f.querySelector('.rt-sel')||{}).value||'').trim();
+    const d=f.querySelector('.rt-datos');
+    const info=_respTecPorCorreo(v);
+    if(d) d.textContent = info ? (info.correo+(info.celular?' · '+info.celular:'')) : v;
+    if(v && !correos.includes(v)) correos.push(v);
+  });
+  hid.value = correos.join(', ');
+}
+window._rtSync=_rtSync;
+function _rtQuitar(btn){
+  const f=btn.closest('.rt-fila'); if(f) f.remove();
+  const wrap=document.getElementById('em_resp_tec_wrap');
+  if(wrap && !wrap.querySelector('.rt-fila')) _rtAgregar();
+  _rtSync();
+}
+window._rtQuitar=_rtQuitar;
+function _rtAgregar(){
+  const wrap=document.getElementById('em_resp_tec_wrap'); if(!wrap) return;
+  const btn=wrap.querySelector('.rt-add');
+  if(btn) btn.insertAdjacentHTML('beforebegin', _rtFilaHTML(''));
+  else wrap.insertAdjacentHTML('beforeend', _rtFilaHTML(''));
+}
+window._rtAgregar=_rtAgregar;
+// Repinta las filas a partir del valor guardado (correos separados por coma)
+async function _rtSyncDesdeInput(){
+  const wrap=document.getElementById('em_resp_tec_wrap'), hid=document.getElementById('em_resp_tec');
+  if(!wrap||!hid) return;
+  await cargarRespTecnicos();
+  const lista=String(hid.value||'').split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
+  const soloAdmin = !esAdmin();
+  wrap.innerHTML = (lista.length?lista:['']).map(c=>_rtFilaHTML(c)).join('')
+    + (soloAdmin ? '' : `<button type="button" class="btn btn-ghost btn-sm rt-add" style="margin-top:2px" onclick="_rtAgregar()">+ Añadir responsable</button>`);
+  // Solo el administrador asigna responsables técnicos; los demás lo ven en modo consulta.
+  if(soloAdmin){
+    wrap.querySelectorAll('.rt-sel').forEach(s=>{ s.disabled=true; s.style.background='var(--paper)'; s.style.cursor='not-allowed'; s.title='Solo el administrador puede asignar los responsables técnicos.'; });
+    wrap.querySelectorAll('.rt-fila .icon-btn').forEach(b=>b.remove());
+  }
+  _rtSync();
+}
+window._rtSyncDesdeInput=_rtSyncDesdeInput;
 
 async function autocompletarRespMatrizEdit(){
   const sel=document.getElementById('em_oficina');
@@ -7047,6 +7164,8 @@ async function autocompletarRespMatrizEdit(){
   // Si la oficina no tiene responsable en el mapa, LIMPIAR (no dejar el valor anterior).
   if(elR) elR.value=info.responsable||'(sin responsable registrado)';
   if(elC) elC.value=info.celular||'';
+  // Las opciones de responsables técnicos dependen de esta oficina/responsable: repintar.
+  if(typeof _rtSyncDesdeInput==='function' && document.getElementById('em_resp_tec_wrap')) _rtSyncDesdeInput();
   if(elE) elE.value=info.correo||'';
 }
 window.autocompletarRespMatrizEdit=autocompletarRespMatrizEdit;
@@ -7103,7 +7222,16 @@ async function guardarEdicionMatriz(){
   campos[MAT.resp_correo.id]=corVal;
   // Solo el administrador puede modificar los responsables técnicos. Para el resto, el campo
   // ni siquiera se envía, así que conserva su valor actual en la base.
-  if(_respTecActivo() && esAdmin()) campos[_respTecId()]=(g('em_resp_tec')||'').trim();
+  if(_respTecActivo() && esAdmin()){
+    const correosTec=(g('em_resp_tec')||'').split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);
+    campos[_respTecId()]=correosTec.join(', ');
+    // Campos espejo: nombre y celular, en el MISMO orden que los correos
+    const nombres=[], celus=[];
+    correosTec.forEach(c=>{ const t=(typeof _respTecPorCorreo==='function')?_respTecPorCorreo(c):null;
+      nombres.push(t&&t.nombre ? t.nombre : c); celus.push(t&&t.celular ? t.celular : ''); });
+    campos[RESP_TEC_NOMBRE_FIELD_ID]  = nombres.join(', ');
+    campos[RESP_TEC_CELULAR_FIELD_ID] = celus.filter(Boolean).join(', ');
+  }
   const btn=document.getElementById('em_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
     await API.saveForm(EM_ID, campos);
@@ -7976,6 +8104,8 @@ function _detSegHTML(r){
 async function verDetalleMatriz(matId){
   const r=(STATE.matriz||[]).find(x=>x.id===matId); if(!r) return;
   const d=await _datosNotifIndConFallback(r);
+  // Cargar la tabla de responsables técnicos para poder mostrar su nombre y celular
+  if(_respTecActivo() && typeof cargarRespTecnicos==='function'){ try{ await cargarRespTecnicos(); }catch(_){} }
   let nivel = relTieneAlgo(r,MAT.indicador_n1.id)?'N1' : relTieneAlgo(r,MAT.indicador_n2.id)?'N2' : relTieneAlgo(r,MAT.indicador_n0.id)?'N0':'';
   if(!nivel && d.proceso) nivel = nivelDesdeRuta(d.proceso);
   const filas=[
@@ -7988,7 +8118,12 @@ async function verDetalleMatriz(matId){
     ['Oficina responsable de la medición', d.oficina],
     ['Responsable de la medición', d.responsable],
     ['Responsable(s) técnico(s)', _respTecActivo()
-      ? (_respTecLista(r).length ? _respTecLista(r).join(' · ') : 'Sin asignar (puede editarlo cualquiera de la oficina que no sea responsable técnico de otros indicadores)')
+      ? (_respTecLista(r).length
+          ? _respTecLista(r).map(c=>{
+              const t=(typeof _respTecPorCorreo==='function')?_respTecPorCorreo(c):null;
+              return t ? (t.nombre||c)+' · '+c+(t.celular?' · '+t.celular:'') : c;
+            }).join('  |  ')
+          : 'Sin asignar (puede editarlo cualquiera de la oficina que no sea responsable técnico de otros indicadores)')
       : ''],
     ['Celular del responsable', d.celular],
     ['Correo del responsable', d.correo],
