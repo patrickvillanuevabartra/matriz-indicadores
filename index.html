@@ -6621,7 +6621,14 @@ async function renderMatriz(){
           : (r._periodos>0
               ? `<span class="hint" style="font-size:11px">${r._periodos} periodo(s) sin avance</span>`
               : (r._progMetas>0
-                  ? `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>`
+                  ? (()=>{ // Metas programadas: mostrar de QUÉ periodo(s) son
+                      const _pers=(r._progMetasList||[]).map(x=>String(x.periodo||'').trim())
+                        .filter(p=>p && !/periodo/i.test(p));
+                      const _txtPer=_pers.length
+                        ? `<div style="font-size:10px;color:var(--slate);font-weight:600;margin-top:3px">${_pers.join(' · ').replace(/</g,'&lt;')}</div>`
+                        : '';
+                      return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--brand);background:var(--paper);border:1px solid var(--brand-2);border-radius:20px;padding:3px 10px" title="${attr('Meta programada, aún sin seguimiento registrado. Cuando registres la medición, aquí verás la barra de avance.')}"><span style="font-size:13px">✓</span> ${r._progMetas} meta(s) programada(s)</span>${_txtPer}`;
+                    })()
                   : '<span class="hint" style="font-size:12px">Sin metas</span>'));
         const _dataBuscar = [indSolo, ind, proposito, formula, ofiMed, ofiDueno, rutaFull, elemento, resp].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
         // ¿Este indicador está a mi cargo? (responsables técnicos). Define si puedo editarlo.
