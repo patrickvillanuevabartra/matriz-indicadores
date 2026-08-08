@@ -6536,6 +6536,9 @@ async function renderMatriz(){
     // Asegurar fichas cargadas (para resolver a qué ficha pertenece cada indicador) y
     // cargar el orden de subformularios SOLO de las fichas presentes, en paralelo.
     try{ await _mapLimitado(['N0','N1','N2','N3'], 2, n=>loadFichas(n)); }catch(_){}
+    // Tabla de responsables técnicos: permite mostrar el NOMBRE aunque el registro solo
+    // tenga guardado el correo (asignaciones hechas antes de existir el campo de nombre).
+    if(_respTecActivo()){ try{ await cargarRespTecnicos(); }catch(_){} }
     try{ await loadInventario(); }catch(_){}
     try{ await construirMapaIndicadores(); }catch(_){}
     // Agrupar por OFICINA de medición (ancla principal, igual que antes y que "Fichas registradas").
@@ -6638,8 +6641,13 @@ async function renderMatriz(){
         if(_respTecActivo()){
           const _correosTec = _respTecLista(r);
           if(_correosTec.length){
+            // Nombre: primero el guardado en la matriz; si no está, se resuelve desde la
+            // tabla de responsables técnicos; y solo como último recurso se muestra el correo.
             const _nomTec = (leerCampo(r, RESP_TEC_NOMBRE_FIELD_ID, 'Nombre responsable técnico')||'').trim();
-            const _txtTec = _nomTec || _correosTec.join(', ');
+            const _txtTec = _nomTec || _correosTec.map(c=>{
+              const t=(typeof _respTecPorCorreo==='function')?_respTecPorCorreo(c):null;
+              return (t && t.nombre) ? t.nombre : c;
+            }).join(', ');
             _lineaRespTec += `<div style="margin-top:2px;font-size:10px;color:#2b4c9b" title="${attr('Responsable(s) técnico(s) de este indicador: '+_correosTec.join(', ')+'. Solo ellos pueden editarlo e informarlo.')}"><span style="font-weight:700">Técnico:</span> ${String(_txtTec).replace(/</g,'&lt;')}</div>`;
           }
         }
