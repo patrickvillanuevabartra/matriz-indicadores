@@ -5974,10 +5974,19 @@ async function renderTablero(){
     recs.forEach(m=>{
       const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'—';
-      (m._avancePeriodos||[]).forEach(p=>{
-        if(p.pct===null||p.pct===undefined) return;
+      const medidos=(m._avancePeriodos||[]).filter(p=>p.pct!==null&&p.pct!==undefined);
+      medidos.forEach(p=>{
         _TAB_MEDICIONES.push({ ind, ofi, periodo:p.periodo||'(sin periodo)', pct:p.pct });
       });
+      // Indicadores SIN ninguna medición: entran como PENDIENTES, para que el gráfico refleje
+      // el total real de la oficina y no solo lo ya medido. No se cuentan como "<50%", porque
+      // "no medido" es un problema distinto de "medido con bajo desempeño".
+      if(!medidos.length){
+        const persMeta=(m._progMetasList||[]).map(x=>String(x.periodo||'').trim())
+          .filter(pp=>pp && !/periodo/i.test(pp));
+        if(persMeta.length) persMeta.forEach(pp=>_TAB_MEDICIONES.push({ ind, ofi, periodo:pp, pct:null, pendiente:true }));
+        else _TAB_MEDICIONES.push({ ind, ofi, periodo:'(sin programar)', pct:null, pendiente:true });
+      }
     });
     html+=`<div id="tab-semaforo" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-top:20px;scroll-margin-top:90px">
       <div style="font-weight:700;color:var(--brand);margin-bottom:4px;font-size:15px">Avance de cumplimiento por rangos</div>
@@ -5998,7 +6007,8 @@ const _TAB_RANGOS=[
   { key:'r100', label:'100% de avance',        color:'#0f6b4f', test:p=>p>=100 },
   { key:'r75',  label:'75% a 99% de avance',   color:'#4aa88e', test:p=>p>=75 && p<100 },
   { key:'r50',  label:'50% a 74% de avance',   color:'#8fc9b9', test:p=>p>=50 && p<75 },
-  { key:'rlow', label:'Menor al 50% de avance',color:'#c0392b', test:p=>p<50 },
+  { key:'rlow', label:'Menor al 50% de avance',color:'#c0392b', test:p=>p!==null && p!==undefined && p<50 },
+  { key:'rpend',label:'Pendiente (sin medición)',color:'#8a8f8c', test:p=>p===null || p===undefined },
 ];
 function _tabMedicionesFiltradas(){
   return _TAB_MEDICIONES.filter(m=>{
@@ -6052,7 +6062,7 @@ function _tabRenderRanking(){
   if(!_TAB_FILTRO.rango){ cont.innerHTML='<p class="hint" style="margin:0">Haz clic en un rango de arriba para ver el ranking de indicadores.</p>'; return; }
   const r=_TAB_RANGOS.find(x=>x.key===_TAB_FILTRO.rango); if(!r) return;
   const datos=_tabMedicionesFiltradas().filter(m=>r.test(m.pct));
-  datos.sort((a,b)=>b.pct-a.pct); // mayor a menor
+  datos.sort((a,b)=>(b.pct==null?-1:b.pct)-(a.pct==null?-1:a.pct)); // mayor a menor; pendientes al final
   let h=`<div style="font-weight:700;color:${r.color};margin-bottom:10px">${r.label} <span style="color:var(--mist);font-weight:600">(${datos.length})</span></div>`;
   if(!datos.length){ h+='<p class="hint" style="margin:0">Sin indicadores en este rango con los filtros actuales.</p>'; cont.innerHTML=h; return; }
   h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">';
@@ -6063,7 +6073,7 @@ function _tabRenderRanking(){
       <td style="padding:7px 8px;color:var(--slate)">${String(m.ind).replace(/</g,'&lt;')}</td>
       <td style="padding:7px 8px;color:var(--mist)">${String(m.ofi).replace(/</g,'&lt;')}</td>
       <td style="padding:7px 8px;color:var(--mist)">${String(m.periodo).replace(/</g,'&lt;')}</td>
-      <td style="padding:7px 8px;text-align:right;font-weight:700;color:${r.color}">${Math.round(m.pct)}%</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:700;color:${r.color}">${(m.pct==null)?'sin medir':Math.round(m.pct)+'%'}</td>
     </tr>`;
   });
   h+='</tbody></table></div>';
