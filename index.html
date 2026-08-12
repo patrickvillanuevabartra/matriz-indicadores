@@ -6106,15 +6106,18 @@ function _tabRenderSemaforo(){
   h+='<div style="display:flex;flex-direction:column;gap:8px">';
   _TAB_RANGOS.forEach(r=>{
     const n=conteos[r.key]; const w=totalMed?Math.round(n/totalMed*100):0;
+    // Ancho MÍNIMO visible: con pocos casos sobre muchos (p. ej. 1 de 26 = 4%) la barra
+    // quedaba tan fina que no se distinguía. Si hay al menos un caso, se garantiza que se vea.
+    const wPint = n>0 ? Math.max(w, 6) : 0;
     const activo=_TAB_FILTRO.rango===r.key;
     const vacio=(n===0);
     h+=`<div onclick="${vacio?'':`_tabSetRango('${r.key}')`}" style="${vacio?'opacity:.55;':'cursor:pointer;'}display:flex;align-items:center;gap:10px;padding:6px;border-radius:8px;${activo?'background:var(--paper);outline:2px solid '+r.color:''}">
       <div style="width:16px;height:16px;border-radius:4px;background:${r.color};flex-shrink:0"></div>
       <div style="width:180px;font-size:13px;color:var(--slate);font-weight:600">${r.label}</div>
       <div style="flex:1;background:var(--paper);border-radius:8px;height:24px;border:1px solid var(--line);position:relative;overflow:hidden">
-        ${n>0?`<div style="width:${w}%;height:100%;background:${r.color};border-radius:7px 0 0 7px"></div>
+        ${n>0?`<div style="width:${wPint}%;height:100%;background:${r.color};border-radius:7px 0 0 7px;min-width:14px"></div>
         <span style="position:absolute;top:0;height:100%;display:flex;align-items:center;font-size:12px;font-weight:700;${
-          w>=12 ? 'left:8px;color:#fff' : 'left:calc('+w+'% + 8px);color:'+r.color
+          wPint>=12 ? 'left:8px;color:#fff' : 'left:calc('+wPint+'% + 10px);color:'+r.color
         }">${n}</span>`:''}
       </div>
       <div style="width:80px;text-align:right;font-size:12px;color:var(--mist)">${n>0?(n+' · '+w+'%'):'—'}</div>
