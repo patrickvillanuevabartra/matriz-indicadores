@@ -6076,8 +6076,30 @@ function _tabRenderSemaforo(){
       </div>
     </div></div>`;
   // Filtros de periodo (multi)
-  h+=`<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700;margin-bottom:6px">Periodos ${_TAB_FILTRO.periodos.length?'('+_TAB_FILTRO.periodos.length+' seleccionados)':'(todos)'}</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">${periodos.map(p=>chip(p, _TAB_FILTRO.periodos.includes(p), `_tabToggleFiltro('periodos','${p.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')`)).join('')}</div></div>`;
+  // Filtro de periodos: mismo formato que el de oficinas, para que la barra quede ordenada.
+  const nPer=_TAB_FILTRO.periodos.length;
+  h+=`<div style="margin-bottom:14px">
+    <div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700;margin-bottom:6px">Periodos</div>
+    <div style="position:relative;display:inline-block;min-width:280px;max-width:100%">
+      <button onclick="_tabToggleListaPer()" style="font:inherit;font-size:13px;width:100%;text-align:left;padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--slate);cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <span>${nPer? nPer+' periodo(s) seleccionado(s)' : 'Todos los periodos'}</span><span style="color:var(--mist)">▾</span>
+      </button>
+      <div id="tab-lista-per" style="display:none;position:absolute;z-index:50;left:0;right:0;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.14)">
+        <div style="max-height:230px;overflow-y:auto;padding:6px">
+          ${periodos.map(pp=>{
+            const marcada=_TAB_FILTRO.periodos.includes(pp);
+            const val=pp.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+            return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--slate)" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+              <input type="checkbox" ${marcada?'checked':''} onchange="_tabToggleFiltro('periodos','${val}')" style="width:15px;height:15px;cursor:pointer">
+              <span>${pp.replace(/</g,'&lt;')}</span></label>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;padding:8px;border-top:1px solid var(--line)">
+          <button onclick="_tabLimpiarPeriodos()" style="font:inherit;font-size:12px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--slate);cursor:pointer">Ver todos</button>
+          <button onclick="_tabCerrarListaPer()" class="btn btn-primary btn-sm" style="font-size:12px">Listo</button>
+        </div>
+      </div>
+    </div></div>`;
   if(_TAB_FILTRO.oficinas.length||_TAB_FILTRO.periodos.length||_TAB_FILTRO.rango){ h+=`<div style="margin-bottom:14px"><button class="btn btn-ghost btn-sm" onclick="_tabLimpiar()">Limpiar selección</button></div>`; }
   if(!totalMed){ h+='<p class="hint">No hay mediciones con avance para los filtros elegidos.</p>'; cont.innerHTML=h; return; }
   // Barras del semáforo
@@ -6131,12 +6153,25 @@ function _tabRenderRanking(){
 function _tabToggleListaOfi(){
   const el=document.getElementById('tab-lista-ofi'); if(!el) return;
   const abrir = (el.style.display==='none'||!el.style.display);
+  if(typeof _tabCerrarListaPer==='function') _tabCerrarListaPer();  // no dos listas a la vez
   el.style.display = abrir ? 'block' : 'none';
   if(abrir){ const b=document.getElementById('tab-buscar-ofi'); if(b){ b.value=''; _tabFiltrarListaOfi(); setTimeout(()=>b.focus(),30); } }
 }
 window._tabToggleListaOfi=_tabToggleListaOfi;
 function _tabCerrarListaOfi(){ const el=document.getElementById('tab-lista-ofi'); if(el) el.style.display='none'; }
 window._tabCerrarListaOfi=_tabCerrarListaOfi;
+// Lista de periodos: mismo comportamiento que la de oficinas (Listo, clic fuera, Escape)
+function _tabToggleListaPer(){
+  const el=document.getElementById('tab-lista-per'); if(!el) return;
+  const abrir=(el.style.display==='none'||!el.style.display);
+  _tabCerrarListaOfi();                       // no dejar las dos listas abiertas a la vez
+  el.style.display = abrir ? 'block' : 'none';
+}
+window._tabToggleListaPer=_tabToggleListaPer;
+function _tabCerrarListaPer(){ const el=document.getElementById('tab-lista-per'); if(el) el.style.display='none'; }
+window._tabCerrarListaPer=_tabCerrarListaPer;
+function _tabLimpiarPeriodos(){ _TAB_FILTRO.periodos=[]; _tabRenderSemaforo(); }
+window._tabLimpiarPeriodos=_tabLimpiarPeriodos;
 // Filtra las oficinas de la lista según lo escrito (sin acentos, en cualquier parte del nombre)
 function _tabFiltrarListaOfi(){
   const norm = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
@@ -6153,12 +6188,14 @@ function _tabFiltrarListaOfi(){
 window._tabFiltrarListaOfi=_tabFiltrarListaOfi;
 // Cerrar al hacer clic fuera del desplegable o con Escape
 document.addEventListener('click', e=>{
-  const el=document.getElementById('tab-lista-ofi');
-  if(!el || el.style.display!=='block') return;
-  const caja=el.parentElement;                       // el contenedor con el botón y la lista
-  if(caja && !caja.contains(e.target)) _tabCerrarListaOfi();
+  [['tab-lista-ofi',_tabCerrarListaOfi], ['tab-lista-per',()=>_tabCerrarListaPer()]].forEach(([id,cerrar])=>{
+    const el=document.getElementById(id);
+    if(!el || el.style.display!=='block') return;
+    const caja=el.parentElement;                     // contenedor con el botón y la lista
+    if(caja && !caja.contains(e.target)) cerrar();
+  });
 });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') _tabCerrarListaOfi(); });
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ _tabCerrarListaOfi(); if(typeof _tabCerrarListaPer==='function') _tabCerrarListaPer(); } });
 function _tabLimpiarOficinas(){ _TAB_FILTRO.oficinas=[]; _tabRenderSemaforo(); }
 window._tabLimpiarOficinas=_tabLimpiarOficinas;
 
@@ -6168,6 +6205,8 @@ function _tabToggleFiltro(campo,val){
   if(i>=0) arr.splice(i,1); else arr.push(val);
   const abierta = campo==='oficinas' && (document.getElementById('tab-lista-ofi')||{}).style
     && document.getElementById('tab-lista-ofi').style.display==='block';
+  const abiertaPer = campo==='periodos' && (document.getElementById('tab-lista-per')||{}).style
+    && document.getElementById('tab-lista-per').style.display==='block';
   const _txtBusq = (document.getElementById('tab-buscar-ofi')||{}).value||'';
   _tabRenderSemaforo();
   // Mantener la lista abierta (y lo escrito en el buscador) para marcar varias seguidas
@@ -6176,6 +6215,7 @@ function _tabToggleFiltro(campo,val){
     const b=document.getElementById('tab-buscar-ofi');
     if(b){ b.value=_txtBusq; _tabFiltrarListaOfi(); b.focus(); }
   }
+  if(abiertaPer){ const el=document.getElementById('tab-lista-per'); if(el) el.style.display='block'; }
 }
 function _tabSetRango(key){ _TAB_FILTRO.rango=(_TAB_FILTRO.rango===key)?null:key; _tabRenderSemaforo(); }
 function _tabLimpiar(){ _TAB_FILTRO={ oficinas:[], periodos:[], rango:null }; _tabRenderSemaforo(); }
@@ -7959,6 +7999,20 @@ async function guardarProgMeta(){
   if(!String(plan||'').trim()){ toast('Agrega al menos una evidencia (enlace) de la programación.', true);
     const w=document.getElementById('pm_plan_wrap'); if(w){ w.scrollIntoView({behavior:'smooth',block:'center'});
       const i=w.querySelector('.ev-url'); if(i){ i.focus(); i.style.borderColor='#c0392b'; } } return; }
+  // ANTI-DUPLICADOS: un indicador no puede tener DOS metas programadas para el MISMO periodo
+  // (quedaría con dos objetivos distintos y el % de avance sería ambiguo). Al editar, no se
+  // compara consigo misma.
+  if(String(periodo||'').trim()){
+    const normP = x => String(x||'').replace(/\s+/g,' ').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const yaExiste=(STATE.progMetas||[]).find(x=>
+      x.id!==PM_EDIT_ID && normP(leerCampo(x, PM.periodo.id, 'Periodo'))===normP(periodo));
+    if(yaExiste){
+      const vm=leerCampo(yaExiste, PM.valor_meta.id, 'Valor meta');
+      toast('Este indicador ya tiene una meta programada para «'+periodo+'»'+(vm?' (valor '+vm+')':'')+
+            '. Edita la que ya existe en lugar de crear otra.', true);
+      return;
+    }
+  }
   const campos={};
   if(!PM_EDIT_ID) campos[PM.rel_matriz.id]=[MT_CTX.matId];
   if(fecha) campos[PM.fecha_prog.id]=fecha;
