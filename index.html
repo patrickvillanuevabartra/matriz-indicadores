@@ -6031,6 +6031,7 @@ function _tabRenderSemaforo(){
   const conteos={}; _TAB_RANGOS.forEach(r=>conteos[r.key]=0);
   datos.forEach(m=>{ const r=_TAB_RANGOS.find(x=>x.test(m.pct)); if(r) conteos[r.key]++; });
   const totalMed=datos.length;
+  const maxN=Math.max(1, ..._TAB_RANGOS.map(r=>conteos[r.key]||0));   // mayor conteo, para escalar las barras
   // Chip de filtro (marcable)
   const chip=(label, activo, onclick)=>`<button onclick="${onclick}" style="font:inherit;font-size:12px;font-weight:600;border-radius:16px;padding:5px 12px;cursor:pointer;border:1.5px solid ${activo?'var(--brand)':'var(--line)'};background:${activo?'var(--brand)':'var(--card)'};color:${activo?'#fff':'var(--slate)'}">${activo?'✓ ':''}${String(label).replace(/</g,'&lt;')}</button>`;
   // Título dinámico: deja claro QUÉ oficina(s) se están evaluando
@@ -6106,9 +6107,11 @@ function _tabRenderSemaforo(){
   h+='<div style="display:flex;flex-direction:column;gap:8px">';
   _TAB_RANGOS.forEach(r=>{
     const n=conteos[r.key]; const w=totalMed?Math.round(n/totalMed*100):0;
-    // Ancho MÍNIMO visible: con pocos casos sobre muchos (p. ej. 1 de 26 = 4%) la barra
-    // quedaba tan fina que no se distinguía. Si hay al menos un caso, se garantiza que se vea.
-    const wPint = n>0 ? Math.max(w, 6) : 0;
+    // ANCHO DE LA BARRA: se escala respecto al rango MÁS ALTO (no al total). Si se usara el
+    // total, con muchos casos los valores pequeños caerían todos bajo el mínimo visible y se
+    // verían iguales (8, 3 y 1 pintaban lo mismo). Escalando al máximo, el mayor llena la
+    // barra y los demás quedan en proporción real entre sí, siempre visibles.
+    const wPint = n>0 ? Math.max(Math.round(n/maxN*100), 5) : 0;
     const activo=_TAB_FILTRO.rango===r.key;
     const vacio=(n===0);
     h+=`<div onclick="${vacio?'':`_tabSetRango('${r.key}')`}" style="${vacio?'opacity:.55;':'cursor:pointer;'}display:flex;align-items:center;gap:10px;padding:6px;border-radius:8px;${activo?'background:var(--paper);outline:2px solid '+r.color:''}">
