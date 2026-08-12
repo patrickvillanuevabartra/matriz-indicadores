@@ -1203,7 +1203,7 @@
                 <div id="pm_meta_grid" class="grid"></div>
               </div>
             </div>
-            <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
+            <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span style="color:#c0392b">*</span> <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
               <div class="ev-wrap" id="pm_plan_wrap" data-target="pm_plan"></div>
               <input type="hidden" id="pm_plan">
             </div>
@@ -1236,8 +1236,8 @@
             <div class="field"><label>Tipo de medición</label><select id="sm_tipo_med" onchange="evaluarRemediacion()"><option value="Parcial">Parcial (corte / avance en curso)</option><option value="Cierre">De cierre (fin del periodo)</option></select></div>
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
             <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
-            <div class="field full"><div style="font-size:11px;color:var(--mist);background:var(--paper);border-radius:8px;padding:8px 12px;line-height:1.5">📐 <strong>Fórmula del % de avance:</strong> (valor alcanzado − referencia) ÷ (meta − referencia) × 100. Funciona para indicadores donde subir es mejor y donde bajar es mejor. 100% = se alcanzó la meta; 0% = sin avance respecto a la línea base.</div></div>
-            <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
+            <div class="field full"><div style="font-size:11px;color:var(--mist);background:var(--paper);border-radius:8px;padding:8px 12px;line-height:1.5">📐 <strong>Fórmula del % de avance:</strong> (valor alcanzado − referencia) ÷ (meta − referencia) × 100. Funciona para indicadores donde subir es mejor y donde bajar es mejor. 100% = se alcanzó la meta; 0% = sin avance respecto a la línea base.<br><br><strong>Qué mide:</strong> cuánto se logró <em>respecto a la mejora proyectada</em>, no el valor absoluto alcanzado. Es decir, evalúa el grado de cumplimiento sobre la <em>tasa de incremento programada</em>.<br><br><strong>Ejemplo (Escuela Profesional de Ingeniería Informática):</strong><br>Línea base: 0,70 · Meta programada: 0,90 → la mejora proyectada es <strong>0,20</strong>.<br>Al corte del 31 de julio de 2026 la gestión real alcanzó <strong>91,18 %</strong> (0,91), es decir una mejora efectiva de <strong>0,21</strong> sobre la línea base.<br><span style="display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 9px;margin-top:5px;color:var(--slate)">% de avance = 0,21 ÷ 0,20 × 100 = <strong>105 %</strong></span><br>Supera el 100 % porque la mejora lograda fue mayor que la proyectada para el periodo.</div></div>
+            <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span style="color:#c0392b">*</span> <span class="hint" style="font-weight:400">— obligatorio: puedes agregar varias; cada una con su etiqueta</span></label>
               <div class="ev-wrap" id="sm_evid_wrap" data-target="sm_evid"></div>
               <input type="hidden" id="sm_evid">
             </div>
@@ -5975,9 +5975,13 @@ async function renderTablero(){
       const ind=leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       const ofi=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición')||'—';
       const medidos=(m._avancePeriodos||[]).filter(p=>p.pct!==null&&p.pct!==undefined);
-      medidos.forEach(p=>{
-        _TAB_MEDICIONES.push({ ind, ofi, periodo:p.periodo||'(sin periodo)', pct:p.pct });
-      });
+      // UNA fila por INDICADOR (no por periodo): se usa su ÚLTIMA medición, igual que el
+      // ranking por oficina. Si se contara cada periodo, un indicador medido dos veces
+      // sumaría dos y el total no coincidiría con el número real de indicadores.
+      if(medidos.length){
+        const ult=medidos[medidos.length-1];
+        _TAB_MEDICIONES.push({ ind, ofi, periodo:ult.periodo||'(sin periodo)', pct:ult.pct });
+      }
       // Indicadores SIN ninguna medición: entran como PENDIENTES, para que el gráfico refleje
       // el total real de la oficina y no solo lo ya medido. No se cuentan como "<50%", porque
       // "no medido" es un problema distinto de "medido con bajo desempeño".
@@ -6028,9 +6032,26 @@ function _tabRenderSemaforo(){
   // Chip de filtro (marcable)
   const chip=(label, activo, onclick)=>`<button onclick="${onclick}" style="font:inherit;font-size:12px;font-weight:600;border-radius:16px;padding:5px 12px;cursor:pointer;border:1.5px solid ${activo?'var(--brand)':'var(--line)'};background:${activo?'var(--brand)':'var(--card)'};color:${activo?'#fff':'var(--slate)'}">${activo?'✓ ':''}${String(label).replace(/</g,'&lt;')}</button>`;
   let h='';
-  // Filtros de oficina (multi)
-  h+=`<div style="margin-bottom:10px"><div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700;margin-bottom:6px">Oficinas ${_TAB_FILTRO.oficinas.length?'('+_TAB_FILTRO.oficinas.length+' seleccionadas)':'(todas)'}</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">${oficinas.map(o=>chip(o, _TAB_FILTRO.oficinas.includes(o), `_tabToggleFiltro('oficinas','${o.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')`)).join('')}</div></div>`;
+  // Filtro de oficinas: desplegable con casilleros (permite marcar varias). Con ~24 oficinas,
+  // los chips ocupaban demasiado espacio; así la lista queda plegada hasta que se necesita.
+  const nSel=_TAB_FILTRO.oficinas.length;
+  h+=`<div style="margin-bottom:10px">
+    <div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700;margin-bottom:6px">Oficinas</div>
+    <div style="position:relative;display:inline-block;min-width:280px;max-width:100%">
+      <button onclick="_tabToggleListaOfi()" style="font:inherit;font-size:13px;width:100%;text-align:left;padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--slate);cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center">
+        <span>${nSel? nSel+' oficina(s) seleccionada(s)' : 'Todas las oficinas'}</span><span style="color:var(--mist)">▾</span>
+      </button>
+      <div id="tab-lista-ofi" style="display:none;position:absolute;z-index:50;left:0;right:0;margin-top:4px;max-height:260px;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:6px">
+        <button onclick="_tabLimpiarOficinas()" style="font:inherit;font-size:12px;width:100%;text-align:left;padding:6px 8px;border:0;background:transparent;color:var(--brand);cursor:pointer;font-weight:600">Todas las oficinas</button>
+        ${oficinas.map(o=>{
+          const marcada=_TAB_FILTRO.oficinas.includes(o);
+          const val=o.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+          return `<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--slate)" onmouseover="this.style.background='var(--paper)'" onmouseout="this.style.background=''">
+            <input type="checkbox" ${marcada?'checked':''} onchange="_tabToggleFiltro('oficinas','${val}')" style="width:15px;height:15px;cursor:pointer">
+            <span>${o.replace(/</g,'&lt;')}</span></label>`;
+        }).join('')}
+      </div>
+    </div></div>`;
   // Filtros de periodo (multi)
   h+=`<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--mist);text-transform:uppercase;font-weight:700;margin-bottom:6px">Periodos ${_TAB_FILTRO.periodos.length?'('+_TAB_FILTRO.periodos.length+' seleccionados)':'(todos)'}</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap">${periodos.map(p=>chip(p, _TAB_FILTRO.periodos.includes(p), `_tabToggleFiltro('periodos','${p.replace(/'/g,"\\'").replace(/"/g,'&quot;')}')`)).join('')}</div></div>`;
@@ -6079,11 +6100,24 @@ function _tabRenderRanking(){
   h+='</tbody></table></div>';
   cont.innerHTML=h;
 }
+// Abre/cierra la lista desplegable de oficinas del semáforo
+function _tabToggleListaOfi(){
+  const el=document.getElementById('tab-lista-ofi'); if(!el) return;
+  el.style.display = (el.style.display==='none'||!el.style.display) ? 'block' : 'none';
+}
+window._tabToggleListaOfi=_tabToggleListaOfi;
+function _tabLimpiarOficinas(){ _TAB_FILTRO.oficinas=[]; _tabRenderSemaforo(); }
+window._tabLimpiarOficinas=_tabLimpiarOficinas;
+
 function _tabToggleFiltro(campo,val){
   const arr=_TAB_FILTRO[campo];
   const i=arr.indexOf(val);
   if(i>=0) arr.splice(i,1); else arr.push(val);
+  const abierta = campo==='oficinas' && (document.getElementById('tab-lista-ofi')||{}).style
+    && document.getElementById('tab-lista-ofi').style.display==='block';
   _tabRenderSemaforo();
+  // Mantener la lista abierta para poder marcar varias seguidas
+  if(abierta){ const el=document.getElementById('tab-lista-ofi'); if(el) el.style.display='block'; }
 }
 function _tabSetRango(key){ _TAB_FILTRO.rango=(_TAB_FILTRO.rango===key)?null:key; _tabRenderSemaforo(); }
 function _tabLimpiar(){ _TAB_FILTRO={ oficinas:[], periodos:[], rango:null }; _tabRenderSemaforo(); }
@@ -7860,6 +7894,10 @@ async function guardarProgMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan'), periodo=g('pm_periodo');
   if(!meta){ toast('Indica el valor meta.', true); return; }
+  // Evidencia OBLIGATORIA: toda meta programada debe respaldarse con al menos un enlace.
+  if(!String(plan||'').trim()){ toast('Agrega al menos una evidencia (enlace) de la programación.', true);
+    const w=document.getElementById('pm_plan_wrap'); if(w){ w.scrollIntoView({behavior:'smooth',block:'center'});
+      const i=w.querySelector('.ev-url'); if(i){ i.focus(); i.style.borderColor='#c0392b'; } } return; }
   const campos={};
   if(!PM_EDIT_ID) campos[PM.rel_matriz.id]=[MT_CTX.matId];
   if(fecha) campos[PM.fecha_prog.id]=fecha;
@@ -8458,6 +8496,10 @@ async function guardarSegMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs'), evid=g('sm_evid'), remed=g('sm_remed'), periodo=g('sm_periodo');
   if(!real){ toast('Indica el valor real.', true); return; }
+  // Evidencia OBLIGATORIA: todo seguimiento debe respaldarse con al menos un enlace.
+  if(!String(evid||'').trim()){ toast('Agrega al menos una evidencia (enlace) del seguimiento.', true);
+    const w=document.getElementById('sm_evid_wrap'); if(w){ w.scrollIntoView({behavior:'smooth',block:'center'});
+      const i=w.querySelector('.ev-url'); if(i){ i.focus(); i.style.borderColor='#c0392b'; } } return; }
   let meta=null, ref=null;
   if(SM_EDIT_ID){
     // Edición: usar la meta/referencia PROPIAS del seguimiento (no del desplegable)
