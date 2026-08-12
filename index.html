@@ -6107,11 +6107,13 @@ function _tabRenderSemaforo(){
   h+='<div style="display:flex;flex-direction:column;gap:8px">';
   _TAB_RANGOS.forEach(r=>{
     const n=conteos[r.key]; const w=totalMed?Math.round(n/totalMed*100):0;
-    // ANCHO DE LA BARRA: se escala respecto al rango MÁS ALTO (no al total). Si se usara el
-    // total, con muchos casos los valores pequeños caerían todos bajo el mínimo visible y se
-    // verían iguales (8, 3 y 1 pintaban lo mismo). Escalando al máximo, el mayor llena la
-    // barra y los demás quedan en proporción real entre sí, siempre visibles.
-    const wPint = n>0 ? Math.max(Math.round(n/maxN*100), 8) : 0;
+    // ANCHO DE LA BARRA — escala de raíz cuadrada.
+    // Con proporciones muy dispares (p. ej. 355 pendientes frente a 8, 3 y 1) una escala lineal
+    // aplasta a los pequeños: todos caen bajo el mínimo visible y se ven iguales. La raíz
+    // cuadrada comprime al grande y expande a los chicos, de modo que 8, 3 y 1 se distinguen
+    // entre sí sin dejar de verse que 355 es, con mucho, el mayor.
+    // El porcentaje real sobre el total se sigue mostrando a la derecha, sin alterar.
+    const wPint = n>0 ? Math.max(Math.round(Math.sqrt(n/maxN)*100), 6) : 0;
     const activo=_TAB_FILTRO.rango===r.key;
     const vacio=(n===0);
     h+=`<div onclick="${vacio?'':`_tabSetRango('${r.key}')`}" style="${vacio?'opacity:.55;':'cursor:pointer;'}display:flex;align-items:center;gap:10px;padding:6px;border-radius:8px;${activo?'background:var(--paper);outline:2px solid '+r.color:''}">
