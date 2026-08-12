@@ -5988,8 +5988,10 @@ async function renderTablero(){
       if(!medidos.length){
         const persMeta=(m._progMetasList||[]).map(x=>String(x.periodo||'').trim())
           .filter(pp=>pp && !/periodo/i.test(pp));
-        if(persMeta.length) persMeta.forEach(pp=>_TAB_MEDICIONES.push({ ind, ofi, periodo:pp, pct:null, pendiente:true }));
-        else _TAB_MEDICIONES.push({ ind, ofi, periodo:'(sin programar)', pct:null, pendiente:true });
+        // UNA sola fila por indicador, aunque tenga metas programadas en VARIOS periodos:
+        // si se empujara una por periodo, un indicador contaría dos veces y el total no
+        // coincidiría con el número real de indicadores de la oficina.
+        _TAB_MEDICIONES.push({ ind, ofi, periodo: persMeta.length?persMeta.join(' · '):'(sin programar)', pct:null, pendiente:true });
       }
     });
     html+=`<div id="tab-semaforo" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-top:20px;scroll-margin-top:90px">
