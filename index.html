@@ -1152,6 +1152,7 @@
         <div class="field"><label>Responsable de la medición</label><input id="em_responsable" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Celular del responsable</label><input id="em_celular" readonly style="background:var(--paper)"></div>
         <div class="field"><label>Correo del responsable</label><input id="em_correo" readonly style="background:var(--paper)"></div>
+        <div class="field full"><label>Observación <span class="hint" style="font-weight:400">— nota interna sobre este indicador (opcional)</span></label><textarea id="em_observacion" rows="2" placeholder="Ej.: se mide solo en el semestre par; pendiente definir la fuente…"></textarea></div>
         <div class="field full"><label>Responsables técnicos <span class="hint" style="font-weight:400">— se eligen de la lista del responsable del proceso; solo ellos podrán editar e informar este indicador. Si se deja vacío, puede hacerlo cualquiera de la oficina.</span></label><div id="em_resp_tec_wrap"></div><input type="hidden" id="em_resp_tec"></div>
         <div class="field"><label>Frecuencia de medición</label><select id="em_frec_med"></select></div>
         <div class="field"><label>Frecuencia de cálculo</label><select id="em_frec_calc"></select></div>
@@ -5611,6 +5612,8 @@ window.attr=attr;
 // Field-id del campo «Responsables técnicos» de la tabla Matriz de Indicadores (QuintaDB).
 // Si se dejara vacío, la función queda desactivada y todo se comporta como antes.
 const RESP_TEC_FIELD_ID = 'dcI1xdOGDdK5P2i8k5y8of';
+// Campo «Observación» de la Matriz de Indicadores (texto multilínea, opcional).
+const OBSERVACION_FIELD_ID = 'ciW4_dTX5cMykJvCoAt8k3';
 // Campos espejo en la Matriz: los llena AUTOMÁTICAMENTE el selector, a partir del correo
 // elegido. Sirven para que el nombre y el celular queden legibles en QuintaDB y en los
 // reportes; el permiso sigue basándose únicamente en el correo.
@@ -7006,11 +7009,25 @@ async function cargarIndicadoresFicha(){
   AG_CTX={ nivel, fichaId:id, ruta };
   const list=document.getElementById('ag_inds_list');
   if(!AG_INDS.length){ list.innerHTML='<p class="hint">Esta ficha no tiene indicadores definidos.</p>'; box.classList.remove('hidden'); defb.classList.add('hidden'); return; }
+  // Cada indicador lleva su propia OBSERVACIÓN (opcional), porque suele ser específica de
+  // ese indicador ("se mide solo en semestre par", "pendiente definir fuente"...).
   list.innerHTML=AG_INDS.map((ind,i)=>`
-    <label class="sipoc-check"><input type="checkbox" value="${i}" onchange="toggleDefBox()"><span>${ind.texto.replace(/</g,'&lt;')}</span></label>`).join('');
+    <div style="border:1px solid var(--line);border-radius:9px;padding:8px 10px">
+      <label class="sipoc-check" style="border:0;padding:0;margin:0"><input type="checkbox" value="${i}" onchange="toggleDefBox();_agToggleObs(${i})"><span>${ind.texto.replace(/</g,'&lt;')}</span></label>
+      <div id="ag_obs_box_${i}" style="display:none;margin-top:7px">
+        <input id="ag_obs_${i}" placeholder="Observación (opcional): nota sobre este indicador…" style="width:100%;font-size:13px">
+      </div>
+    </div>`).join('');
   box.classList.remove('hidden');
 }
 window.cargarIndicadoresFicha=cargarIndicadoresFicha;
+// Muestra el campo de observación solo cuando el indicador está marcado
+function _agToggleObs(i){
+  const cb=document.querySelector('#ag_inds_list input[value="'+i+'"]');
+  const box=document.getElementById('ag_obs_box_'+i);
+  if(box) box.style.display = (cb && cb.checked) ? 'block' : 'none';
+}
+window._agToggleObs=_agToggleObs;
 function toggleDefBox(){
   const marcados=[...document.querySelectorAll('#ag_inds_list input:checked')].length;
   document.getElementById('ag_def_box').classList.toggle('hidden', marcados===0);
@@ -7111,6 +7128,9 @@ async function guardarIndicadoresMatriz(){
       const campos={};
       campos[MAT.indicador_txt.id]=ind.texto;
       campos[MAT.proceso_ruta.id]=rutaCompleta;
+      // Observación propia de este indicador (opcional)
+      { const obs=((document.getElementById('ag_obs_'+i)||{}).value||'').trim();
+        if(obs) campos[OBSERVACION_FIELD_ID]=obs; }
       if(formula) campos[MAT.formula.id]=formula;
       if(fuente) campos[MAT.fuente_info.id]=fuente;
       if(proposito && MAT.proposito_ind) campos[MAT.proposito_ind.id]=proposito;
@@ -7192,6 +7212,7 @@ async function abrirEditarMatriz(matId){
     set('em_responsable', (dCont&&dCont.responsable) || leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición'));
     set('em_celular', (dCont&&dCont.celular) || leerCampo(r, MAT.resp_celular.id, 'Celular responsable'));
     set('em_correo', (dCont&&dCont.correo) || leerCampo(r, MAT.resp_correo.id, 'Correo responsable'));
+    set('em_observacion', leerCampo(r, OBSERVACION_FIELD_ID, 'Observación'));
     set('em_resp_tec', _respTecActivo() ? _respTecTexto(r) : '');
     // Selector de responsables técnicos (la restricción a Administrador la aplica _rtSyncDesdeInput)
     if(typeof _rtSyncDesdeInput==='function') _rtSyncDesdeInput();
@@ -7403,6 +7424,7 @@ async function guardarEdicionMatriz(){
   campos[MAT.resp_med_txt.id]=respLimpio;
   campos[MAT.resp_celular.id]=celVal;
   campos[MAT.resp_correo.id]=corVal;
+  campos[OBSERVACION_FIELD_ID]=(g('em_observacion')||'').trim();
   // Solo el administrador puede modificar los responsables técnicos. Para el resto, el campo
   // ni siquiera se envía, así que conserva su valor actual en la base.
   if(_respTecActivo() && esAdmin()){
@@ -8317,6 +8339,7 @@ async function verDetalleMatriz(matId){
     ['Fórmula', d.formula],
     ['Fuente de información', d.fuente],
     ['Oficina responsable de la medición', d.oficina],
+    ['Observación', leerCampo(r, OBSERVACION_FIELD_ID, 'Observación')],
     ['Responsable del proceso (medición)', d.responsable],
     ['Responsable(s) técnico(s) del indicador', _respTecActivo()
       ? (_respTecLista(r).length
