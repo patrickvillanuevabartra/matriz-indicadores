@@ -638,21 +638,21 @@
       <h2 style="margin:0;font-size:19px;color:#1a2b22">Matriz de Indicadores</h2>
       <p style="margin:6px 0 0;font-size:13px;color:#6b7d74">Facultad de Ingeniería · URP<br>Sistema de Gestión para Organizaciones Educativas (SGOE)<br>ISO 21001</p>
     </div>
-    <div style="display:flex;flex-direction:column;gap:14px">
+    <form id="login_form" onsubmit="event.preventDefault();hacerLogin();return false;" style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Usuario</label>
-        <input id="login_user" type="text" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')document.getElementById('login_pass').focus()">
+        <input id="login_user" name="username" type="text" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('login_pass').focus();}">
       </div>
       <div>
         <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Contraseña</label>
         <div style="position:relative">
-          <input id="login_pass" type="password" autocomplete="current-password" style="width:100%;padding:11px 42px 11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')hacerLogin()">
+          <input id="login_pass" name="password" type="password" autocomplete="current-password" style="width:100%;padding:11px 42px 11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" >
           <button type="button" id="login_pass_toggle" onclick="toggleLoginPass()" aria-label="Mostrar u ocultar contraseña" title="Mostrar/ocultar contraseña" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:17px;line-height:1;color:#5a6b62">👁️</button>
         </div>
       </div>
       <div id="login_error" style="display:none;font-size:13px;color:#c0392b;background:#fdecea;border-radius:8px;padding:9px 11px"></div>
-      <button onclick="hacerLogin()" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
-    </div>
+      <button type="submit" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+    </form>
     <p style="margin:18px 0 0;font-size:11px;color:#9aa8a0;text-align:center">Acceso restringido. Cada usuario solo puede ver los registros de su unidad.</p>
   </div>
 </div>
@@ -1594,6 +1594,9 @@ async function hacerLogin(){
     const oficinas = [...setOfi.values()];
     const nombre = _leerNombreUsuario(v);
     SESION = { rol, usuario:_limpioU(v['Usuario']), nombre, oficina:oficinas[0]||'', oficinas, recordId: encontrado.id };
+    // Se recuerda solo el nombre de usuario para no tener que reescribirlo.
+    // La contraseña NO se guarda aquí: de eso se encarga el navegador.
+    try{ localStorage.setItem('mi_ultimo_usuario', u); }catch(_){}
     // Aviso solo para administradores: hay registros duplicados que conviene unificar.
     if(rol==='Administrador' && coincidencias.length>1){
       setTimeout(()=>toast('Nota: el usuario "'+u+'" tiene '+coincidencias.length+' registros. Conviene unificarlo en uno solo con varias oficinas.', true), 1200);
@@ -8798,6 +8801,19 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
 /* ============================================================
    ARRANQUE
    ============================================================ */
+// Precarga el último usuario para no reescribirlo en cada visita.
+(function precargarUsuario(){
+  try{
+    const guardado = localStorage.getItem('mi_ultimo_usuario');
+    const campoU = document.getElementById('login_user');
+    const campoP = document.getElementById('login_pass');
+    if(guardado && campoU && !campoU.value){
+      campoU.value = guardado;
+      if(campoP) setTimeout(()=>campoP.focus(), 120);
+    }
+  }catch(_){}
+})();
+
 (async function init(){
   renderIndicadores();
   aplicarNivelVisual('N0'); // fijar visibilidad inicial coherente con el nivel
