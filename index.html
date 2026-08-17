@@ -638,21 +638,21 @@
       <h2 style="margin:0;font-size:19px;color:#1a2b22">Matriz de Indicadores</h2>
       <p style="margin:6px 0 0;font-size:13px;color:#6b7d74">Facultad de Ingeniería · URP<br>Sistema de Gestión para Organizaciones Educativas (SGOE)<br>ISO 21001</p>
     </div>
-    <form id="login_form" onsubmit="event.preventDefault();hacerLogin();return false;" style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Usuario</label>
-        <input id="login_user" name="username" type="text" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('login_pass').focus();}">
+        <input id="login_user" type="text" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')document.getElementById('login_pass').focus()">
       </div>
       <div>
         <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Contraseña</label>
         <div style="position:relative">
-          <input id="login_pass" name="password" type="password" autocomplete="current-password" style="width:100%;padding:11px 42px 11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" >
+          <input id="login_pass" type="password" autocomplete="current-password" style="width:100%;padding:11px 42px 11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')hacerLogin()">
           <button type="button" id="login_pass_toggle" onclick="toggleLoginPass()" aria-label="Mostrar u ocultar contraseña" title="Mostrar/ocultar contraseña" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:17px;line-height:1;color:#5a6b62">👁️</button>
         </div>
       </div>
       <div id="login_error" style="display:none;font-size:13px;color:#c0392b;background:#fdecea;border-radius:8px;padding:9px 11px"></div>
-      <button type="submit" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
-    </form>
+      <button onclick="hacerLogin()" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+    </div>
     <p style="margin:18px 0 0;font-size:11px;color:#9aa8a0;text-align:center">Acceso restringido. Cada usuario solo puede ver los registros de su unidad.</p>
   </div>
 </div>
@@ -1195,6 +1195,18 @@
                 <div id="pm_ref_formula" style="font-size:11px;color:var(--mist);margin-bottom:8px"></div>
                 <div id="pm_ref_grid" class="grid"></div>
               </div>
+              <label id="pm_ref_estim_lbl" style="display:flex;align-items:center;gap:7px;margin-top:8px;font-size:12px;color:var(--slate);cursor:pointer;font-weight:400">
+                <input type="checkbox" id="pm_ref_estim" onchange="_toggleRefEstimada()" style="width:15px;height:15px;cursor:pointer">
+                No tengo las bases de cálculo: ingresar los valores <b>directamente</b>
+              </label>
+              <div id="pm_ref_fuente_box" style="display:none;margin-top:6px">
+                <input id="pm_ref_fuente" placeholder="¿En qué se basan estos valores? Ej.: línea base estimada del reporte 2025-II; meta acordada en reunión de escuela del 12/03/2026"
+                       style="width:100%;font-size:12.5px" oninput="_pintarNotaRef()">
+                <div style="font-size:11px;color:var(--mist);margin-top:4px;line-height:1.4">
+                  Obligatorio. Se guardará en la Observación del indicador. Declarar el sustento es lo que hace defendible una estimación ante una auditoría.
+                </div>
+              </div>
+              <div id="pm_ref_nota" style="display:none;font-size:11.5px;line-height:1.45;border-radius:8px;padding:8px 11px;margin-top:6px"></div>
             </div>
             <div class="field">
               <label>Valor meta</label>
@@ -1204,7 +1216,7 @@
                 <div id="pm_meta_grid" class="grid"></div>
               </div>
             </div>
-            <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span style="color:#c0392b">*</span> <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
+            <div class="field full"><label>Plan de Acción (enlaces a SharePoint/Drive) <span style="color:#c0392b">*</span> <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
               <div class="ev-wrap" id="pm_plan_wrap" data-target="pm_plan"></div>
               <input type="hidden" id="pm_plan">
             </div>
@@ -1594,9 +1606,6 @@ async function hacerLogin(){
     const oficinas = [...setOfi.values()];
     const nombre = _leerNombreUsuario(v);
     SESION = { rol, usuario:_limpioU(v['Usuario']), nombre, oficina:oficinas[0]||'', oficinas, recordId: encontrado.id };
-    // Se recuerda solo el nombre de usuario para no tener que reescribirlo.
-    // La contraseña NO se guarda aquí: de eso se encarga el navegador.
-    try{ localStorage.setItem('mi_ultimo_usuario', u); }catch(_){}
     // Aviso solo para administradores: hay registros duplicados que conviene unificar.
     if(rol==='Administrador' && coincidencias.length>1){
       setTimeout(()=>toast('Nota: el usuario "'+u+'" tiene '+coincidencias.length+' registros. Conviene unificarlo en uno solo con varias oficinas.', true), 1200);
@@ -7620,6 +7629,9 @@ function calcularValorMeta(which){
       if(isFinite(val)) destino.value=Math.round(val*100)/100;
     }
   }catch(_){}
+  // Si se recalculó la línea base a mano, actualizar la nota de herencia
+  if(which==='ref'){ const rf=document.getElementById('pm_ref'); if(rf) delete rf.dataset.heredado;
+    if(typeof _pintarNotaRef==='function') _pintarNotaRef(); }
 }
 window.toggleCalcMeta=toggleCalcMeta;
 window.calcularValorMeta=calcularValorMeta;
@@ -7898,6 +7910,10 @@ function cancelarEdicionMeta(){
   PM_EDIT_ID=null;
   ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
+  { const rf=document.getElementById('pm_ref'); if(rf) delete rf.dataset.heredado;
+    const ck=document.getElementById('pm_ref_estim'); if(ck && ck.checked){ ck.checked=false; if(typeof _toggleRefEstimada==='function') _toggleRefEstimada(); }
+    const fu=document.getElementById('pm_ref_fuente'); if(fu){ fu.value=''; fu.style.borderColor=''; } }
+  if(typeof _pintarNotaRef==='function') setTimeout(_pintarNotaRef, 60);
   const ep=document.getElementById('pm_periodo'); if(ep){ delete ep.dataset.touched; ep.style.display='none'; } _llenarPeriodoSel('pm','');
   _limpiarVarsMeta();
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
@@ -7981,6 +7997,10 @@ function editarProgMeta(progId){
   const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
   set('pm_fecha', leerCampo(p,PM.fecha_prog.id,'Fecha programación'));
   set('pm_ref', leerCampo(p,PM.valor_ref.id,'Valor de referencia'));
+  { const rf=document.getElementById('pm_ref'); if(rf) delete rf.dataset.heredado;
+    const ck=document.getElementById('pm_ref_estim'); if(ck && ck.checked){ ck.checked=false; if(typeof _toggleRefEstimada==='function') _toggleRefEstimada(); }
+    const fu=document.getElementById('pm_ref_fuente'); if(fu){ fu.value=''; fu.style.borderColor=''; } }
+  if(typeof _pintarNotaRef==='function') setTimeout(_pintarNotaRef,60);
   set('pm_meta', leerCampo(p,PM.valor_meta.id,'Valor meta'));
   set('pm_plan', leerCampo(p,PM.plan_accion.id,'Plan de acción'));
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
@@ -8024,12 +8044,127 @@ async function eliminarProgMeta(progId){
 }
 window.eliminarProgMeta=eliminarProgMeta;
 
+
+// ===== Línea base estimada =====
+// El valor de referencia normalmente se CALCULA con las variables de la fórmula (numerador y
+// denominador). Pero en el primer ciclo muchas oficinas no tienen esas variables: solo una
+// estimación («el año pasado andábamos por el 12 %»). Obligarlas a inventar un numerador y un
+// denominador sería peor: quedaría registrado como si fuera un dato exacto.
+// Con este interruptor se escribe la estimación directamente y se exige declarar su fuente.
+function _toggleRefEstimada(){
+  const on   = !!(document.getElementById('pm_ref_estim')||{}).checked;
+  const fbox = document.getElementById('pm_ref_fuente_box');
+  if(fbox) fbox.style.display = on ? 'block' : 'none';
+  // Afecta a LOS DOS campos: si no se tienen las bases de cálculo, no se tienen ni para la
+  // línea base ni para la meta. Obligar a inventar variables en uno de ellos sería el mismo
+  // problema que se quiere evitar.
+  ['ref','meta'].forEach(w=>{
+    const campo=document.getElementById('pm_'+w);
+    const calc =document.getElementById('pm_'+w+'_calc');
+    if(calc) calc.style.display = on ? 'none' : '';
+    if(!campo) return;
+    campo.readOnly = !on;
+    campo.style.background = on ? '' : 'var(--paper)';
+    campo.placeholder = on ? (w==='ref'?'Escribe la línea base estimada':'Escribe el valor meta') : 'se calcula con la fórmula';
+    if(on){ if(w==='ref') delete campo.dataset.heredado; }
+    else { campo.value=''; if(typeof calcularValorMeta==='function'){ try{ calcularValorMeta(w); }catch(_){} } }
+  });
+  if(on){ const r=document.getElementById('pm_ref'); if(r) r.focus(); }
+  if(typeof _pintarNotaRef==='function') _pintarNotaRef();
+}
+window._toggleRefEstimada=_toggleRefEstimada;
+function _refEsEstimada(){ return !!(document.getElementById('pm_ref_estim')||{}).checked; }
+function _refFuente(){ return ((document.getElementById('pm_ref_fuente')||{}).value||'').trim(); }
+
+// ===== Herencia de la línea base entre periodos =====
+// Al programar una meta, sugiere como valor de referencia el resultado del ÚLTIMO
+// seguimiento DE CIERRE del indicador. Así el resultado de un periodo se convierte en la
+// línea base del siguiente, sin que nadie tenga que copiarlo a mano.
+// Se sugiere, NO se impone: el responsable puede escribir otro valor si corresponde
+// (por ejemplo, si cambió la forma de medir o hubo una reestructuración).
+function _ultimoCierre(){
+  const segs = (STATE.segMetas || []);
+  let mejor = null;
+  segs.forEach(sg => {
+    // Solo mediciones DE CIERRE: un corte parcial no es una línea base válida.
+    const tipo = SM.tipo_medicion ? leerCampo(sg, SM.tipo_medicion.id, 'Tipo de medición') : '';
+    if (String(tipo || '').trim() !== 'Cierre') return;
+    const real = SM.valor_real ? leerCampo(sg, SM.valor_real.id, 'Valor real obtenido') : '';
+    const n = parseFloat(String(real).replace(',', '.'));
+    if (!isFinite(n)) return;
+    const fecha = SM.fecha_eval ? (leerCampo(sg, SM.fecha_eval.id, 'Fecha evaluación') || '') : '';
+    const per = SM.periodo ? (leerCampo(sg, SM.periodo.id, 'Periodo') || '') : '';
+    const vars = SM.variables_calculo ? _parseVars(leerCampo(sg, SM.variables_calculo.id, 'Variables de cálculo')) : {};
+    const cand = { valor: n, fecha, periodo: per, vars };
+    // El más reciente por fecha; si no hay fecha, el último de la lista
+    if (!mejor || String(fecha) > String(mejor.fecha)) mejor = cand;
+  });
+  return mejor;
+}
+
+// Pinta la nota bajo el valor de referencia y precarga la sugerencia si corresponde.
+function _pintarNotaRef(){
+  const nota = document.getElementById('pm_ref_nota');
+  const inp  = document.getElementById('pm_ref');
+  if (!nota || !inp) return;
+  const previo = _ultimoCierre();
+  const yaTiene = String(inp.value || '').trim() !== '';
+
+  const caja = (fondo, borde, color, html) => {
+    nota.style.display = 'block';
+    nota.style.background = fondo; nota.style.border = '1px solid ' + borde; nota.style.color = color;
+    nota.innerHTML = html;
+  };
+
+  if (previo) {
+    // Detalle de las variables del cierre anterior, solo como información
+    const det = Object.keys(previo.vars || {}).length
+      ? ' <span style="opacity:.75">(' + Object.entries(previo.vars).map(([k, v]) => v).join(' de ') + ')</span>'
+      : '';
+    const per = previo.periodo ? ' de <b>' + String(previo.periodo).replace(/</g, '&lt;') + '</b>' : ' anterior';
+    if (!yaTiene) {
+      // Precargar la sugerencia
+      inp.value = previo.valor;
+      inp.dataset.heredado = '1';
+      if (typeof recalcAvancePM === 'function') { try { recalcAvancePM(); } catch(_){} }
+      caja('#eef4ff', '#adc4ee', '#2b4c9b',
+        '📌 <b>Referencia tomada del cierre' + per + ':</b> ' + previo.valor + det +
+        '. <span style="opacity:.85">Puedes cambiarla si corresponde.</span>');
+    } else if (inp.dataset.heredado === '1' && String(inp.value) == String(previo.valor)) {
+      caja('#eef4ff', '#adc4ee', '#2b4c9b',
+        '📌 <b>Referencia tomada del cierre' + per + ':</b> ' + previo.valor + det + '.');
+    } else {
+      caja('var(--paper)', 'var(--line)', 'var(--slate)',
+        '✏️ <b>Referencia ajustada manualmente.</b> El cierre' + per + ' fue ' + previo.valor + det + '.');
+    }
+    return;
+  }
+
+  // Sin cierre previo
+  if (yaTiene) { nota.style.display = 'none'; return; }
+  caja('#fff8e6', '#f0c987', '#8a6100',
+    '⚠️ <b>Sin medición previa:</b> es el primer periodo de este indicador, así que no hay línea base que heredar.' +
+    '<br>Si dejas la referencia vacía, el avance se calculará sobre la meta (cuánto lograste de lo propuesto).' +
+    '<br><b>Importante:</b> si en este indicador <b>bajar es mejor</b> (deserción, desaprobación, quejas…), <b>no la dejes vacía</b>: ' +
+    'el cálculo se invertiría y un mal resultado se vería como bueno. Usa el dato del periodo anterior aunque venga de tus registros, ' +
+    'y anótalo en la Observación del indicador.');
+}
+window._pintarNotaRef = _pintarNotaRef;
+
 async function guardarProgMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan'), periodo=g('pm_periodo');
   if(!meta){ toast('Indica el valor meta.', true); return; }
   // Evidencia OBLIGATORIA: toda meta programada debe respaldarse con al menos un enlace.
-  if(!String(plan||'').trim()){ toast('Agrega al menos una evidencia (enlace) de la programación.', true);
+  // Si los valores se ingresaron directamente (sin bases de cálculo), exigir el sustento:
+  // una estimación sin fuente declarada no es defendible ante una auditoría.
+  if(typeof _refEsEstimada==='function' && _refEsEstimada() && !_refFuente()){
+    toast('Indica en qué se basan los valores (la fuente de la estimación).', true);
+    const f=document.getElementById('pm_ref_fuente');
+    if(f){ f.scrollIntoView({behavior:'smooth',block:'center'}); f.focus(); f.style.borderColor='#c0392b'; }
+    return;
+  }
+  if(!String(plan||'').trim()){ toast('Agrega al menos un enlace del plan de acción.', true);
     const w=document.getElementById('pm_plan_wrap'); if(w){ w.scrollIntoView({behavior:'smooth',block:'center'});
       const i=w.querySelector('.ev-url'); if(i){ i.focus(); i.style.borderColor='#c0392b'; } } return; }
   // ANTI-DUPLICADOS: un indicador no puede tener DOS metas programadas para el MISMO periodo
@@ -8066,11 +8201,29 @@ async function guardarProgMeta(){
   campos[PM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   try{
     await API.saveForm(PM_EDIT_ID||null, campos, PM_EDIT_ID?undefined:CONFIG.ENTITIES.PROG_METAS);
+    // Si los valores fueron estimados, dejar constancia en la OBSERVACIÓN del indicador:
+    // así el sustento queda visible en la matriz y en el detalle, no solo en esta meta.
+    if(typeof _refEsEstimada==='function' && _refEsEstimada() && _refFuente()){
+      try{
+        const rInd=(STATE.matriz||[]).find(x=>x.id===MT_CTX.matId);
+        const obsPrev=rInd?String(leerCampo(rInd, OBSERVACION_FIELD_ID, 'Observación')||'').trim():'';
+        const linea='Línea base y meta de «'+(periodo||'este periodo')+'» ingresadas sin bases de cálculo. Sustento: '+_refFuente();
+        if(obsPrev.indexOf(linea)<0){
+          const obsNueva=(obsPrev? obsPrev+'\n' : '')+linea;
+          await API.saveForm(MT_CTX.matId, { [OBSERVACION_FIELD_ID]: obsNueva }, CONFIG.ENTITIES.MATRIZ_IND);
+          STATE.matriz=[];
+        }
+      }catch(_){ /* si falla, la meta ya quedó guardada */ }
+    }
     toast(PM_EDIT_ID?'Programación actualizada.':'Programación guardada.');
     PM_EDIT_ID=null;
     const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
     ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
+  { const rf=document.getElementById('pm_ref'); if(rf) delete rf.dataset.heredado;
+    const ck=document.getElementById('pm_ref_estim'); if(ck && ck.checked){ ck.checked=false; if(typeof _toggleRefEstimada==='function') _toggleRefEstimada(); }
+    const fu=document.getElementById('pm_ref_fuente'); if(fu){ fu.value=''; fu.style.borderColor=''; } }
+  if(typeof _pintarNotaRef==='function') setTimeout(_pintarNotaRef, 60);
     const ep=document.getElementById('pm_periodo'); if(ep){ delete ep.dataset.touched; ep.style.display='none'; } _llenarPeriodoSel('pm','');
     _limpiarVarsMeta();   // dejar las variables de referencia y meta en blanco
     _mostrarBtnCancelarMeta(false);
@@ -8519,6 +8672,7 @@ async function cargarSegMetas(){
     const data=await API.records(CONFIG.ENTITIES.SEG_METAS);
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
     STATE.segMetas=mias;
+    if(typeof _pintarNotaRef==='function') _pintarNotaRef();
     if(!mias.length){ tb.innerHTML='<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
     let ultimoAvance=null, ultimaFecha='';
     const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
@@ -8801,19 +8955,6 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
 /* ============================================================
    ARRANQUE
    ============================================================ */
-// Precarga el último usuario para no reescribirlo en cada visita.
-(function precargarUsuario(){
-  try{
-    const guardado = localStorage.getItem('mi_ultimo_usuario');
-    const campoU = document.getElementById('login_user');
-    const campoP = document.getElementById('login_pass');
-    if(guardado && campoU && !campoU.value){
-      campoU.value = guardado;
-      if(campoP) setTimeout(()=>campoP.focus(), 120);
-    }
-  }catch(_){}
-})();
-
 (async function init(){
   renderIndicadores();
   aplicarNivelVisual('N0'); // fijar visibilidad inicial coherente con el nivel
@@ -8845,30 +8986,19 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
 
 <!-- ===================== ASISTENTE DE AYUDA (chat con Gemini) ===================== -->
 <style>
-  #asis-btn{position:fixed;right:20px;bottom:20px;z-index:900;height:56px;border-radius:28px;
-    background:var(--brand);color:#fff;border:0;cursor:pointer;display:flex;align-items:center;
-    justify-content:center;gap:9px;padding:0 20px 0 16px;box-shadow:0 6px 22px rgba(0,0,0,.22);
-    font:inherit;font-size:15px;font-weight:600;white-space:nowrap;
-    transition:padding .25s ease,width .25s ease,transform .15s}
-  #asis-btn .asis-ico{font-size:24px;line-height:1}
-  #asis-btn .asis-txt{max-width:120px;overflow:hidden;transition:max-width .25s ease,opacity .2s ease}
-  #asis-btn.mini{padding:0;width:56px}
-  #asis-btn.mini .asis-txt{max-width:0;opacity:0}
+  #asis-btn{position:fixed;right:20px;bottom:20px;z-index:900;width:56px;height:56px;border-radius:50%;
+    background:var(--brand);color:#fff;border:0;cursor:pointer;font-size:24px;display:flex;align-items:center;
+    justify-content:center;box-shadow:0 6px 22px rgba(0,0,0,.22);transition:transform .15s}
   #asis-btn:hover{transform:scale(1.06)}
-  #asis-btn.mini:hover{padding:0 20px 0 16px;width:auto}
-  #asis-btn.mini:hover .asis-txt{max-width:120px;opacity:1}
-  .asis-msg.err button{margin-top:8px;display:block;background:#c0392b;color:#fff;border:0;border-radius:8px;
-    padding:6px 12px;cursor:pointer;font:inherit;font-size:12px;font-weight:600}
-  .asis-msg a{color:inherit;text-decoration:underline}
   #asis-panel{position:fixed;right:20px;bottom:88px;z-index:900;width:min(390px,calc(100vw - 32px));
-    max-height:min(500px,calc(100vh - 230px));display:none;flex-direction:column;background:var(--card);
+    max-height:min(600px,calc(100vh - 130px));display:none;flex-direction:column;background:var(--card);
     border:1px solid var(--line);border-radius:14px;box-shadow:0 14px 44px rgba(0,0,0,.20);overflow:hidden}
   #asis-panel.abierto{display:flex}
   .asis-cab{background:var(--brand);color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
   .asis-cab b{font-size:14px}
   .asis-cab small{display:block;font-size:11px;opacity:.85;font-weight:400}
   .asis-cab button{background:transparent;border:0;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:0 4px}
-  .asis-msgs{flex:1 1 auto;min-height:90px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--paper)}
+  .asis-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--paper)}
   .asis-msg{max-width:88%;padding:9px 12px;border-radius:12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word}
   .asis-msg.yo{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px}
   .asis-msg.bot{align-self:flex-start;background:var(--card);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:4px}
@@ -8890,10 +9020,10 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
   .asis-esc span:nth-child(2){animation-delay:.2s}
   .asis-esc span:nth-child(3){animation-delay:.4s}
   @keyframes asisP{0%,60%,100%{opacity:.3}30%{opacity:1}}
-  @media(max-width:520px){ #asis-panel{right:10px;left:10px;width:auto;bottom:80px;max-height:calc(100vh - 150px)} #asis-btn{right:14px;bottom:14px} }
+  @media(max-width:520px){ #asis-panel{right:10px;left:10px;width:auto;bottom:80px} #asis-btn{right:14px;bottom:14px} }
 </style>
 
-<button id="asis-btn" title="Asistente de ayuda" aria-label="Abrir el asistente de ayuda" onclick="asisAbrir()"><span class="asis-ico" aria-hidden="true">💬</span><span class="asis-txt">Ayuda</span></button>
+<button id="asis-btn" title="Asistente de ayuda" onclick="asisAbrir()">💬</button>
 
 <div id="asis-panel" role="dialog" aria-label="Asistente de ayuda">
   <div class="asis-cab">
@@ -8907,7 +9037,7 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
       oninput="asisAutoAlto(this)" onkeydown="asisTecla(event)"></textarea>
     <button id="asis-enviar" onclick="asisEnviar()">Enviar</button>
   </div>
-  <div class="asis-nota">Asistente con IA. Explica cómo usar el aplicativo; no ve tus indicadores ni tus avances. No escribas información confidencial.</div>
+  <div class="asis-nota">Te ayuda a usar el aplicativo. No conoce tus datos ni tus indicadores, y no escribas información confidencial.</div>
 </div>
 
 <script>
@@ -8930,7 +9060,7 @@ function asisAbrir(){
   p.classList.add('abierto');
   document.getElementById('asis-btn').style.display='none';
   if(!ASIS_HIST.length){
-    asisPintar('bot','¡Hola! Soy el asistente del aplicativo. Puedo explicarte cómo programar metas, registrar avances, entender las alertas o resolver dudas frecuentes.\n\nSi necesitas apoyo de una persona, escribe a la Subcomisión de Sistematización (patrick.villanueva@urp.edu.pe).\n\n¿En qué te ayudo?');
+    asisPintar('bot','¡Hola! Soy el asistente del aplicativo. Puedo explicarte cómo programar metas, registrar avances, entender las alertas o resolver dudas frecuentes.\n\n¿En qué te ayudo?');
     asisSugerencias();
   }
   setTimeout(()=>document.getElementById('asis-input').focus(),80);
@@ -8961,8 +9091,7 @@ function asisFormato(txt){
   const esc = String(txt||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   return esc
     .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
-    .replace(/«(.+?)»/g,'«<b>$1</b>»')
-    .replace(/([\w.+-]+@[\w-]+\.[\w.-]+)/g,'<a href="mailto:$1">$1</a>');
+    .replace(/«(.+?)»/g,'«<b>$1</b>»');
 }
 
 function asisPintar(quien, texto){
@@ -8979,19 +9108,6 @@ function asisPintar(quien, texto){
 function asisPantalla(){
   const b=document.querySelector('nav button.active');
   return b ? (b.textContent||'').replace(/\s+/g,' ').trim() : '';
-}
-
-// Muestra el error, devuelve la pregunta a la caja y ofrece reintentar
-function asisFallo(nodo, mensaje, pregunta){
-  if(ASIS_HIST.length && ASIS_HIST[ASIS_HIST.length-1].rol==='user'){ ASIS_HIST.pop(); }
-  nodo.className='asis-msg err';
-  nodo.innerHTML='';
-  const t=document.createElement('div'); t.textContent=mensaje; nodo.appendChild(t);
-  const b=document.createElement('button'); b.type='button'; b.textContent='Reintentar';
-  b.onclick=function(){ nodo.remove(); asisPreguntar(pregunta); };
-  nodo.appendChild(b);
-  const inp=document.getElementById('asis-input');
-  if(!(inp.value||'').trim()){ inp.value=pregunta; asisAutoAlto(inp); }
 }
 
 async function asisEnviar(){
@@ -9017,14 +9133,16 @@ async function asisEnviar(){
       body: JSON.stringify({ mensaje:pregunta, historial:ASIS_HIST.slice(0,-1), pantalla:asisPantalla() })
     });
     const data=await r.json().catch(()=>({}));
-    if(r.ok && data.ok!==false && data.respuesta){
+    if(data.respuesta){
       esperando.innerHTML=asisFormato(data.respuesta);
       ASIS_HIST.push({rol:'modelo', texto:data.respuesta});
     } else {
-      asisFallo(esperando, data.error || data.respuesta || 'No pude responder. Inténtalo de nuevo.', pregunta);
+      esperando.className='asis-msg err';
+      esperando.textContent = data.error || 'No pude responder. Inténtalo de nuevo.';
     }
   }catch(e){
-    asisFallo(esperando,'No pude conectarme con el asistente. Revisa tu conexión e inténtalo de nuevo.', pregunta);
+    esperando.className='asis-msg err';
+    esperando.textContent='No pude conectarme con el asistente. Revisa tu conexión e inténtalo de nuevo.';
   }finally{
     ASIS_OCUPADO=false;
     document.getElementById('asis-enviar').disabled=false;
@@ -9039,9 +9157,6 @@ document.addEventListener('DOMContentLoaded',()=>{
   const btn=document.getElementById('asis-btn');
   const ver=()=>{ btn.style.display = (typeof SESION!=='undefined' && SESION) ? 'flex' : 'none'; };
   ver(); setInterval(ver, 1500);
-  // La píldora muestra la palabra «Ayuda» unos segundos y luego se contrae al
-  // círculo, para no tapar contenido. Vuelve a abrirse al pasar el cursor.
-  setTimeout(()=>btn.classList.add('mini'), 6000);
 });
 </script>
 </body>
