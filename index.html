@@ -638,21 +638,21 @@
       <h2 style="margin:0;font-size:19px;color:#1a2b22">Matriz de Indicadores</h2>
       <p style="margin:6px 0 0;font-size:13px;color:#6b7d74">Facultad de Ingeniería · URP<br>Sistema de Gestión para Organizaciones Educativas (SGOE)<br>ISO 21001</p>
     </div>
-    <div style="display:flex;flex-direction:column;gap:14px">
+    <form id="login_form" onsubmit="event.preventDefault();hacerLogin();return false;" style="display:flex;flex-direction:column;gap:14px">
       <div>
         <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Usuario</label>
-        <input id="login_user" type="text" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')document.getElementById('login_pass').focus()">
+        <input id="login_user" name="username" type="text" autocomplete="username" style="width:100%;padding:11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('login_pass').focus();}">
       </div>
       <div>
         <label style="display:block;font-size:13px;font-weight:600;color:#1a2b22;margin-bottom:5px">Contraseña</label>
         <div style="position:relative">
-          <input id="login_pass" type="password" autocomplete="current-password" style="width:100%;padding:11px 42px 11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" onkeydown="if(event.key==='Enter')hacerLogin()">
+          <input id="login_pass" name="password" type="password" autocomplete="current-password" style="width:100%;padding:11px 42px 11px 13px;border:1px solid #d4ddd7;border-radius:9px;font-size:14px;box-sizing:border-box" >
           <button type="button" id="login_pass_toggle" onclick="toggleLoginPass()" aria-label="Mostrar u ocultar contraseña" title="Mostrar/ocultar contraseña" style="position:absolute;top:50%;right:8px;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;font-size:17px;line-height:1;color:#5a6b62">👁️</button>
         </div>
       </div>
       <div id="login_error" style="display:none;font-size:13px;color:#c0392b;background:#fdecea;border-radius:8px;padding:9px 11px"></div>
-      <button onclick="hacerLogin()" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
-    </div>
+      <button type="submit" id="login_btn" style="margin-top:6px;padding:12px;background:#0f8f5e;color:#fff;border:none;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer">Iniciar sesión</button>
+    </form>
     <p style="margin:18px 0 0;font-size:11px;color:#9aa8a0;text-align:center">Acceso restringido. Cada usuario solo puede ver los registros de su unidad.</p>
   </div>
 </div>
@@ -1606,6 +1606,8 @@ async function hacerLogin(){
     const oficinas = [...setOfi.values()];
     const nombre = _leerNombreUsuario(v);
     SESION = { rol, usuario:_limpioU(v['Usuario']), nombre, oficina:oficinas[0]||'', oficinas, recordId: encontrado.id };
+    // Se recuerda solo el nombre de usuario. La contraseña NO: de eso se encarga el navegador.
+    try{ localStorage.setItem('mi_ultimo_usuario', u); }catch(_){}
     // Aviso solo para administradores: hay registros duplicados que conviene unificar.
     if(rol==='Administrador' && coincidencias.length>1){
       setTimeout(()=>toast('Nota: el usuario "'+u+'" tiene '+coincidencias.length+' registros. Conviene unificarlo en uno solo con varias oficinas.', true), 1200);
@@ -8955,6 +8957,19 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
 /* ============================================================
    ARRANQUE
    ============================================================ */
+// Precarga el último usuario para no reescribirlo en cada visita.
+(function precargarUsuario(){
+  try{
+    const guardado = localStorage.getItem('mi_ultimo_usuario');
+    const campoU = document.getElementById('login_user');
+    const campoP = document.getElementById('login_pass');
+    if(guardado && campoU && !campoU.value){
+      campoU.value = guardado;
+      if(campoP) setTimeout(()=>campoP.focus(), 120);
+    }
+  }catch(_){}
+})();
+
 (async function init(){
   renderIndicadores();
   aplicarNivelVisual('N0'); // fijar visibilidad inicial coherente con el nivel
@@ -8986,10 +9001,21 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
 
 <!-- ===================== ASISTENTE DE AYUDA (chat con Gemini) ===================== -->
 <style>
-  #asis-btn{position:fixed;right:20px;bottom:20px;z-index:900;width:56px;height:56px;border-radius:50%;
-    background:var(--brand);color:#fff;border:0;cursor:pointer;font-size:24px;display:flex;align-items:center;
-    justify-content:center;box-shadow:0 6px 22px rgba(0,0,0,.22);transition:transform .15s}
+  #asis-btn{position:fixed;right:20px;bottom:20px;z-index:900;height:56px;border-radius:28px;
+    background:var(--brand);color:#fff;border:0;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:9px;padding:0 20px 0 16px;box-shadow:0 6px 22px rgba(0,0,0,.22);
+    font:inherit;font-size:15px;font-weight:600;white-space:nowrap;
+    transition:padding .25s ease,width .25s ease,transform .15s}
+  #asis-btn .asis-ico{font-size:24px;line-height:1}
+  #asis-btn .asis-txt{max-width:120px;overflow:hidden;transition:max-width .25s ease,opacity .2s ease}
+  #asis-btn.mini{padding:0;width:56px}
+  #asis-btn.mini .asis-txt{max-width:0;opacity:0}
   #asis-btn:hover{transform:scale(1.06)}
+  #asis-btn.mini:hover{padding:0 20px 0 16px;width:auto}
+  #asis-btn.mini:hover .asis-txt{max-width:120px;opacity:1}
+  .asis-msg.err button{margin-top:8px;display:block;background:#c0392b;color:#fff;border:0;border-radius:8px;
+    padding:6px 12px;cursor:pointer;font:inherit;font-size:12px;font-weight:600}
+  .asis-msg a{color:inherit;text-decoration:underline}
   /* El panel se ancla ARRIBA y ABAJO a la vez: así nunca se sale de la pantalla, sin importar
      el zoom del aplicativo (body{zoom:1.22}) ni el alto de la ventana. La cabecera con el
      botón × queda siempre visible. */
@@ -9030,7 +9056,7 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
   @media(max-width:520px){ #asis-panel{right:10px;left:10px;width:auto;bottom:80px;top:70px} #asis-btn{right:14px;bottom:14px} }
 </style>
 
-<button id="asis-btn" title="Asistente de ayuda" onclick="asisAbrir()">💬</button>
+<button id="asis-btn" title="Asistente de ayuda" aria-label="Abrir el asistente de ayuda" onclick="asisAbrir()"><span class="asis-ico" aria-hidden="true">💬</span><span class="asis-txt">Ayuda</span></button>
 
 <div id="asis-panel" role="dialog" aria-label="Asistente de ayuda">
   <div class="asis-cab">
@@ -9044,7 +9070,7 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
       oninput="asisAutoAlto(this)" onkeydown="asisTecla(event)"></textarea>
     <button id="asis-enviar" onclick="asisEnviar()">Enviar</button>
   </div>
-  <div class="asis-nota">Te ayuda a usar el aplicativo. No conoce tus datos ni tus indicadores, y no escribas información confidencial.</div>
+  <div class="asis-nota">Asistente con IA. Explica cómo usar el aplicativo; no ve tus indicadores ni tus avances. No escribas información confidencial.</div>
 </div>
 
 <script>
@@ -9067,7 +9093,7 @@ function asisAbrir(){
   p.classList.add('abierto');
   document.getElementById('asis-btn').style.display='none';
   if(!ASIS_HIST.length){
-    asisPintar('bot','¡Hola! Soy el asistente del aplicativo. Puedo explicarte cómo programar metas, registrar avances, entender las alertas o resolver dudas frecuentes.\n\n¿En qué te ayudo?');
+    asisPintar('bot','¡Hola! Soy el asistente del aplicativo. Puedo explicarte cómo programar metas, registrar avances, entender las alertas o resolver dudas frecuentes.\n\nSi necesitas apoyo de una persona, escribe a la Subcomisión de Sistematización (patrick.villanueva@urp.edu.pe).\n\n¿En qué te ayudo?');
     asisSugerencias();
   }
   setTimeout(()=>document.getElementById('asis-input').focus(),80);
@@ -9112,7 +9138,8 @@ function asisFormato(txt){
   const esc = String(txt||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   return esc
     .replace(/\*\*(.+?)\*\*/g,'<b>$1</b>')
-    .replace(/«(.+?)»/g,'«<b>$1</b>»');
+    .replace(/«(.+?)»/g,'«<b>$1</b>»')
+    .replace(/([\w.+-]+@[\w-]+\.[\w.-]+)/g,'<a href="mailto:$1">$1</a>');
 }
 
 function asisPintar(quien, texto){
@@ -9129,6 +9156,19 @@ function asisPintar(quien, texto){
 function asisPantalla(){
   const b=document.querySelector('nav button.active');
   return b ? (b.textContent||'').replace(/\s+/g,' ').trim() : '';
+}
+
+// Muestra el error, devuelve la pregunta a la caja y ofrece reintentar
+function asisFallo(nodo, mensaje, pregunta){
+  if(ASIS_HIST.length && ASIS_HIST[ASIS_HIST.length-1].rol==='user'){ ASIS_HIST.pop(); }
+  nodo.className='asis-msg err';
+  nodo.innerHTML='';
+  const t=document.createElement('div'); t.textContent=mensaje; nodo.appendChild(t);
+  const b=document.createElement('button'); b.type='button'; b.textContent='Reintentar';
+  b.onclick=function(){ nodo.remove(); asisPreguntar(pregunta); };
+  nodo.appendChild(b);
+  const inp=document.getElementById('asis-input');
+  if(!(inp.value||'').trim()){ inp.value=pregunta; asisAutoAlto(inp); }
 }
 
 async function asisEnviar(){
@@ -9154,16 +9194,14 @@ async function asisEnviar(){
       body: JSON.stringify({ mensaje:pregunta, historial:ASIS_HIST.slice(0,-1), pantalla:asisPantalla() })
     });
     const data=await r.json().catch(()=>({}));
-    if(data.respuesta){
+    if(r.ok && data.ok!==false && data.respuesta){
       esperando.innerHTML=asisFormato(data.respuesta);
       ASIS_HIST.push({rol:'modelo', texto:data.respuesta});
     } else {
-      esperando.className='asis-msg err';
-      esperando.textContent = data.error || 'No pude responder. Inténtalo de nuevo.';
+      asisFallo(esperando, data.error || data.respuesta || 'No pude responder. Inténtalo de nuevo.', pregunta);
     }
   }catch(e){
-    esperando.className='asis-msg err';
-    esperando.textContent='No pude conectarme con el asistente. Revisa tu conexión e inténtalo de nuevo.';
+    asisFallo(esperando,'No pude conectarme con el asistente. Revisa tu conexión e inténtalo de nuevo.', pregunta);
   }finally{
     ASIS_OCUPADO=false;
     document.getElementById('asis-enviar').disabled=false;
@@ -9178,6 +9216,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   const btn=document.getElementById('asis-btn');
   const ver=()=>{ btn.style.display = (typeof SESION!=='undefined' && SESION) ? 'flex' : 'none'; };
   ver(); setInterval(ver, 1500);
+  // La píldora muestra la palabra «Ayuda» unos segundos y luego se contrae al
+  // círculo, para no tapar contenido. Vuelve a abrirse al pasar el cursor.
+  setTimeout(()=>btn.classList.add('mini'), 6000);
 });
 </script>
 </body>
