@@ -116,8 +116,8 @@
   .filtro-cond select,.filtro-cond input{padding:7px 9px;font-size:13px;border:1px solid var(--line);border-radius:8px;background:#fff}
   .filtro-cond select{width:auto;min-width:140px}
   .filtro-cond input{flex:1;min-width:160px}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--mist);font-weight:600;padding:10px 12px;border-bottom:2px solid var(--line)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--mist);font-weight:600;padding:10px 12px;border-bottom:2px solid var(--line)}
   td{padding:11px 12px;border-bottom:1px solid var(--line);color:var(--slate);vertical-align:top}
   /* Inventario de procesos: los separadores se dibujan DENTRO de cada celda (div interno),
      por eso anulamos el border-bottom global: cortaba las lineas verticales de color. */
@@ -129,18 +129,24 @@
   #tablaInventarioTbl th{ font-size:12px }
   tr:hover td{background:var(--paper)}
   /* Celda recortada a 2 líneas con elipsis (compacta la matriz sin perder info: el resto se ve en tooltip o en 👁) */
-  .clip2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
+  .clip2{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;line-height:1.35}
   /* Tabla de matriz más compacta y de ancho controlado */
   #tablaMatrizTbl{table-layout:fixed}
-  #tablaMatrizTbl td{padding:8px 9px;font-size:12px;word-break:break-word}
+  #tablaMatrizTbl td{padding:9px 10px;font-size:13.5px;word-break:break-word}
   #tablaMatrizTbl th{padding:8px 9px}
   #tablaMatrizTbl .icon-btn{width:28px;height:26px;font-size:13px;border-radius:7px}
-  #tablaMatrizTbl .btn-sm{padding:5px 9px;font-size:12px}
-  .badge-n{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;color:#fff;padding:2px 8px;border-radius:5px}
+  #tablaMatrizTbl .btn-sm{padding:6px 10px;font-size:13px}
+  .badge-n{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:500;color:#fff;padding:2px 8px;border-radius:5px}
   .badge-n.n0{background:var(--n0)} .badge-n.n1{background:var(--n1)} .badge-n.n2{background:var(--n2)} .badge-n.n3{background:var(--n3)}
   .icon-btn{background:#fff;border:1px solid var(--line);border-radius:8px;width:34px;height:30px;cursor:pointer;font-size:14px;line-height:1;transition:.15s}
   .icon-btn:hover{border-color:var(--brand-2);background:var(--paper)}
 
+  /* Tooltip propio: el nativo del navegador no se puede agrandar por CSS */
+  #tip-grande{position:fixed;z-index:3000;max-width:520px;background:#0f1f18;color:#fff;
+    font:500 14.5px/1.55 'IBM Plex Sans',system-ui,sans-serif;padding:11px 14px;border-radius:9px;
+    box-shadow:0 8px 30px rgba(0,0,0,.32);pointer-events:none;opacity:0;transition:opacity .12s;
+    white-space:pre-wrap;word-break:break-word}
+  #tip-grande.visible{opacity:1}
   .empty{text-align:center;padding:54px 20px;color:var(--mist)}
   .empty h3{color:var(--slate);margin-bottom:8px;font-family:'IBM Plex Sans',sans-serif}
   .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--ink);color:#fff;padding:14px 22px;border-radius:11px;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);transition:.3s;z-index:1000;opacity:0;max-width:90vw}
@@ -2644,7 +2650,7 @@ function renderSipocCardsForm(){
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
-        <div class="field"><label>Proveedores / Cliente ${ayudaFicha('prov')}</label>${_sipocListaHTML('fi',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
+        <div class="field"><label>Proveedores ${ayudaFicha('prov')}</label>${_sipocListaHTML('fi',safe,'prov',d.prov,'Proveedor')}</div>
         <div class="field"><label>Entrada / Insumo ${ayudaFicha('entr')}</label>${_sipocListaHTML('fi',safe,'entr',d.entr,'Entrada/Insumo')}</div>
         <div class="field"><label>Producto ${ayudaFicha('prod')}</label>${_sipocListaHTML('fi',safe,'prod',d.prod,'Producto')}</div>
         <div class="field"><label>Receptor final del producto ${ayudaFicha('recep')}</label>${_sipocListaHTML('fi',safe,'recep',d.recep,'Receptor final de producto')}</div>
@@ -3637,7 +3643,52 @@ function exportarTablaExcel(tabla, titulo, nombreArch, quitarUltimaCol){
     +'th{background:#1f7a4d;color:#fff;border:1px solid #999;padding:6px 8px;text-align:left}'
     +'td{border:1px solid #bbb;padding:5px 8px;vertical-align:top}</style></head><body>'
     +'<h3>'+titulo+' — Facultad de Ingeniería URP<br>Sistema de Gestión para Organizaciones Educativas (SGOE) · ISO 21001</h3>'
-    +'<p>Exportado el '+fecha+'</p>'+clon.outerHTML+'</body></html>';
+    +'<p>Exportado el '+fecha+'</p>'+clon.outerHTML+'<script>
+/* ===== Tooltip propio para las celdas de las tablas =====
+   El aviso nativo del navegador usa la letra del sistema y no se puede agrandar.
+   Aquí se sustituye por uno propio, con tipografía legible y varias líneas.
+   Se cuelga de <html> y no de <body> porque el body tiene zoom:1.22, que
+   descuadraría las coordenadas de un elemento con position:fixed. */
+(function tooltipGrande(){
+  let caja=null;
+  function crear(){
+    if(caja) return caja;
+    caja=document.createElement('div');
+    caja.id='tip-grande';
+    document.documentElement.appendChild(caja);
+    return caja;
+  }
+  function colocar(c, el){
+    const r=el.getBoundingClientRect();
+    c.style.left='-9999px'; c.style.top='0px';
+    const w=c.offsetWidth, h=c.offsetHeight;
+    let x=r.left, y=r.bottom+8;
+    if(x+w > window.innerWidth-12) x = window.innerWidth-w-12;
+    if(x<12) x=12;
+    if(y+h > window.innerHeight-12) y = r.top-h-8;
+    if(y<12) y=12;
+    c.style.left=x+'px'; c.style.top=y+'px';
+  }
+  document.addEventListener('mouseover', function(e){
+    const el = e.target.closest && e.target.closest('[title],[data-tip]');
+    if(!el || !el.closest('table')) return;
+    if(el.hasAttribute('title')){
+      const t = el.getAttribute('title');
+      if(t){ el.setAttribute('data-tip', t); }
+      el.removeAttribute('title');     // evita que salga también el nativo
+    }
+    const txt = el.getAttribute('data-tip');
+    if(!txt) return;
+    const c = crear();
+    c.textContent = txt;
+    c.classList.add('visible');
+    colocar(c, el);
+  });
+  document.addEventListener('mouseout', function(){ if(caja) caja.classList.remove('visible'); });
+  window.addEventListener('scroll', function(){ if(caja) caja.classList.remove('visible'); }, true);
+})();
+</script>
+</body></html>';
   const blob=new Blob(['\ufeff'+htmlDoc],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download=nombreArch+'_'+fecha+'.xls';
@@ -5448,7 +5499,7 @@ function renderSipocModal(){
     return `<div class="sipoc-card">
       <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
       <div class="grid">
-        <div class="field"><label>Proveedores / Cliente ${ayudaFicha('prov')}</label>${_sipocListaHTML('ed',safe,'prov',d.prov,'Proveedor/Cliente')}</div>
+        <div class="field"><label>Proveedores ${ayudaFicha('prov')}</label>${_sipocListaHTML('ed',safe,'prov',d.prov,'Proveedor')}</div>
         <div class="field"><label>Entrada / Insumo ${ayudaFicha('entr')}</label>${_sipocListaHTML('ed',safe,'entr',d.entr,'Entrada/Insumo')}</div>
         <div class="field"><label>Producto ${ayudaFicha('prod')}</label>${_sipocListaHTML('ed',safe,'prod',d.prod,'Producto')}</div>
         <div class="field"><label>Receptor final del producto ${ayudaFicha('recep')}</label>${_sipocListaHTML('ed',safe,'recep',d.recep,'Receptor final de producto')}</div>
