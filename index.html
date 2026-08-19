@@ -3643,52 +3643,7 @@ function exportarTablaExcel(tabla, titulo, nombreArch, quitarUltimaCol){
     +'th{background:#1f7a4d;color:#fff;border:1px solid #999;padding:6px 8px;text-align:left}'
     +'td{border:1px solid #bbb;padding:5px 8px;vertical-align:top}</style></head><body>'
     +'<h3>'+titulo+' — Facultad de Ingeniería URP<br>Sistema de Gestión para Organizaciones Educativas (SGOE) · ISO 21001</h3>'
-    +'<p>Exportado el '+fecha+'</p>'+clon.outerHTML+'<script>
-/* ===== Tooltip propio para las celdas de las tablas =====
-   El aviso nativo del navegador usa la letra del sistema y no se puede agrandar.
-   Aquí se sustituye por uno propio, con tipografía legible y varias líneas.
-   Se cuelga de <html> y no de <body> porque el body tiene zoom:1.22, que
-   descuadraría las coordenadas de un elemento con position:fixed. */
-(function tooltipGrande(){
-  let caja=null;
-  function crear(){
-    if(caja) return caja;
-    caja=document.createElement('div');
-    caja.id='tip-grande';
-    document.documentElement.appendChild(caja);
-    return caja;
-  }
-  function colocar(c, el){
-    const r=el.getBoundingClientRect();
-    c.style.left='-9999px'; c.style.top='0px';
-    const w=c.offsetWidth, h=c.offsetHeight;
-    let x=r.left, y=r.bottom+8;
-    if(x+w > window.innerWidth-12) x = window.innerWidth-w-12;
-    if(x<12) x=12;
-    if(y+h > window.innerHeight-12) y = r.top-h-8;
-    if(y<12) y=12;
-    c.style.left=x+'px'; c.style.top=y+'px';
-  }
-  document.addEventListener('mouseover', function(e){
-    const el = e.target.closest && e.target.closest('[title],[data-tip]');
-    if(!el || !el.closest('table')) return;
-    if(el.hasAttribute('title')){
-      const t = el.getAttribute('title');
-      if(t){ el.setAttribute('data-tip', t); }
-      el.removeAttribute('title');     // evita que salga también el nativo
-    }
-    const txt = el.getAttribute('data-tip');
-    if(!txt) return;
-    const c = crear();
-    c.textContent = txt;
-    c.classList.add('visible');
-    colocar(c, el);
-  });
-  document.addEventListener('mouseout', function(){ if(caja) caja.classList.remove('visible'); });
-  window.addEventListener('scroll', function(){ if(caja) caja.classList.remove('visible'); }, true);
-})();
-</script>
-</body></html>';
+    +'<p>Exportado el '+fecha+'</p>'+clon.outerHTML+'</body></html>';
   const blob=new Blob(['\ufeff'+htmlDoc],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
   a.download=nombreArch+'_'+fecha+'.xls';
@@ -9287,6 +9242,50 @@ document.addEventListener('DOMContentLoaded',()=>{
   // círculo, para no tapar contenido. Vuelve a abrirse al pasar el cursor.
   setTimeout(()=>btn.classList.add('mini'), 6000);
 });
+</script>
+<script>
+/* ===== Tooltip propio para las celdas de las tablas =====
+   El aviso nativo del navegador usa la letra del sistema y no se puede agrandar.
+   Se cuelga de <html> y no de <body> porque el body tiene zoom:1.22, que
+   descuadraría las coordenadas de un elemento con position:fixed. */
+(function tooltipGrande(){
+  let caja=null;
+  function crear(){
+    if(caja) return caja;
+    caja=document.createElement('div');
+    caja.id='tip-grande';
+    document.documentElement.appendChild(caja);
+    return caja;
+  }
+  function colocar(c, el){
+    const r=el.getBoundingClientRect();
+    c.style.left='-9999px'; c.style.top='0px';
+    const w=c.offsetWidth, h=c.offsetHeight;
+    let x=r.left, y=r.bottom+8;
+    if(x+w > window.innerWidth-12) x = window.innerWidth-w-12;
+    if(x<12) x=12;
+    if(y+h > window.innerHeight-12) y = r.top-h-8;
+    if(y<12) y=12;
+    c.style.left=x+'px'; c.style.top=y+'px';
+  }
+  document.addEventListener('mouseover', function(e){
+    const el = e.target.closest && e.target.closest('[title],[data-tip]');
+    if(!el || !el.closest('table')) return;
+    if(el.hasAttribute('title')){
+      const t = el.getAttribute('title');
+      if(t){ el.setAttribute('data-tip', t); }
+      el.removeAttribute('title');
+    }
+    const txt = el.getAttribute('data-tip');
+    if(!txt) return;
+    const c = crear();
+    c.textContent = txt;
+    c.classList.add('visible');
+    colocar(c, el);
+  });
+  document.addEventListener('mouseout', function(){ if(caja) caja.classList.remove('visible'); });
+  window.addEventListener('scroll', function(){ if(caja) caja.classList.remove('visible'); }, true);
+})();
 </script>
 </body>
 </html>
