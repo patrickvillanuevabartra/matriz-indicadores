@@ -142,9 +142,14 @@
   .icon-btn:hover{border-color:var(--brand-2);background:var(--paper)}
 
   /* Tooltip propio: el nativo del navegador no se puede agrandar por CSS */
-  #tip-grande{position:fixed;z-index:3000;max-width:520px;background:#0f1f18;color:#fff;
-    font:500 14.5px/1.55 'IBM Plex Sans',system-ui,sans-serif;padding:11px 14px;border-radius:9px;
-    box-shadow:0 8px 30px rgba(0,0,0,.32);pointer-events:none;opacity:0;transition:opacity .12s;
+  /* Opción vigente: verde institucional muy claro. Para cambiar de estilo,
+     sustituye background, color y border por una de estas variantes:
+       · Gris pizarra suave: background:#37474f; color:rgba(255,255,255,.95); border:0;
+       · Tarjeta clara:      background:#fbfdfc; color:#33413b; border:1px solid #d7e2dc; */
+  #tip-grande{position:fixed;z-index:3000;max-width:520px;
+    background:#eef6f1;color:#1f3b2e;border:1px solid #bcd9c8;
+    font:500 14.5px/1.6 'IBM Plex Sans',system-ui,sans-serif;padding:11px 14px;border-radius:9px;
+    box-shadow:0 6px 22px rgba(20,60,40,.16);pointer-events:none;opacity:0;transition:opacity .12s;
     white-space:pre-wrap;word-break:break-word}
   #tip-grande.visible{opacity:1}
   .empty{text-align:center;padding:54px 20px;color:var(--mist)}
