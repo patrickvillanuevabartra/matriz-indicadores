@@ -7855,7 +7855,7 @@ async function cargarProgMetas(){
       const plan=leerCampo(r,PM.plan_accion.id,'Plan de acción');
       // Puede haber varias evidencias (una por línea, con formato "Etiqueta | url")
       const planLink=(typeof _evParse==='function'?_evParse(plan):[]).filter(x=>x.url).map(x=>
-        ` · <a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" style="color:var(--brand);font-size:11px">${(x.etq||'evidencia').replace(/</g,'&lt;')} ↗</a>`
+        ` · <a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" style="color:var(--brand);font-size:11px">${(x.etq||'plan de acción').replace(/</g,'&lt;')} ↗</a>`
       ).join('');
       return `<tr><td>${fmtFecha(f)||'—'}</td><td><strong style="color:var(--brand);font-size:12px">${per?per.replace(/</g,'&lt;'):'—'}</strong></td><td>${ref||'—'}</td><td><strong>${meta||'—'}</strong></td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${planLink}</td>
         <td style="text-align:right;white-space:nowrap">
