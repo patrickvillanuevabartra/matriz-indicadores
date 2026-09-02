@@ -774,7 +774,7 @@ label .req{color:var(--falla)}
           '</small></td></tr>';
 
         const cargas = g.filas.map(({ ancla, partes }) => {
-          const a = ancla.a, i = ancla.i;
+          const a = ancla.a;
           nCarga++;
           const bloqueada = a.faltantes.length > 0;
           const hechos = new Set();
@@ -784,7 +784,7 @@ label .req{color:var(--falla)}
             const ok = hechos.has(clave);
             const cls = 'chip' + (ok ? ' hecho' : (bloqueada ? '' : ' activo'));
             return '<button class="' + cls + '" ' +
-              (bloqueada ? 'disabled' : 'data-abrir="' + clave + '" data-fila="' + i + '"') +
+              (bloqueada ? 'disabled' : 'data-abrir="' + clave + '" data-id="' + esc(a.idAsignacion) + '"') +
               ' title="' + esc(m.nombre) + (ok ? ' — registrado' : ' — pendiente') + '">' +
               esc(m.corto) + '</button>';
           }).join('');
@@ -796,7 +796,7 @@ label .req{color:var(--falla)}
 
           const puedeMover = estado.admin || estado.general;
           const mover = puedeMover
-            ? '<button class="chip mover" data-mover="' + i + '" title="Cambiar el área de esta carga">Área ⇄</button>'
+            ? '<button class="chip mover" data-mover="' + esc(a.idAsignacion) + '" title="Cambiar el área de esta carga">Área ⇄</button>'
             : '';
           const tipos = [...new Set(partes.map(p => p.a.tipo || '?'))].join(' + ');
           const subs = [...new Set(partes.map(p => p.a.subGrupo).filter(x => x !== ''))];
@@ -825,12 +825,17 @@ label .req{color:var(--falla)}
       '<tbody>' + filas + '</tbody></table>';
 
     $('tableroTabla').querySelectorAll('[data-mover]').forEach(b => {
-      b.addEventListener('click', () => abrirMover(estado.visibles[Number(b.dataset.mover)]));
+      b.addEventListener('click', () => {
+        const a = estado.asignaciones.find(x => x.idAsignacion === b.dataset.mover);
+        if (a) abrirMover(a);
+      });
     });
 
-    $('tableroTabla').querySelectorAll('[data-abrir]').forEach(b => {
+    $('tableroTabla').querySelectorAll('[data-abrir][data-id]').forEach(b => {
       b.addEventListener('click', () => {
-        abrirModulo(estado.visibles[Number(b.dataset.fila)], b.dataset.abrir);
+        // Se busca por ID, no por posicion: al filtrar, las posiciones cambian.
+        const a = estado.asignaciones.find(x => x.idAsignacion === b.dataset.id);
+        if (a) abrirModulo(a, b.dataset.abrir);
       });
     });
   }
