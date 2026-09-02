@@ -282,7 +282,7 @@ label .req{color:var(--falla)}
   <div class="sello">PCA</div>
   <div class="marca">
     <b>Portal del Coordinador de Área</b>
-    <span>Facultad de Ingeniería</span>
+    <span>Facultad de Ingeniería · <b id="version" style="font-weight:600">v14</b></span>
   </div>
   <div class="espacio"></div>
   <div class="usuario oculto" id="usuarioCaja">
@@ -834,8 +834,14 @@ label .req{color:var(--falla)}
     $('tableroTabla').querySelectorAll('[data-abrir][data-id]').forEach(b => {
       b.addEventListener('click', () => {
         // Se busca por ID, no por posicion: al filtrar, las posiciones cambian.
-        const a = estado.asignaciones.find(x => x.idAsignacion === b.dataset.id);
-        if (a) abrirModulo(a, b.dataset.abrir);
+        const id = b.dataset.id;
+        const iguales = estado.asignaciones.filter(x => x.idAsignacion === id);
+        if (!iguales.length) { alert('No se encontró la carga ' + id); return; }
+        if (iguales.length > 1) {
+          alert('Hay ' + iguales.length + ' cargas con el mismo ID ' + id +
+                '. Corrige el ID asignacion en Docentes DAI antes de registrar.');
+        }
+        abrirModulo(iguales[0], b.dataset.abrir);
       });
     });
   }
