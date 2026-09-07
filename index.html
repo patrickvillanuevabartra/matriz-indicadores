@@ -873,9 +873,9 @@
       </div>
       <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Vista completa (con actividad)</option><option value="Proceso nivel 0">Agrupar por Nivel 0</option><option value="Proceso nivel 1">Agrupar por Nivel 1</option><option value="Proceso nivel 2">Agrupar por Nivel 2</option><option value="Proceso nivel 3">Agrupar por Nivel 3</option></select>
       <select id="invFiltroTipo" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los tipos</option></select>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;document.getElementById('invVerSinProc').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;document.getElementById('invOcultarSinProc').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer" title="Procesos creados en la estructura a los que todavía no se les registraron procedimientos"><input type="checkbox" id="invVerSinProc" onchange="renderInventario()"> Ver procesos sin procedimientos</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer" title="El inventario muestra TODOS los procesos. Marca esta casilla si prefieres ver solo los que ya tienen procedimientos registrados."><input type="checkbox" id="invOcultarSinProc" onchange="renderInventario()"> Ocultar los incompletos</label>
     </div>
     <div class="card"><div class="tabla-wrap"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse;font-size:13.5px">
       <thead><tr>
@@ -3813,11 +3813,12 @@ async function renderInventario(){
         proc:limpio(v[INV_COLS.proc])
       };
     });
-    const verSinProc = !!(document.getElementById('invVerSinProc')||{}).checked;
+    const ocultarSinProc = !!(document.getElementById('invOcultarSinProc')||{}).checked;
     filas=filas.filter(f=>{
-      // Los procesos sin procedimientos solo se muestran si se pide expresamente:
-      // aparecer siempre confundía, porque parecían registros eliminados que volvían.
-      if(f.sinProc && !verSinProc) return false;
+      // El inventario muestra TODO lo que existe, incluidos los procesos a los que
+      // aún les faltan procedimientos: solo así se puede decidir si completarlos o
+      // borrarlos. Quien quiera la vista reducida marca la casilla.
+      if(f.sinProc && ocultarSinProc) return false;
       if(!verArch && f.archivado) return false;
       if(fTipo && f.tipo!==fTipo) return false;
       if(q){ const blob=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
@@ -3870,8 +3871,10 @@ async function renderInventario(){
         html+=`<tr style="${it.archivado?'opacity:.5':''}">
           <td colspan="6" style="padding:8px 14px 8px ${padresSinTipo.length?42:26}px;border-top:1px solid var(--line);color:var(--slate);font-weight:600">${it.valor.replace(/</g,'&lt;')}${archTag}</td>
           <td style="text-align:right;white-space:nowrap;border-top:1px solid var(--line);padding:8px 6px">
-            ${(it.repr && it.repr._sinProc) ? '<span style="color:var(--mist);font-size:11px">—</span>'
-              : (puedeGestionarInventario()?`<button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>`:'<span style="color:var(--mist);font-size:11px">Solo lectura</span>')}
+            ${!puedeGestionarInventario() ? '<span style="color:var(--mist);font-size:11px">Solo lectura</span>'
+              : (it.repr && it.repr._sinProc)
+                ? `<button class="icon-btn" title="Eliminar este proceso" onclick="eliminarProcesoSinProc('${it.repr.id}')">🗑️</button>`
+                : `<button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>`}
           </td>
         </tr>`;
       });
@@ -4606,6 +4609,44 @@ async function _borrarEnTablaNivel(nivelLabel, nombre){
   }catch(e){ console.warn('Error leyendo tabla de nivel:', e.message); }
   return borrados;
 }
+
+/* Borra un proceso que existe en su tabla de nivel pero no tiene procedimientos
+   (los que se ven con la casilla «Ver procesos sin procedimientos»). El borrado
+   normal parte de la fila de PROCEDIMIENTO, que aquí no existe, así que se borra
+   directamente el registro del nivel, con las mismas comprobaciones previas. */
+async function eliminarProcesoSinProc(rid){
+  if(!puedeGestionarInventario()){ toast("Solo el administrador puede modificar el inventario de procesos.", true); return; }
+  const inv = await loadInventario();
+  const r = inv.find(x=>x.id===rid && x._sinProc);
+  if(!r){ toast('No se encontró ese proceso.', true); return; }
+
+  const {nivel, nombre} = _invNivelElemento(r);
+  const codigo = _codigoInicio(nombre);
+  const enUso  = await _fichasQueUsan(nombre);
+  const hijos  = _hijosDe(codigo);
+
+  const avisos=[];
+  if(hijos>0) avisos.push('⚠️ Tiene '+hijos+' proceso(s) que dependen de él. Si lo eliminas, quedarán sin su proceso padre.');
+  if(enUso>0) avisos.push('⚠️ Está en uso por '+enUso+' ficha(s). Esas fichas pueden quedar inconsistentes.');
+  let msg='¿Eliminar «'+nombre+'»?\n\nSe borrará de la tabla de '+(nivel||'su nivel')+'.\nEsta acción no se puede deshacer.';
+  if(avisos.length) msg = avisos.join('\n\n')+'\n\n'+msg;
+  if(!confirm(msg)) return;
+
+  // Confirmación escrita: es un borrado permanente
+  if(codigo){
+    const escrito = prompt('Para confirmar, escribe el código del proceso:\n\n'+codigo);
+    if(String(escrito||'').trim() !== codigo){ toast('Cancelado.', true); return; }
+  }
+
+  try{
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+rid+'.json','DELETE',{});
+    toast('Proceso eliminado de la tabla de '+(nivel||'su nivel')+'.');
+    STATE.inventario=[];
+    await invalidarCachesProcesos();
+    await renderInventario();
+  }catch(e){ toast('No se pudo eliminar: '+e.message, true); }
+}
+window.eliminarProcesoSinProc = eliminarProcesoSinProc;
 
 async function eliminarInventario(rid){
   if(!puedeGestionarInventario()){ toast("Solo el administrador puede modificar el inventario de procesos.", true); return; }
