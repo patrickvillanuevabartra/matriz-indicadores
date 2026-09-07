@@ -1030,6 +1030,24 @@
       </div>
       <div id="usuariosLista"><p class="hint">Cargando usuarios…</p></div>
     </div>
+    <div class="card" style="padding:22px;margin-top:18px" id="cardRenumerar">
+      <h3 style="margin:0 0 4px;font-size:16px;color:var(--slate)">Renumerar un código de proceso</h3>
+      <p style="margin:0 0 14px;font-size:13px;color:var(--mist)">
+        Cambia un código en <strong>todas</strong> las tablas a la vez: inventario, fichas, subindicadores y matriz.
+        Hace falta porque el código va escrito dentro del texto de cada registro, no como un vínculo.
+        Primero busca, revisa la lista y recién entonces reemplaza.
+      </p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+        <div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Código actual</label>
+          <input id="rnActual" placeholder="M01.05.04" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;width:180px"></div>
+        <div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Código nuevo</label>
+          <input id="rnNuevo" placeholder="M01.05.03" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;width:180px"></div>
+        <button class="btn" onclick="rnBuscar()" id="rnBtnBuscar">Buscar</button>
+        <button class="btn btn-primary" onclick="rnReemplazar()" id="rnBtnAplicar" disabled>Reemplazar</button>
+      </div>
+      <div id="rnSalida" style="margin-top:14px;font-size:13px"></div>
+    </div>
+
   </section>
 
 </main>
@@ -9410,5 +9428,79 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 })();
 </script>
+<script>
+/* ===== Renumerar un código de proceso en todas las tablas =====
+   El código (M01.05.04) está escrito DENTRO del texto de cada registro, y no como
+   una relación entre tablas. Por eso cambiarlo en el inventario no arrastra al
+   resto: hay que reemplazarlo en cada sitio donde aparece. Esta herramienta lo
+   hace de una sola vez, sobre las tablas configuradas en CONFIG.ENTITIES.
+   Los sufijos se conservan: M01.05.04.01.02 pasa a M01.05.03.01.02. */
+let _RN_HALLAZGOS = null;
+
+function _rnEsIdCampo(k){ return /^[a-zA-Z0-9_\-]{22}$/.test(String(k)); }
+function _rnSalida(html){ document.getElementById('rnSalida').innerHTML = html; }
+
+async function rnBuscar(){
+  const viejo=(document.getElementById('rnActual').value||'').trim();
+  const nuevo=(document.getElementById('rnNuevo').value||'').trim();
+  document.getElementById('rnBtnAplicar').disabled = true;
+  _RN_HALLAZGOS = null;
+  if(!viejo || !nuevo){ _rnSalida('<span style="color:var(--danger,#c0392b)">Completa los dos códigos.</span>'); return; }
+  if(viejo===nuevo){ _rnSalida('<span style="color:var(--danger,#c0392b)">Son el mismo código.</span>'); return; }
+  _rnSalida('Buscando…');
+
+  const hallazgos=[]; const filas=[]; let choque=0;
+  for(const [tabla, ent] of Object.entries(CONFIG.ENTITIES)){
+    let d;
+    try{ d = await API.records(ent); }catch(e){ filas.push(`<tr><td>${tabla}</td><td colspan="2" style="color:var(--danger,#c0392b)">no se pudo leer</td></tr>`); continue; }
+    let n=0;
+    (d.records||[]).forEach(r=>{
+      const v=r.values||{}; const campos={};
+      Object.keys(v).forEach(k=>{
+        const val=v[k];
+        if(typeof val==='string' && val.includes(viejo) && _rnEsIdCampo(k)){
+          campos[k]=val.split(viejo).join(nuevo);
+        }
+        if(typeof val==='string' && val.includes(nuevo)) choque++;
+      });
+      if(Object.keys(campos).length){ hallazgos.push({tabla, ent, id:r.id, campos}); n++; }
+    });
+    if(n) filas.push(`<tr><td>${tabla}</td><td style="text-align:right"><strong>${n}</strong></td><td>registro(s)</td></tr>`);
+  }
+
+  if(!hallazgos.length){ _rnSalida(`No se encontró <code>${viejo}</code> en ninguna tabla.`); return; }
+  _RN_HALLAZGOS = { viejo, nuevo, lista:hallazgos };
+  document.getElementById('rnBtnAplicar').disabled = false;
+  const aviso = choque ? `<p style="color:#b26a00;margin:8px 0 0">Atención: ya existen registros que contienen <code>${nuevo}</code>. Revisa que no se dupliquen códigos.</p>` : '';
+  _rnSalida(`<table style="width:auto;font-size:13px">${filas.join('')}</table>
+    <p style="margin:8px 0 0">Se cambiará <code>${viejo}</code> por <code>${nuevo}</code> en <strong>${hallazgos.length}</strong> registro(s), conservando los sufijos.</p>${aviso}
+    <p style="margin:6px 0 0;color:var(--mist)">Exporta las tablas a Excel antes de continuar: el reemplazo no se puede deshacer desde aquí.</p>`);
+}
+window.rnBuscar = rnBuscar;
+
+async function rnReemplazar(){
+  if(!_RN_HALLAZGOS){ return; }
+  const {viejo, nuevo, lista} = _RN_HALLAZGOS;
+  const escrito = prompt(`Vas a cambiar ${viejo} por ${nuevo} en ${lista.length} registro(s).\n\nEscribe el código nuevo para confirmar:`);
+  if(String(escrito||'').trim() !== nuevo){ toast('Cancelado: el código no coincide.', true); return; }
+
+  const btn=document.getElementById('rnBtnAplicar');
+  btn.disabled=true; btn.textContent='Reemplazando…';
+  let ok=0; const errores=[];
+  for(const h of lista){
+    try{ await API.saveForm(h.id, h.campos, h.ent); ok++; }
+    catch(e){ errores.push(`${h.tabla} · ${h.id}: ${e.message}`); }
+    _rnSalida(`Procesando… ${ok+errores.length} de ${lista.length}`);
+  }
+  btn.textContent='Reemplazar';
+  _RN_HALLAZGOS=null;
+  const detalle = errores.length ? `<p style="color:var(--danger,#c0392b);margin:8px 0 0">No se pudieron actualizar ${errores.length}:<br>${errores.join('<br>')}</p>` : '';
+  _rnSalida(`<strong>${ok}</strong> registro(s) actualizados.${detalle}
+    <p style="margin:8px 0 0">Vuelve a pulsar <strong>Buscar</strong> con el código viejo: debe decir que ya no aparece en ninguna tabla.</p>`);
+  toast(ok+' registro(s) actualizados. Recarga la página para ver los cambios.');
+}
+window.rnReemplazar = rnReemplazar;
+</script>
+
 </body>
 </html>
