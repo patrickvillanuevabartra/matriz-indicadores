@@ -6538,6 +6538,72 @@ async function abrirControlSync(){
       html+='</tbody></table></div>';
     }
 
+
+    // ===== Cotejo con el INVENTARIO DE PROCESOS =====
+    // Un indicador o una ficha guardan el nombre del proceso como texto copiado.
+    // Si en el Inventario se corrige ese nombre, o el proceso se elimina, aquí
+    // quedan referencias viejas que nadie detectaría. Esta sección las lista.
+    try{
+      const inv = await loadInventario();
+      // Código → nombre vigente en el inventario (todos los niveles)
+      const vigente = {};
+      inv.forEach(r=>{
+        const v=r.values||{};
+        ['Proceso nivel 0','Proceso nivel 1','Proceso nivel 2','Proceso nivel 3','Procedimiento'].forEach(k=>{
+          const t=String(v[k]||'').trim();
+          const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.*)$/);
+          if(m) vigente[m[1]] = t;
+        });
+      });
+      // Referencias guardadas en la matriz
+      const cambiados=[]; const huerfanos=[];
+      (STATE.matriz||[]).forEach(r=>{
+        const v=r.values||{};
+        Object.keys(v).forEach(k=>{
+          const t=String(v[k]||'').trim();
+          const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.+)$/);
+          if(!m) return;
+          const cod=m[1];
+          if(!vigente[cod]){
+            if(!huerfanos.some(x=>x.cod===cod)) huerfanos.push({cod, texto:t});
+          } else if(vigente[cod]!==t){
+            if(!cambiados.some(x=>x.cod===cod)) cambiados.push({cod, antes:t, ahora:vigente[cod]});
+          }
+        });
+      });
+
+      if(cambiados.length){
+        html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos renombrados en el Inventario ('+cambiados.length+')</h3>';
+        html+='<p class="hint" style="margin:0 0 8px">El nombre del proceso cambió en el Inventario y en la Matriz sigue el anterior. Corrígelo en el Inventario o en QuintaDB para que coincidan.</p>';
+        html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Dice en la Matriz</th><th style="padding:8px 10px">Dice en el Inventario</th></tr></thead><tbody>';
+        cambiados.forEach(d=>{
+          html+=`<tr style="border-bottom:1px solid var(--line)">
+            <td style="padding:8px 10px"><code>${d.cod}</code></td>
+            <td style="padding:8px 10px;color:#b26a00">${String(d.antes).replace(/</g,'&lt;')}</td>
+            <td style="padding:8px 10px;color:var(--brand)">${String(d.ahora).replace(/</g,'&lt;')}</td>
+          </tr>`;
+        });
+        html+='</tbody></table></div>';
+      }
+
+      if(huerfanos.length){
+        html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos que ya no existen en el Inventario ('+huerfanos.length+')</h3>';
+        html+='<p class="hint" style="margin:0 0 8px">Estos códigos aparecen en la Matriz pero no están en el Inventario: el proceso fue eliminado o su código cambió. Los indicadores siguen midiendo algo que ya no figura en la estructura. Reasígnalos a un proceso vigente o archívalos.</p>';
+        html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Texto guardado</th></tr></thead><tbody>';
+        huerfanos.forEach(d=>{
+          html+=`<tr style="border-bottom:1px solid var(--line)">
+            <td style="padding:8px 10px"><code style="color:#c0392b">${d.cod}</code></td>
+            <td style="padding:8px 10px">${String(d.texto).replace(/</g,'&lt;')}</td>
+          </tr>`;
+        });
+        html+='</tbody></table></div>';
+      }
+
+      if(!cambiados.length && !huerfanos.length){
+        html+='<p class="hint" style="margin:22px 0 0">✓ Todos los procesos citados en la Matriz coinciden con el Inventario.</p>';
+      }
+    }catch(e){ html+='<p class="hint" style="margin:22px 0 0">No se pudo cotejar con el Inventario: '+e.message+'</p>'; }
+
     cont.innerHTML=html;
   }catch(e){ cont.innerHTML='<p class="hint">Error al analizar: '+e.message+'</p>'; }
 }
