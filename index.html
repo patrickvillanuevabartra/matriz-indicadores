@@ -2342,6 +2342,41 @@ async function loadInventario(forzar){
     }catch(_){ /* reintentar */ }
     await new Promise(r=>setTimeout(r, 300*intento));
   }
+  // ── Procesos SIN procedimientos ──────────────────────────────────────────
+  // El inventario se arma con la tabla PROCEDIMIENTO, así que un proceso al que
+  // todavía no le crearon procedimientos quedaba invisible. Para que el inventario
+  // refleje TODO lo que existe (y se vea qué falta), se añaden aquí como filas
+  // propias, marcadas con «sin procedimientos». No se editan desde esta pantalla.
+  if(regs.length){
+    try{
+      const yaEstan = new Set();
+      regs.forEach(r=>{
+        const t=JSON.stringify(r.values||{});
+        (t.match(/[A-Z]\d{2}(\.\d{2})+/g)||[]).forEach(c=>yaEstan.add(c));
+      });
+      const extras=[];
+      const tablas=[
+        { ent:CONFIG.ENTITIES.NIVEL2, cod:'Código "Nivel 2"', nom:'Proceso nivel 2' },
+        { ent:CONFIG.ENTITIES.NIVEL3, cod:'Código "Nivel 3"', nom:'Proceso nivel 3' }
+      ];
+      for(const t of tablas){
+        if(!t.ent) continue;
+        const d = await API.records(t.ent);
+        (d.records||[]).forEach(r=>{
+          const v=r.values||{};
+          const codigo=String(v[t.cod]||'').trim();
+          if(!codigo || yaEstan.has(codigo)) return;
+          const copia={};
+          ['Tipo de proceso','Proceso nivel 0','Proceso nivel 1','Proceso nivel 2','Proceso nivel 3'].forEach(k=>{
+            if(v[k]) copia[k]=v[k];
+          });
+          if(!copia[t.nom]) return;
+          extras.push({ id:r.id, values:copia, _sinProc:true });
+        });
+      }
+      regs = regs.concat(extras);
+    }catch(e){ /* si falla, el inventario sigue mostrando lo de siempre */ }
+  }
   // Solo cachear si realmente trajo registros (evita guardar un vacío en falso)
   if(regs.length){
     // Derivar los niveles desde el campo de texto plano "Ruta completa" (field-id cIWOeqW6vkuildQSkfW4WT),
@@ -3770,7 +3805,7 @@ async function renderInventario(){
     let filas=inv.map(r=>{
       const v=r.values||{};
       return {
-        r, id:r.id, archivado:_invArchivado(r),
+        r, id:r.id, archivado:_invArchivado(r), sinProc:!!r._sinProc,
         tipo:limpio(v[INV_COLS.tipo]),
         n0:limpio(v[INV_COLS.n0]), n1:limpio(v[INV_COLS.n1]),
         n2:limpio(v[INV_COLS.n2]), n3:limpio(v[INV_COLS.n3]),
@@ -3825,11 +3860,13 @@ async function renderInventario(){
           html+=`<tr><td colspan="7" style="background:var(--paper);padding:8px 14px 8px 26px;font-weight:700;color:var(--brand);font-size:13px;border-top:1px solid var(--line)">${(it.subgrupo||'(sin proceso padre)').replace(/</g,'&lt;')} <span style="color:var(--mist);font-weight:500">(${cntSub[it.tipo+'¦'+it.subgrupo]})</span></td></tr>`;
         }
         // Elemento: solo el nombre (ya incluye el código como prefijo). Sin código duplicado a la izquierda.
-        const archTag=it.archivado?'<span style="font-size:10px;color:var(--mist);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px">Archivado</span>':'';
+        const archTag=it.archivado?'<span style="font-size:10px;color:var(--mist);border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-left:6px">Archivado</span>':''
+          + (it.repr && it.repr._sinProc ? '<span style="font-size:10px;color:#b26a00;background:#fff6e5;border:1px solid #f0d9a8;border-radius:8px;padding:1px 6px;margin-left:6px" title="Este proceso existe, pero todavía no tiene procedimientos registrados">sin procedimientos</span>' : '');
         html+=`<tr style="${it.archivado?'opacity:.5':''}">
           <td colspan="6" style="padding:8px 14px 8px ${padresSinTipo.length?42:26}px;border-top:1px solid var(--line);color:var(--slate);font-weight:600">${it.valor.replace(/</g,'&lt;')}${archTag}</td>
           <td style="text-align:right;white-space:nowrap;border-top:1px solid var(--line);padding:8px 6px">
-            ${puedeGestionarInventario()?`<button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>`:'<span style="color:var(--mist);font-size:11px">Solo lectura</span>'}
+            ${(it.repr && it.repr._sinProc) ? '<span style="color:var(--mist);font-size:11px">—</span>'
+              : (puedeGestionarInventario()?`<button class="icon-btn" title="Editar" onclick="editarInventario('${it.repr.id}')">✏️</button>`:'<span style="color:var(--mist);font-size:11px">Solo lectura</span>')}
           </td>
         </tr>`;
       });
