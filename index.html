@@ -3959,12 +3959,16 @@ async function renderInventario(){
       // Sin border-top: el separador se dibuja DENTRO de la celda, así no corta
       // la línea vertical de color de las columnas agrupadas de la izquierda.
       const sep = i>0 ? 'border-top:1px solid var(--line);' : '';
-      html+=`<td style="vertical-align:top;padding:0 0 0 0;border-left:3px solid ${bgP.fg}33"><div style="${sep}padding:8px 10px">${f.proc?`<div style="font-weight:600;color:${bgP.fg};line-height:1.35">${f.proc.replace(/</g,'&lt;')}${archTag}</div>`:'<span style="color:var(--mist)">—</span>'}</div></td>`;
+      html+=`<td style="vertical-align:top;padding:0 0 0 0;border-left:3px solid ${bgP.fg}33"><div style="${sep}padding:8px 10px">${f.proc?`<div style="font-weight:600;color:${bgP.fg};line-height:1.35">${f.proc.replace(/</g,'&lt;')}${archTag}</div>`
+          : (f.sinProc?'<span style="font-size:10px;color:#b26a00;background:#fff6e5;border:1px solid #f0d9a8;border-radius:8px;padding:2px 7px" title="Este proceso existe, pero todavía no tiene procedimientos registrados">sin procedimientos</span>'
+                      :'<span style="color:var(--mist)">—</span>')}</div></td>`;
       // acciones
       html+=`<td style="text-align:right;vertical-align:top;white-space:nowrap;padding:0"><div style="${sep}padding:8px 6px">
-        ${puedeGestionarInventario()?`<button class="icon-btn" title="Editar" onclick="editarInventario('${f.id}')">✏️</button>
+        ${!puedeGestionarInventario()?'<span style="color:var(--mist);font-size:11px">Solo lectura</span>'
+          : f.sinProc?`<button class="icon-btn" title="Eliminar este proceso" onclick="eliminarProcesoSinProc('${f.id}')">🗑️</button>`
+          : `<button class="icon-btn" title="Editar" onclick="editarInventario('${f.id}')">✏️</button>
         <button class="icon-btn" title="${f.archivado?'Reactivar':'Archivar'}" onclick="archivarInventario('${f.id}', ${f.archivado?'false':'true'})">📦</button>
-        <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${f.id}')">🗑️</button>`:'<span style="color:var(--mist);font-size:11px">Solo lectura</span>'}
+        <button class="icon-btn" title="Eliminar" onclick="eliminarInventario('${f.id}')">🗑️</button>`}
       </div></td>`;
       html+=`</tr>`;
     });
