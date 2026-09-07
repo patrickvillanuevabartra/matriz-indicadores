@@ -889,6 +889,44 @@
       </tr></thead>
       <tbody id="tablaInventario"><tr><td colspan="7" class="empty"><h3>Cargando…</h3></td></tr></tbody>
     </table></div></div>
+
+    <details class="card" id="cardRenumerar" style="padding:0;margin-top:18px">
+      <summary style="padding:16px 22px;cursor:pointer;font-weight:600;color:var(--slate);font-size:15px;list-style:none">
+        🔧 Renumerar o renombrar un proceso
+        <span style="font-weight:400;color:var(--mist);font-size:13px;margin-left:8px">— úsalo después de cambiar un código o un nombre aquí arriba</span>
+      </summary>
+      <div style="padding:0 22px 22px">
+
+        <div style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px;font-size:13.5px;line-height:1.55;color:var(--slate)">
+          <strong>¿Para qué sirve?</strong><br>
+          Cuando cambias el código o el nombre de un proceso en este inventario, el cambio <strong>no llega solo</strong> a la Matriz de indicadores ni a las fichas: cada indicador guarda una copia del nombre del proceso. Esta herramienta reemplaza el texto viejo por el nuevo en todas las tablas de una sola vez.<br><br>
+
+          <strong>Ejemplo</strong><br>
+          El proceso <code>M01.05.04 Tutoría, asesoría y consejería</code> pasa a ser <code>M01.05.03</code>.<br>
+          Escribes <code>M01.05.04</code> en «Código actual» y <code>M01.05.03</code> en «Código nuevo».<br>
+          La herramienta lo corrige en todos los registros donde aparece, y respeta los sufijos: <code>M01.05.04.01</code> queda como <code>M01.05.03.01</code>.<br><br>
+
+          <strong>Si no lo usas</strong>, el Inventario dirá 03 y la Matriz seguirá diciendo 04. Los indicadores quedarían apuntando a un proceso que ya no existe con ese código.<br><br>
+
+          <strong>También sirve para nombres.</strong> Pega el texto completo viejo en «actual» y el nuevo en «nuevo».<br><br>
+
+          <strong>Cómo se usa con seguridad</strong><br>
+          1. Descarga el Excel del Inventario y de la Matriz, por si acaso.<br>
+          2. Pulsa <strong>Buscar</strong> y revisa cuántos registros cambiarán.<br>
+          3. Si el número cuadra, pulsa <strong>Reemplazar</strong>. No se puede deshacer.
+        </div>
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Código actual</label>
+            <input id="rnActual" placeholder="M01.05.04" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;width:200px"></div>
+          <div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Código nuevo</label>
+            <input id="rnNuevo" placeholder="M01.05.03" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;width:200px"></div>
+          <button class="btn" onclick="rnBuscar()" id="rnBtnBuscar">Buscar</button>
+          <button class="btn btn-primary" onclick="rnReemplazar()" id="rnBtnAplicar" disabled>Reemplazar</button>
+        </div>
+        <div id="rnSalida" style="margin-top:14px;font-size:13px"></div>
+      </div>
+    </details>
   </section>
 
   <!-- ===================== MAPA DE PROCESOS ===================== -->
@@ -1030,23 +1068,6 @@
         <button class="btn" onclick="exportarUsuariosExcel()" style="white-space:nowrap">⬇️ Descargar Excel</button>
       </div>
       <div id="usuariosLista"><p class="hint">Cargando usuarios…</p></div>
-    </div>
-    <div class="card" style="padding:22px;margin-top:18px" id="cardRenumerar">
-      <h3 style="margin:0 0 4px;font-size:16px;color:var(--slate)">Renumerar un código de proceso</h3>
-      <p style="margin:0 0 14px;font-size:13px;color:var(--mist)">
-        Cambia un código en <strong>todas</strong> las tablas a la vez: inventario, fichas, subindicadores y matriz.
-        Hace falta porque el código va escrito dentro del texto de cada registro, no como un vínculo.
-        Primero busca, revisa la lista y recién entonces reemplaza.
-      </p>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-        <div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Código actual</label>
-          <input id="rnActual" placeholder="M01.05.04" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;width:180px"></div>
-        <div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px">Código nuevo</label>
-          <input id="rnNuevo" placeholder="M01.05.03" style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;width:180px"></div>
-        <button class="btn" onclick="rnBuscar()" id="rnBtnBuscar">Buscar</button>
-        <button class="btn btn-primary" onclick="rnReemplazar()" id="rnBtnAplicar" disabled>Reemplazar</button>
-      </div>
-      <div id="rnSalida" style="margin-top:14px;font-size:13px"></div>
     </div>
 
   </section>
@@ -6423,6 +6444,86 @@ window.pintarResumenMatriz=pintarResumenMatriz;
 //  pero el texto ya no aparece igual (posible corrección de texto en la ficha).
 //  No cambia nada solo: el usuario decide por cada uno.
 // ============================================================================
+
+/* ===== Actualizar en bloque el nombre de un proceso desde el panel de sincronización
+   Reemplaza el texto viejo por el nuevo en TODAS las tablas, igual que la herramienta
+   de Administración, pero sin salir del panel. Reutiliza rnCamposDe() para traducir
+   los nombres de columna a identificadores antes de escribir. */
+async function csReemplazarTexto(viejo, nuevo){
+  if(!viejo || !nuevo || viejo===nuevo) return { ok:0, errores:['textos inválidos'] };
+  const lista=[];
+  for(const [tabla, ent] of Object.entries(CONFIG.ENTITIES)){
+    let d;
+    try{ d = await API.records(ent); }catch(e){ continue; }
+    (d.records||[]).forEach(r=>{
+      const v=r.values||{}; const campos={};
+      Object.keys(v).forEach(k=>{
+        const val=v[k];
+        if(typeof val==='string' && val.includes(viejo) && k!==val){
+          campos[k]=val.split(viejo).join(nuevo);
+        }
+      });
+      if(Object.keys(campos).length) lista.push({tabla, ent, id:r.id, campos});
+    });
+  }
+  let ok=0; const errores=[];
+  for(const h of lista){
+    try{
+      const mapa = await rnCamposDe(h.ent);
+      const campos = {};
+      for(const k in h.campos){
+        const fid = _rnEsIdCampo(k) ? k : (mapa ? mapa[k] : null);
+        if(!fid) throw new Error('columna no identificada: '+k);
+        campos[fid]=h.campos[k];
+      }
+      await API.saveForm(h.id, campos, h.ent); ok++;
+    }catch(e){ errores.push(h.tabla+' · '+e.message); }
+  }
+  return { ok, errores, total:lista.length };
+}
+
+async function csActualizarProceso(btn){
+  if(!puedeEditar()){ toast('No tienes permiso para editar.', true); return; }
+  const antes=btn.getAttribute('data-antes')||'';
+  const ahora=btn.getAttribute('data-ahora')||'';
+  if(!confirm('Se reemplazará en todas las tablas:\n\n'+antes+'\n\npor:\n\n'+ahora+'\n\nEsta acción no se puede deshacer.')) return;
+  btn.disabled=true; btn.textContent='Actualizando…';
+  const r = await csReemplazarTexto(antes, ahora);
+  if(r.ok){
+    const fila=document.getElementById(btn.getAttribute('data-fila'));
+    if(fila){ fila.style.opacity='.45'; }
+    btn.textContent='✓ '+r.ok+' registro(s)';
+    toast(r.ok+' registro(s) actualizados.');
+  } else {
+    btn.disabled=false; btn.textContent='Reintentar';
+    toast('No se actualizó nada. '+(r.errores[0]||''), true);
+  }
+  await invalidarCachesProcesos();
+}
+window.csActualizarProceso = csActualizarProceso;
+
+async function csActualizarTodos(btn){
+  if(!puedeEditar()){ toast('No tienes permiso para editar.', true); return; }
+  const botones=[...document.querySelectorAll('button[data-antes]')].filter(b=>!b.disabled);
+  if(!botones.length){ toast('No queda nada por actualizar.'); return; }
+  if(!confirm('Se actualizarán '+botones.length+' proceso(s) en todas las tablas.\n\nEsta acción no se puede deshacer. ¿Continuar?')) return;
+  btn.disabled=true;
+  let hechos=0;
+  for(const b of botones){
+    const antes=b.getAttribute('data-antes')||'', ahora=b.getAttribute('data-ahora')||'';
+    b.textContent='Actualizando…'; b.disabled=true;
+    const r = await csReemplazarTexto(antes, ahora);
+    b.textContent = r.ok ? ('✓ '+r.ok+' registro(s)') : 'Falló';
+    const fila=document.getElementById(b.getAttribute('data-fila'));
+    if(fila && r.ok) fila.style.opacity='.45';
+    if(r.ok) hechos++;
+  }
+  btn.textContent='Terminado: '+hechos+' de '+botones.length;
+  toast(hechos+' proceso(s) actualizados. Vuelve a abrir el control para comprobar.');
+  await invalidarCachesProcesos();
+}
+window.csActualizarTodos = csActualizarTodos;
+
 async function abrirControlSync(){
   document.getElementById('modalControlSync').classList.add('show'); document.body.style.overflow='hidden';
   const cont=document.getElementById('cs_cuerpo');
@@ -6629,13 +6730,16 @@ async function abrirControlSync(){
 
       if(cambiados.length){
         html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos renombrados en el Inventario ('+cambiados.length+')</h3>';
-        html+='<p class="hint" style="margin:0 0 8px">El Inventario es la referencia. Estos procesos se renombraron ahí y en la Matriz quedó el nombre anterior. Para propagar el cambio usa <strong>Administración → Renumerar un código de proceso</strong>, que lo reemplaza en todas las tablas a la vez.</p>';
-        html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Dice en la Matriz</th><th style="padding:8px 10px">Dice en el Inventario</th></tr></thead><tbody>';
-        cambiados.forEach(d=>{
-          html+=`<tr style="border-bottom:1px solid var(--line)">
+        html+='<p class="hint" style="margin:0 0 8px">El Inventario es la referencia. Estos procesos se renombraron ahí y en la Matriz quedó el nombre anterior. Pulsa <strong>Actualizar</strong> en cada fila para propagar el cambio a la Matriz, las fichas y los subindicadores. Revisa la lista antes: el reemplazo no se puede deshacer.</p>';
+        html+='<p style="margin:0 0 10px"><button class="btn btn-sm" onclick="csActualizarTodos(this)">Actualizar los '+cambiados.length+' de la lista</button></p>';
+        html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Dice en la Matriz</th><th style="padding:8px 10px">Dice en el Inventario</th><th style="padding:8px 10px"></th></tr></thead><tbody>';
+        const esc = x => String(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        cambiados.forEach((d,ix)=>{
+          html+=`<tr style="border-bottom:1px solid var(--line)" id="cs_inv_${ix}">
             <td style="padding:8px 10px"><code>${d.cod}</code></td>
-            <td style="padding:8px 10px;color:#b26a00">${String(d.antes).replace(/</g,'&lt;')}</td>
-            <td style="padding:8px 10px;color:var(--brand)">${String(d.ahora).replace(/</g,'&lt;')}</td>
+            <td style="padding:8px 10px;color:#b26a00">${esc(d.antes)}</td>
+            <td style="padding:8px 10px;color:var(--brand)">${esc(d.ahora)}</td>
+            <td style="padding:8px 10px;text-align:right"><button class="btn btn-sm" onclick="csActualizarProceso(this)" data-fila="cs_inv_${ix}" data-antes="${esc(d.antes)}" data-ahora="${esc(d.ahora)}">Actualizar</button></td>
           </tr>`;
         });
         html+='</tbody></table></div>';
