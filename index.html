@@ -6596,13 +6596,17 @@ async function abrirControlSync(){
     try{
       const inv = await loadInventario();
       // Código → nombre vigente en el inventario (todos los niveles)
+      // En la Matriz el texto es "CÓDIGO Nombre del proceso — Nombre del indicador".
+      // Solo la parte anterior al guion largo es el nombre del proceso: lo demás
+      // identifica al indicador y NO debe compararse.
+      const soloProceso = t => String(t||'').split(/\s+[—–]\s+/)[0].replace(/\s+/g,' ').trim();
       const vigente = {};
       inv.forEach(r=>{
         const v=r.values||{};
         ['Proceso nivel 0','Proceso nivel 1','Proceso nivel 2','Proceso nivel 3','Procedimiento'].forEach(k=>{
           const t=String(v[k]||'').trim();
           const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.*)$/);
-          if(m) vigente[m[1]] = t;
+          if(m) vigente[m[1]] = soloProceso(t);
         });
       });
       // Referencias guardadas en la matriz
@@ -6614,17 +6618,18 @@ async function abrirControlSync(){
           const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.+)$/);
           if(!m) return;
           const cod=m[1];
+          const proc=soloProceso(t);
           if(!vigente[cod]){
-            if(!huerfanos.some(x=>x.cod===cod)) huerfanos.push({cod, texto:t});
-          } else if(vigente[cod]!==t){
-            if(!cambiados.some(x=>x.cod===cod)) cambiados.push({cod, antes:t, ahora:vigente[cod]});
+            if(!huerfanos.some(x=>x.cod===cod)) huerfanos.push({cod, texto:proc});
+          } else if(vigente[cod]!==proc){
+            if(!cambiados.some(x=>x.cod===cod)) cambiados.push({cod, antes:proc, ahora:vigente[cod]});
           }
         });
       });
 
       if(cambiados.length){
         html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos renombrados en el Inventario ('+cambiados.length+')</h3>';
-        html+='<p class="hint" style="margin:0 0 8px">El nombre del proceso cambió en el Inventario y en la Matriz sigue el anterior. Corrígelo en el Inventario o en QuintaDB para que coincidan.</p>';
+        html+='<p class="hint" style="margin:0 0 8px">El Inventario es la referencia. Estos procesos se renombraron ahí y en la Matriz quedó el nombre anterior. Para propagar el cambio usa <strong>Administración → Renumerar un código de proceso</strong>, que lo reemplaza en todas las tablas a la vez.</p>';
         html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Dice en la Matriz</th><th style="padding:8px 10px">Dice en el Inventario</th></tr></thead><tbody>';
         cambiados.forEach(d=>{
           html+=`<tr style="border-bottom:1px solid var(--line)">
