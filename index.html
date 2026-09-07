@@ -9438,6 +9438,34 @@ document.addEventListener('DOMContentLoaded',()=>{
 let _RN_HALLAZGOS = null;
 
 function _rnEsIdCampo(k){ return /^[a-zA-Z0-9_\-]{22}$/.test(String(k)); }
+
+/* QuintaDB devuelve los valores unas veces con el identificador del campo como
+   clave y otras con el nombre de la columna. Para poder ESCRIBIR hace falta el
+   identificador, así que se pide la definición de campos de cada tabla. Se prueban
+   varias rutas porque cambian según la versión de la API. */
+const _RN_CAMPOS = {};
+async function rnCamposDe(ent){
+  if(_RN_CAMPOS[ent]!==undefined && _RN_CAMPOS[ent]!==null) return _RN_CAMPOS[ent];
+  const rutas = [
+    `/apps/${CONFIG.APP_ID}/entities/${ent}/fields.json`,
+    `/apps/${CONFIG.APP_ID}/fields.json?entity_id=${ent}`,
+    `/apps/${CONFIG.APP_ID}/dtypes/entity/${ent}/fields.json`
+  ];
+  for(const ruta of rutas){
+    try{
+      const d = await API.call(ruta,'GET');
+      const lista = d.fields || d || [];
+      if(Array.isArray(lista) && lista.length && lista[0].id){
+        const mapa = {};
+        lista.forEach(f=>{ if(f.name) mapa[f.name]=f.id; mapa[f.id]=f.id; });
+        _RN_CAMPOS[ent]=mapa;
+        return mapa;
+      }
+    }catch(e){ /* se prueba la siguiente ruta */ }
+  }
+  _RN_CAMPOS[ent]=null;
+  return null;
+}
 function _rnSalida(html){ document.getElementById('rnSalida').innerHTML = html; }
 
 async function rnBuscar(){
@@ -9458,7 +9486,7 @@ async function rnBuscar(){
       const v=r.values||{}; const campos={};
       Object.keys(v).forEach(k=>{
         const val=v[k];
-        if(typeof val==='string' && val.includes(viejo) && _rnEsIdCampo(k)){
+        if(typeof val==='string' && val.includes(viejo) && k!==val){
           campos[k]=val.split(viejo).join(nuevo);
         }
         if(typeof val==='string' && val.includes(nuevo)) choque++;
@@ -9488,7 +9516,16 @@ async function rnReemplazar(){
   btn.disabled=true; btn.textContent='Reemplazando…';
   let ok=0; const errores=[];
   for(const h of lista){
-    try{ await API.saveForm(h.id, h.campos, h.ent); ok++; }
+    try{
+      const mapa = await rnCamposDe(h.ent);
+      const campos = {};
+      for(const k in h.campos){
+        const fid = _rnEsIdCampo(k) ? k : (mapa ? mapa[k] : null);
+        if(!fid) throw new Error('no se pudo identificar la columna «'+k+'»');
+        campos[fid]=h.campos[k];
+      }
+      await API.saveForm(h.id, campos, h.ent); ok++;
+    }
     catch(e){ errores.push(`${h.tabla} · ${h.id}: ${e.message}`); }
     _rnSalida(`Procesando… ${ok+errores.length} de ${lista.length}`);
   }
