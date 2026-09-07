@@ -873,8 +873,9 @@
       </div>
       <select id="invFiltroNivel" onchange="renderInventario()" style="min-width:170px"><option value="">Vista completa (con actividad)</option><option value="Proceso nivel 0">Agrupar por Nivel 0</option><option value="Proceso nivel 1">Agrupar por Nivel 1</option><option value="Proceso nivel 2">Agrupar por Nivel 2</option><option value="Proceso nivel 3">Agrupar por Nivel 3</option></select>
       <select id="invFiltroTipo" onchange="renderInventario()" style="min-width:170px"><option value="">Todos los tipos</option></select>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('invBuscar').value='';document.getElementById('invFiltroNivel').value='';document.getElementById('invFiltroTipo').value='';document.getElementById('invVerArchivados').checked=false;document.getElementById('invVerSinProc').checked=false;renderInventario();" style="white-space:nowrap">Limpiar filtros</button>
       <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer"><input type="checkbox" id="invVerArchivados" onchange="renderInventario()"> Ver archivados</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--slate);cursor:pointer" title="Procesos creados en la estructura a los que todavía no se les registraron procedimientos"><input type="checkbox" id="invVerSinProc" onchange="renderInventario()"> Ver procesos sin procedimientos</label>
     </div>
     <div class="card"><div class="tabla-wrap"><table id="tablaInventarioTbl" style="width:100%;border-collapse:collapse;font-size:13.5px">
       <thead><tr>
@@ -3812,7 +3813,11 @@ async function renderInventario(){
         proc:limpio(v[INV_COLS.proc])
       };
     });
+    const verSinProc = !!(document.getElementById('invVerSinProc')||{}).checked;
     filas=filas.filter(f=>{
+      // Los procesos sin procedimientos solo se muestran si se pide expresamente:
+      // aparecer siempre confundía, porque parecían registros eliminados que volvían.
+      if(f.sinProc && !verSinProc) return false;
       if(!verArch && f.archivado) return false;
       if(fTipo && f.tipo!==fTipo) return false;
       if(q){ const blob=[f.tipo,f.n0,f.n1,f.n2,f.n3,f.proc].join(' ').toLowerCase(); if(!blob.includes(q)) return false; }
