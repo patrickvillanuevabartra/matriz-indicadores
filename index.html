@@ -6514,8 +6514,9 @@ window.pintarResumenMatriz=pintarResumenMatriz;
    Reemplaza el texto viejo por el nuevo en TODAS las tablas, igual que la herramienta
    de Administración, pero sin salir del panel. Reutiliza rnCamposDe() para traducir
    los nombres de columna a identificadores antes de escribir. */
-async function csReemplazarTexto(viejo, nuevo){
-  if(!viejo || !nuevo || viejo===nuevo) return { ok:0, errores:['textos inválidos'] };
+async function csReemplazarTexto(viejo, nuevo, alProgreso){
+  if(!viejo || !nuevo || viejo===nuevo) return { ok:0, errores:['textos inválidos'], total:0 };
+  const esperar = ms => new Promise(r=>setTimeout(r, ms));
   const lista=[];
   for(const [tabla, ent] of Object.entries(CONFIG.ENTITIES)){
     let d;
@@ -6530,19 +6531,25 @@ async function csReemplazarTexto(viejo, nuevo){
       });
       if(Object.keys(campos).length) lista.push({tabla, ent, id:r.id, campos, mapa:_mapaCamposDeRegistro(v)});
     });
+    await esperar(150);
   }
-  let ok=0; const errores=[];
+  // Se escribe con pausas: sin ellas QuintaDB corta las peticiones por exceso y
+  // el proceso falla a mitad de camino con un error poco claro.
+  let ok=0; const errores=[]; let n=0;
   for(const h of lista){
     try{
       const mapa = Object.assign({}, h.mapa||{}, await rnCamposDe(h.ent)||{});
       const campos = {};
-      for(const k in h.campos){
-        const fid = _rnEsIdCampo(k) ? k : mapa[k];
-        if(!fid) throw new Error('columna no identificada: '+k);
-        campos[fid]=h.campos[k];
+      for(const kk in h.campos){
+        const fid = _rnEsIdCampo(kk) ? kk : mapa[kk];
+        if(!fid) throw new Error('columna no identificada: '+kk);
+        campos[fid]=h.campos[kk];
       }
       await API.saveForm(h.id, campos, h.ent); ok++;
     }catch(e){ errores.push(h.tabla+' · '+e.message); }
+    n++;
+    if(typeof alProgreso==='function') alProgreso(n, lista.length);
+    await esperar(n % 20 === 0 ? 3000 : 400);
   }
   return { ok, errores, total:lista.length };
 }
@@ -6564,7 +6571,7 @@ async function csActualizarProceso(btn){
   const ahora=btn.getAttribute('data-ahora')||'';
   if(!confirm('Se reemplazará en todas las tablas:\n\n'+antes+'\n\npor:\n\n'+ahora+'\n\nEsta acción no se puede deshacer.')) return;
   btn.disabled=true; btn.textContent='Actualizando…';
-  const r = await csReemplazarTexto(antes, ahora);
+  const r = await csReemplazarTexto(antes, ahora, (n,total)=>{ btn.textContent='Actualizando… '+n+'/'+total; });
   if(r.ok){
     btn.textContent='✓ '+r.ok+' registro(s)';
     toast(r.ok+' registro(s) actualizados. Actualizando el panel…');
@@ -6589,7 +6596,7 @@ async function csActualizarTodos(btn){
   for(const b of botones){
     const antes=b.getAttribute('data-antes')||'', ahora=b.getAttribute('data-ahora')||'';
     b.textContent='Actualizando…'; b.disabled=true;
-    const r = await csReemplazarTexto(antes, ahora);
+    const r = await csReemplazarTexto(antes, ahora, (n,total)=>{ btn.textContent='Actualizando… '+n+'/'+total; });
     b.textContent = r.ok ? ('✓ '+r.ok+' registro(s)') : 'Falló';
     const fila=document.getElementById(b.getAttribute('data-fila'));
     if(fila && r.ok) fila.style.opacity='.45';
