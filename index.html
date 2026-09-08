@@ -5858,12 +5858,35 @@ function _esMiIndicador(r){
   if(!SESION) return false;
   if(SESION.rol==='Administrador' || SESION.rol==='Gestor') return true;
   if(!_respTecActivo()) return true;
-  const lista=_respTecLista(r);
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
+  // El responsable del proceso conserva acceso a TODOS los indicadores de su
+  // proceso, aunque tengan un responsable técnico distinto: es quien los reparte
+  // y quien responde por ellos. Sin esto quedaba bloqueado en su propia oficina.
+  if(_soyDuenoDelProceso(r)) return true;
+  const lista=_respTecLista(r);
   if(lista.length) return lista.some(x=>yo.includes(norm(x)));
   return !_soyRespTecnico();
 }
+
+/* ¿El usuario en sesión es el dueño del proceso de este indicador? Se compara con
+   el nombre que aparece en la línea «Proceso:» de la tabla y con su correo. */
+function _soyDuenoDelProceso(r){
+  if(!SESION) return false;
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
+  if(!yo.length) return false;
+  let dueno='';
+  try{ dueno = (typeof leerDueno==='function') ? leerDueno(r, (typeof F!=='undefined'?F:{})) : ''; }catch(e){}
+  if(!dueno){
+    const v=r.values||{};
+    dueno = v['Dueño del proceso'] || v['Nombre Dueño del proceso'] || v['Responsable del proceso'] || '';
+  }
+  if(!dueno) return false;
+  return yo.includes(norm(dueno));
+}
+window._soyDuenoDelProceso=_soyDuenoDelProceso;
+
 // ¿No puedo editarlo? (para atenuar la fila y explicar de quién es)
 function _aCargoDeOtro(r){
   if(!_respTecActivo()) return false;
@@ -6524,6 +6547,17 @@ async function csReemplazarTexto(viejo, nuevo){
   return { ok, errores, total:lista.length };
 }
 
+/* Vacía los datos en memoria y los vuelve a leer del servidor. Sin esto, el panel
+   compararía contra la copia anterior al cambio y seguiría marcando el desajuste. */
+async function _csRefrescar(){
+  try{
+    STATE.matriz=[];
+    if(typeof invalidarCachesProcesos==='function') invalidarCachesProcesos();
+    if(typeof loadMatriz==='function') await loadMatriz(true);
+    if(typeof loadInventario==='function') await loadInventario(true);
+  }catch(e){}
+}
+
 async function csActualizarProceso(btn){
   if(!puedeEditar()){ toast('No tienes permiso para editar.', true); return; }
   const antes=btn.getAttribute('data-antes')||'';
@@ -6532,15 +6566,16 @@ async function csActualizarProceso(btn){
   btn.disabled=true; btn.textContent='Actualizando…';
   const r = await csReemplazarTexto(antes, ahora);
   if(r.ok){
-    const fila=document.getElementById(btn.getAttribute('data-fila'));
-    if(fila){ fila.style.opacity='.45'; }
     btn.textContent='✓ '+r.ok+' registro(s)';
-    toast(r.ok+' registro(s) actualizados.');
+    toast(r.ok+' registro(s) actualizados. Actualizando el panel…');
+    // Releer del servidor: si no, al reabrir el panel se compara contra la copia
+    // en memoria anterior al cambio y el desajuste parece seguir ahí.
+    await _csRefrescar();
+    await abrirControlSync();
   } else {
     btn.disabled=false; btn.textContent='Reintentar';
     toast('No se actualizó nada. '+(r.errores[0]||''), true);
   }
-  await invalidarCachesProcesos();
 }
 window.csActualizarProceso = csActualizarProceso;
 
@@ -6561,8 +6596,9 @@ async function csActualizarTodos(btn){
     if(r.ok) hechos++;
   }
   btn.textContent='Terminado: '+hechos+' de '+botones.length;
-  toast(hechos+' proceso(s) actualizados. Vuelve a abrir el control para comprobar.');
-  await invalidarCachesProcesos();
+  toast(hechos+' proceso(s) actualizados. Actualizando el panel…');
+  await _csRefrescar();
+  await abrirControlSync();
 }
 window.csActualizarTodos = csActualizarTodos;
 
