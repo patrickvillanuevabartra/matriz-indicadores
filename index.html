@@ -5889,14 +5889,36 @@ function _mismaPersona(a, b){
 }
 window._mismaPersona=_mismaPersona;
 
+/* Devuelve el responsable VIGENTE del proceso al que pertenece un indicador,
+   consultando la tabla de responsables por su oficina dueña. Antes se usaba el
+   nombre copiado dentro del indicador, que quedaba desactualizado en cuanto se
+   cambiaba el responsable en QuintaDB. */
+function _respVigenteDe(r){
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  let ofi='';
+  try{
+    ofi = leerCampo(r, MAT.oficina_dueno.id, 'Oficina dueña del indicador')
+       || leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable') || '';
+  }catch(e){}
+  const mapa = (typeof MAPA_RESP_PROCESO!=='undefined' && MAPA_RESP_PROCESO) ? MAPA_RESP_PROCESO : {};
+  return mapa[norm(ofi)] || null;
+}
+window._respVigenteDe=_respVigenteDe;
+
 function _soyDuenoDelProceso(r){
   if(!SESION) return false;
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  // Primero el responsable VIGENTE (tabla de responsables); si no estuviera,
+  // se recurre al que quedó guardado dentro del indicador.
   let dueno='', correo='';
-  try{
-    dueno  = leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición') || '';
-    correo = (MAT.resp_correo ? leerCampo(r, MAT.resp_correo.id, 'Correo responsable') : '') || '';
-  }catch(e){}
+  const vig=_respVigenteDe(r);
+  if(vig){ dueno=vig.responsable||''; correo=vig.correo||''; }
+  if(!dueno){
+    try{
+      dueno  = leerCampo(r, MAT.resp_med_txt.id,'Responsable medición') || '';
+      correo = (MAT.resp_correo ? leerCampo(r, MAT.resp_correo.id,'Correo responsable') : '') || '';
+    }catch(e){}
+  }
   if(correo && norm(correo) === norm(SESION.usuario)) return true;
   if(dueno && _mismaPersona(dueno, SESION.nombre)) return true;
   // Último recurso: el usuario suele ser nombre.apellido@urp.edu.pe
@@ -7080,6 +7102,9 @@ async function renderMatriz(){
   const tb=document.getElementById('tablaMatriz');
   try{
     const recs = await loadMatriz();
+    // El responsable de cada proceso se resuelve en vivo desde su tabla, así que
+    // hay que tenerla cargada antes de pintar las filas y de decidir permisos.
+    try{ await cargarMapaRespProceso(); }catch(_){}
     // Para el resumen: contar solo los indicadores VISIBLES según la oficina del usuario
     // (el rol Oficina ve un subconjunto). El buscador de texto no afecta al total del resumen.
     const recsVisibles = puedeVerTodo() ? recs : recs.filter(r=>{
@@ -7181,7 +7206,8 @@ async function renderMatriz(){
         const formula=leerCampo(r, MAT.formula.id, 'Fórmula');
         const frec=leerCampo(r, MAT.frecuencia_medicion.id, 'Frecuencia de medición');
         const frecCalc=leerCampo(r, MAT.frecuencia_calculo.id, 'Frecuencia de cálculo');
-        const resp=leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición');
+        const _vig=_respVigenteDe(r);
+        const resp=(_vig && _vig.responsable) ? _vig.responsable : leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición');
         const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
         const ofiDueno=leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador');
         const rutaFull=leerCampo(r, MAT.proceso_ruta.id, 'Proceso (ruta)');
