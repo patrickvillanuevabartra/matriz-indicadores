@@ -5871,19 +5871,40 @@ function _esMiIndicador(r){
 
 /* ¿El usuario en sesión es el dueño del proceso de este indicador? Se compara con
    el nombre que aparece en la línea «Proceso:» de la tabla y con su correo. */
+/* ¿El usuario en sesión es el dueño del proceso de este indicador?
+   La comparación es por palabras y sin tildes, no por texto exacto: el nombre
+   puede estar escrito en distinto orden («Herrera Najar Danny Manuel»), con o sin
+   tildes, o con espacios de más. Se considera la misma persona cuando todas las
+   palabras del nombre más corto están dentro del más largo, con al menos dos
+   coincidencias, para no confundir a dos personas que compartan un apellido. */
+function _mismaPersona(a, b){
+  const limpia = s => String(s||'')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .toLowerCase().replace(/[^a-z0-9ñ ]/g,' ').replace(/\s+/g,' ').trim();
+  const palabras = s => limpia(s).split(' ').filter(w=>w.length>2);
+  const A=palabras(a), B=palabras(b);
+  if(A.length<2 || B.length<2) return false;
+  const [chico, grande] = A.length<=B.length ? [A,B] : [B,A];
+  return chico.every(w=>grande.includes(w));
+}
+window._mismaPersona=_mismaPersona;
+
 function _soyDuenoDelProceso(r){
   if(!SESION) return false;
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
-  const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
-  if(!yo.length) return false;
-  // Se usa EXACTAMENTE el mismo campo que la tabla muestra en la línea «Proceso:»
-  // (Responsable medición), más el correo asociado si existe.
   let dueno='', correo='';
   try{
     dueno  = leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición') || '';
     correo = (MAT.resp_correo ? leerCampo(r, MAT.resp_correo.id, 'Correo responsable') : '') || '';
   }catch(e){}
-  return (dueno && yo.includes(norm(dueno))) || (correo && yo.includes(norm(correo)));
+  if(correo && norm(correo) === norm(SESION.usuario)) return true;
+  if(dueno && _mismaPersona(dueno, SESION.nombre)) return true;
+  // Último recurso: el usuario suele ser nombre.apellido@urp.edu.pe
+  if(dueno && SESION.usuario){
+    const local = String(SESION.usuario).split('@')[0].replace(/[._-]/g,' ');
+    if(_mismaPersona(dueno, local)) return true;
+  }
+  return false;
 }
 window._soyDuenoDelProceso=_soyDuenoDelProceso;
 
