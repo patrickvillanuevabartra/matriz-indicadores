@@ -5876,14 +5876,14 @@ function _soyDuenoDelProceso(r){
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
   if(!yo.length) return false;
-  let dueno='';
-  try{ dueno = (typeof leerDueno==='function') ? leerDueno(r, (typeof F!=='undefined'?F:{})) : ''; }catch(e){}
-  if(!dueno){
-    const v=r.values||{};
-    dueno = v['Dueño del proceso'] || v['Nombre Dueño del proceso'] || v['Responsable del proceso'] || '';
-  }
-  if(!dueno) return false;
-  return yo.includes(norm(dueno));
+  // Se usa EXACTAMENTE el mismo campo que la tabla muestra en la línea «Proceso:»
+  // (Responsable medición), más el correo asociado si existe.
+  let dueno='', correo='';
+  try{
+    dueno  = leerCampo(r, MAT.resp_med_txt.id, 'Responsable medición') || '';
+    correo = (MAT.resp_correo ? leerCampo(r, MAT.resp_correo.id, 'Correo responsable') : '') || '';
+  }catch(e){}
+  return (dueno && yo.includes(norm(dueno))) || (correo && yo.includes(norm(correo)));
 }
 window._soyDuenoDelProceso=_soyDuenoDelProceso;
 
