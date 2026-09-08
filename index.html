@@ -6505,16 +6505,16 @@ async function csReemplazarTexto(viejo, nuevo){
           campos[k]=val.split(viejo).join(nuevo);
         }
       });
-      if(Object.keys(campos).length) lista.push({tabla, ent, id:r.id, campos});
+      if(Object.keys(campos).length) lista.push({tabla, ent, id:r.id, campos, mapa:_mapaCamposDeRegistro(v)});
     });
   }
   let ok=0; const errores=[];
   for(const h of lista){
     try{
-      const mapa = await rnCamposDe(h.ent);
+      const mapa = Object.assign({}, h.mapa||{}, await rnCamposDe(h.ent)||{});
       const campos = {};
       for(const k in h.campos){
-        const fid = _rnEsIdCampo(k) ? k : (mapa ? mapa[k] : null);
+        const fid = _rnEsIdCampo(k) ? k : mapa[k];
         if(!fid) throw new Error('columna no identificada: '+k);
         campos[fid]=h.campos[k];
       }
@@ -9743,6 +9743,18 @@ let _RN_HALLAZGOS = null;
 
 function _rnEsIdCampo(k){ return /^[a-zA-Z0-9_\-]{22}$/.test(String(k)); }
 
+/* Cada registro trae las dos formas: la clave con el nombre de columna (con el
+   valor real) y la clave con el identificador (cuyo valor es el propio nombre de
+   columna). Eso permite construir la correspondencia nombre → identificador sin
+   consultar la definición de campos, que no siempre está accesible. */
+function _mapaCamposDeRegistro(v){
+  const mapa={};
+  Object.keys(v||{}).forEach(k=>{
+    if(_rnEsIdCampo(k) && typeof v[k]==='string' && v[k].trim()){ mapa[v[k].trim()]=k; }
+  });
+  return mapa;
+}
+
 /* QuintaDB devuelve los valores unas veces con el identificador del campo como
    clave y otras con el nombre de la columna. Para poder ESCRIBIR hace falta el
    identificador, así que se pide la definición de campos de cada tabla. Se prueban
@@ -9795,7 +9807,7 @@ async function rnBuscar(){
         }
         if(typeof val==='string' && val.includes(nuevo)) choque++;
       });
-      if(Object.keys(campos).length){ hallazgos.push({tabla, ent, id:r.id, campos}); n++; }
+      if(Object.keys(campos).length){ hallazgos.push({tabla, ent, id:r.id, campos, mapa:_mapaCamposDeRegistro(v)}); n++; }
     });
     if(n) filas.push(`<tr><td>${tabla}</td><td style="text-align:right"><strong>${n}</strong></td><td>registro(s)</td></tr>`);
   }
@@ -9821,10 +9833,10 @@ async function rnReemplazar(){
   let ok=0; const errores=[];
   for(const h of lista){
     try{
-      const mapa = await rnCamposDe(h.ent);
+      const mapa = Object.assign({}, h.mapa||{}, await rnCamposDe(h.ent)||{});
       const campos = {};
       for(const k in h.campos){
-        const fid = _rnEsIdCampo(k) ? k : (mapa ? mapa[k] : null);
+        const fid = _rnEsIdCampo(k) ? k : mapa[k];
         if(!fid) throw new Error('no se pudo identificar la columna «'+k+'»');
         campos[fid]=h.campos[k];
       }
