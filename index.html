@@ -4778,6 +4778,44 @@ async function editarInventario(rid){
 }
 window.editarInventario=editarInventario;
 
+/* ===== Propagar a las demás tablas el cambio hecho en el Inventario =====
+   Se llama justo después de guardar. Para cada nivel modificado busca cuántos
+   registros conservan el texto anterior y, si hay alguno, ofrece reemplazarlo.
+   Es el camino normal: el control de sincronización queda solo como respaldo
+   para los cambios hechos fuera del aplicativo. */
+async function propagarCambioProceso(cambios){
+  if(!Array.isArray(cambios) || !cambios.length) return;
+  for(const c of cambios){
+    const viejo=String(c.nombre||'').trim();
+    const nuevo=String(c.nuevo||'').trim();
+    if(!viejo || !nuevo || viejo===nuevo) continue;
+
+    // ¿Cuántos registros siguen con el texto anterior?
+    let cuantos=0;
+    for(const [tabla, ent] of Object.entries(CONFIG.ENTITIES)){
+      try{
+        const d=await API.records(ent);
+        (d.records||[]).forEach(r=>{
+          const v=r.values||{};
+          if(Object.keys(v).some(k=>typeof v[k]==='string' && v[k].includes(viejo) && k!==v[k])) cuantos++;
+        });
+      }catch(e){}
+    }
+    if(!cuantos) continue;
+
+    const msg='Cambiaste:\n\n'+viejo+'\n\npor:\n\n'+nuevo+'\n\n'
+      +'Hay '+cuantos+' registro(s) en la Matriz, las fichas y los subindicadores que conservan el texto anterior.\n\n'
+      +'¿Actualizarlos ahora? Si eliges «Cancelar», podrás hacerlo después desde el Control de sincronización.';
+    if(!confirm(msg)) continue;
+
+    toast('Actualizando '+cuantos+' registro(s)…');
+    const r = await csReemplazarTexto(viejo, nuevo);
+    if(r.ok) toast(r.ok+' registro(s) actualizados.');
+    else toast('No se pudo actualizar: '+(r.errores[0]||'error desconocido'), true);
+  }
+}
+window.propagarCambioProceso = propagarCambioProceso;
+
 async function guardarEdicionInventario(){
   if(!_EI_FILA) return;
   const btn=document.getElementById('ei_guardar');
@@ -4926,6 +4964,10 @@ async function guardarEdicionInventario(){
     if(fallos>0) toast('Guardado con '+fallos+' error(es) de '+total+'. Puede que algunas filas no se actualizaran.', true);
     else toast('Cambios guardados.');
     cerrarModal('modalEditInv');
+    // El nombre del proceso está copiado como texto en la Matriz, las fichas y los
+    // subindicadores: aquí se ofrece propagarlo en el momento, que es cuando el
+    // aplicativo sabe con certeza cuál era el texto viejo y cuál el nuevo.
+    try{ await propagarCambioProceso(cambios); }catch(_){}
     // Refresco EN VIVO: invalidar todos los cachés (inventario, padres, códigos, mapa) y
     // releer del servidor SIN caché. Antes se limpiaba STATE.inventario y se repintaba de
     // inmediato: el proxy devolvía la respuesta cacheada anterior y el cambio no se veía.
