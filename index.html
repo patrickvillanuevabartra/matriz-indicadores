@@ -5269,7 +5269,7 @@ window._esMiFicha=_esMiFicha;
 // Empareja por similitud dentro del MISMO elemento y la MISMA escuela (dueño), igual que el
 // panel de sincronización, para no cruzar indicadores de otras escuelas.
 function _motivoAmbar(elemento, indicador, rutaFichaTxt, dueno, itemsFicha){
-  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+  const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
   if(!_MATRIZ_POR_ELEM) return {tipo:'nuevo'};
   const rutaConComp = (rutaFichaTxt||'') + (elemento? ' › '+elemento : '');
   const enMatriz = _MATRIZ_POR_ELEM.get(norm(rutaConComp)+' ¦¦ '+norm(dueno||'')) || [];
@@ -5299,7 +5299,7 @@ function _motivoAmbar(elemento, indicador, rutaFichaTxt, dueno, itemsFicha){
 // Recibe también la ruta de la ficha para un cruce preciso.
 function _indEnMatriz(elemento, indicador, rutaFichaTxt, dueno){
   if(!_INDS_EN_MATRIZ) return true; // aún no cargó: no marcar (se repinta cuando cargue)
-  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
+  const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
   const texto = (elemento?elemento+' — ':'')+indicador;
   // La ruta que se guarda al agregar es: ruta de la ficha + " › " + componente(elemento).
   const rutaConComp = (rutaFichaTxt||'') + (elemento? ' › '+elemento : '');
@@ -6661,7 +6661,7 @@ async function abrirControlSync(){
   try{
     // Cargar todo lo necesario
     await Promise.all([loadMatriz(), (async()=>{ for(const n of ['N0','N1','N2','N3']) await loadFichas(n); })(), construirMapaIndicadores()]);
-    const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
+    const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
 
     // Conjunto de TODOS los textos de indicador que existen HOY en las fichas.
     // IMPORTANTE: incluye también las fichas ARCHIVADAS — así sus indicadores en la
@@ -6910,7 +6910,7 @@ async function actualizarTextoSync(id, btn){
     // no puede tenerlo dos veces. Se bloquea solo si otro registro tiene el mismo texto en
     // la misma ruta Y la misma oficina de medición.
     try{
-      const normD = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+      const normD = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
       const recsM = await loadMatriz();
       const yo=(recsM||[]).find(r=>r.id===id);
       const miRuta = yo?normD(leerCampo(yo, MAT.proceso_ruta.id, 'Proceso (ruta)')):'';
@@ -7020,7 +7020,7 @@ let _INDS_EN_FICHAS = null;   // Set de "texto ¦¦ rutaConComp ¦¦ dueño"
 let _FICHAS_POR_ELEM = null;  // Map "rutaConComp ¦¦ dueño" → [textos de la ficha]
 let _ESCUELAS_CON_FICHA = null; // Set de dueños que sí tienen indicadores cargados
 function _construirIndsEnFichas(){
-  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+  const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
   const set = new Set(), porElem = new Map(), escuelas = new Set();
   ['N0','N1','N2','N3'].forEach(n=>{
     const F = (n==='N0'?CONFIG.FICHA_N0_FIELDS : n==='N1'?CONFIG.FICHA_N1_FIELDS : n==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
@@ -7048,7 +7048,7 @@ window._invalidarIndsEnFichas=_invalidarIndsEnFichas;
 //   {tipo:'huerfano'}         → el indicador ya no está en la ficha
 function _alertaMatriz(textoMat, rutaMat, dueno){
   if(!_INDS_EN_FICHAS || !_INDS_EN_FICHAS.size) return null;   // fichas no cargadas: no alarmar
-  const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+  const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
   const of = norm(dueno||'');
   if(!of) return null;                                          // sin escuela no se puede comparar
   // Si no hay NINGÚN indicador cargado de esa escuela, no alarmar: probablemente sus fichas
@@ -7555,7 +7555,7 @@ async function guardarIndicadoresMatriz(){
     // Evitar DUPLICADOS: dos oficinas SÍ pueden compartir un mismo indicador; lo que no
     // puede ser es que UNA MISMA oficina lo defina dos veces. Duplicado = mismo indicador +
     // misma ruta + misma oficina de medición.
-    const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final
+    const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final
     const yaEnMatriz = new Set();
     try{
       const recsM = await loadMatriz();
@@ -7837,7 +7837,7 @@ async function guardarEdicionMatriz(){
   // misma ruta + misma oficina de medición, en OTRO registro.
   if(g('em_indicador')){
     try{
-      const normD = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
+      const normD = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase();
       const recsM = await loadMatriz();
       const yo=(recsM||[]).find(r=>r.id===EM_ID);
       const miRuta = yo?normD(leerCampo(yo, MAT.proceso_ruta.id, 'Proceso (ruta)')):'';
