@@ -1136,7 +1136,15 @@
       <button class="modal-close" onclick="cerrarModal('modalControlSync')" title="Cerrar">×</button>
     </div>
     <div class="modal-body">
-      <p class="hint" style="margin-top:0">Detecta indicadores de la matriz que ya no coinciden con las fichas. Tú decides qué hacer con cada uno; nada se cambia automáticamente.</p>
+      <div style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:0 0 16px;font-size:13.5px;line-height:1.6;color:var(--slate)">
+        <p style="margin:0 0 8px"><strong>¿Qué es esto?</strong><br>
+        Una revisión que compara la Matriz con las fichas de proceso y con el Inventario, y te muestra lo que no coincide.</p>
+        <p style="margin:0 0 8px"><strong>¿Por qué se desincronizan?</strong><br>
+        Cada indicador guarda el texto del proceso y del indicador escritos dentro, como una copia. Si alguien los corrige en la ficha o en el Inventario, esas copias se quedan con la versión anterior.</p>
+        <p style="margin:0 0 8px"><strong>¿Cambia algo por su cuenta?</strong><br>
+        No. Aquí solo se detecta. Cada corrección la decides tú con los botones de cada fila.</p>
+        <p style="margin:0;color:var(--mist)">Si todo coincide, cada sección te lo dirá. Un panel sin avisos significa que está todo en orden.</p>
+      </div>
       <div id="cs_cuerpo"><p class="hint">Cargando…</p></div>
     </div>
     <div class="modal-foot">
@@ -6786,7 +6794,7 @@ async function abrirControlSync(){
     if(!desincronizados.length){
       html+='<p style="color:#0f8f5e;margin:4px 0 16px">✓ Todo sincronizado: la matriz coincide con las fichas.</p>';
     }else{
-      html+='<p class="hint" style="margin:2px 0 8px">El texto en la matriz ya no coincide con la ficha. Si la ficha tiene un indicador nuevo en su mismo elemento, se muestra en <span style="color:#0f8f5e;font-weight:600">verde</span> y puedes <strong>actualizar el texto</strong> (las metas y mediciones se conservan). Si dice <strong>No existe</strong>, el indicador se quitó del formulario de la ficha; si ya no aplica, elimínalo. <strong>Ojo:</strong> al eliminar, sus metas y seguimientos se pierden.</p>';
+      html+='<p class="hint" style="margin:2px 0 8px"><strong>Qué significa:</strong> el texto del indicador en la Matriz no es el mismo que hay hoy en su ficha.<br><br><strong>Si aparece un texto en <span style="color:#0f8f5e;font-weight:600">verde</span>:</strong> alguien corrigió la redacción en la ficha. Pulsa <strong>Actualizar texto</strong> y la Matriz se pone al día. Las metas y las mediciones se conservan.<br><br><strong>Si dice <span style="color:#c0392b;font-weight:600">No existe</span>:</strong> el indicador se quitó del formulario de la ficha. Revisa si todavía aplica; si ya no, pulsa <strong>Eliminar</strong>. Ten en cuenta que al eliminarlo se pierden sus metas y seguimientos.</p>';
       html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">En la matriz (actual)</th><th style="padding:8px 10px">En la ficha (nuevo)</th><th style="padding:8px 10px">Dueño</th><th style="padding:8px 10px;text-align:right">Acción</th></tr></thead><tbody>';
       desincronizados.forEach(d=>{
         const nuevoHtml = d.nuevo
@@ -6860,7 +6868,7 @@ async function abrirControlSync(){
 
       if(cambiados.length){
         html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos renombrados en el Inventario ('+cambiados.length+')</h3>';
-        html+='<p class="hint" style="margin:0 0 8px">El Inventario es la referencia. Estos procesos se renombraron ahí y en la Matriz quedó el nombre anterior. Pulsa <strong>Actualizar</strong> en cada fila para propagar el cambio a la Matriz, las fichas y los subindicadores. Revisa la lista antes: el reemplazo no se puede deshacer.</p>';
+        html+='<p class="hint" style="margin:0 0 8px"><b>Qué significa:</b> el proceso se renombró en el Inventario y en la Matriz quedó el nombre anterior.<br><br><b>Qué hacer:</b> pulsa <b>Actualizar</b> en cada fila. El nombre nuevo se copia a la Matriz, las fichas y los subindicadores de una sola vez.<br><br><b>Antes de empezar:</b> revisa la lista y descarga el Excel. El cambio no se puede deshacer. Si son varias filas, aplica una, comprueba que desaparece, y sigue con el resto.</p>';
         html+='<p style="margin:0 0 10px"><button class="btn btn-sm" onclick="csActualizarTodos(this)">Actualizar los '+cambiados.length+' de la lista</button></p>';
         html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Dice en la Matriz</th><th style="padding:8px 10px">Dice en el Inventario</th><th style="padding:8px 10px"></th></tr></thead><tbody>';
         const esc = x => String(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
@@ -6877,7 +6885,7 @@ async function abrirControlSync(){
 
       if(huerfanos.length){
         html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos que ya no existen en el Inventario ('+huerfanos.length+')</h3>';
-        html+='<p class="hint" style="margin:0 0 8px">Estos códigos aparecen en la Matriz pero no están en el Inventario: el proceso fue eliminado o su código cambió. Los indicadores siguen midiendo algo que ya no figura en la estructura. Reasígnalos a un proceso vigente o archívalos.</p>';
+        html+='<p class="hint" style="margin:0 0 8px"><b>Qué significa:</b> la Matriz cita un código de proceso que ya no está en el Inventario, porque el proceso se eliminó o se le cambió el código.<br><br><b>Por qué importa:</b> esos indicadores están midiendo algo que ya no figura en la estructura de procesos.<br><br><b>Qué hacer:</b> busca en el Inventario con qué nombre o código quedó ese proceso. Si lo encuentras, corrígelo desde <b>Inventario de procesos → 🔧 Renumerar o renombrar un proceso</b>, escribiendo el texto viejo y el nuevo. Si el proceso se eliminó de verdad, decide con la Subcomisión a qué proceso pasan esos indicadores.</p>';
         html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Texto guardado</th></tr></thead><tbody>';
         huerfanos.forEach(d=>{
           html+=`<tr style="border-bottom:1px solid var(--line)">
