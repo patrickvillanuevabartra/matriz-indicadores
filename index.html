@@ -5196,7 +5196,9 @@ async function cargarIndsEnMatriz(){
   const respFicha = new Map();
   try{
     const recs = await loadMatriz();
-    const norm = s => String(s||'').replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final (un punto de más no es otro indicador)
+    const norm = s => String(s||'')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')   // ignora tildes: «evaluación» y «evaluacion» son el mismo indicador
+      .replace(/\s+/g,' ').trim().replace(/[.;,]+$/,'').trim().toLowerCase(); // ignora puntuación final
     (recs||[]).forEach(m=>{
       const t = leerCampo(m, MAT.indicador_txt.id, 'Indicador');
       const ru = leerCampo(m, MAT.proceso_ruta.id, 'Proceso (ruta)');
