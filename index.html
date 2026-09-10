@@ -952,6 +952,10 @@
         <span style="background:#dbe7ff;border:1px solid #adc4ee;border-radius:4px;padding:0 5px;color:#2b4c9b;font-weight:600">✏️ Cambió en la ficha</span> el texto se corrigió en la ficha y aquí sigue el anterior → actualízalo en «Control de sincronización» (conserva sus metas).
         &nbsp;·&nbsp;
         <span style="background:#fadbd8;border:1px solid #f0b3ac;border-radius:4px;padding:0 5px;color:#c0392b;font-weight:600">⚠️ Ya no está en la ficha</span> el indicador se quitó del formulario → revísalo antes de eliminarlo.
+        &nbsp;·&nbsp;
+        <span style="background:#fff1cf;border:1px solid #f0d9a8;border-radius:4px;padding:0 5px;color:#8a5a00;font-weight:600">🔄 Proceso renombrado</span> el proceso cambió de nombre en el Inventario y aquí sigue el anterior.
+        &nbsp;·&nbsp;
+        <span style="background:#f0dcf7;border:1px solid #ddb8ea;border-radius:4px;padding:0 5px;color:#6b21a8;font-weight:600">🚫 Proceso inexistente</span> ese código ya no está en el Inventario → revísalo en «Control de sincronización».
       </p>
     </div>
 
@@ -7081,6 +7085,43 @@ function _alertaMatriz(textoMat, rutaMat, dueno){
   return {tipo:'huerfano'};
 }
 
+/* Alerta sobre el PROCESO al que pertenece el indicador, comparándolo con el
+   Inventario. Devuelve:
+     {tipo:'renombrado', nuevo:'…'} → el proceso se renombró en el inventario
+     {tipo:'inexistente'}           → ese código ya no está en el inventario
+   El nombre del proceso va copiado dentro de cada indicador, así que al cambiarlo
+   en el inventario estas copias quedan desfasadas. */
+let _PROC_VIGENTES = null;   // código → nombre completo vigente
+function _construirProcesosVigentes(){
+  if(_PROC_VIGENTES) return _PROC_VIGENTES;
+  const m = {};
+  (STATE.inventario||[]).forEach(r=>{
+    const v=r.values||{};
+    ['Proceso nivel 0','Proceso nivel 1','Proceso nivel 2','Proceso nivel 3','Procedimiento'].forEach(k=>{
+      const t=String(v[k]||'').trim();
+      const mm=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.*)$/);
+      if(mm) m[mm[1]] = t;
+    });
+  });
+  _PROC_VIGENTES = m;
+  return m;
+}
+function _alertaProceso(textoInd){
+  const vig=_construirProcesosVigentes();
+  if(!vig || !Object.keys(vig).length) return null;   // inventario no cargado: no alarmar
+  const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+  const t=String(textoInd||'').trim();
+  const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.+)$/);
+  if(!m) return null;
+  const cod=m[1];
+  // Nombre del proceso = lo anterior al guion largo que separa el indicador
+  const procEnMatriz = t.split(/\s+[—–]\s+/)[0].trim();
+  if(!vig[cod]) return {tipo:'inexistente', codigo:cod};
+  if(norm(vig[cod]) !== norm(procEnMatriz)) return {tipo:'renombrado', nuevo:vig[cod]};
+  return null;
+}
+window._alertaProceso=_alertaProceso;
+
 // Pinta las alertas sobre las filas YA renderizadas de la matriz. Se llama cuando el cruce
 // con las fichas está disponible (puede llegar después del render, en segundo plano).
 function pintarAlertasMatriz(){
@@ -7088,8 +7129,24 @@ function pintarAlertasMatriz(){
   if(!_INDS_EN_FICHAS || !_INDS_EN_FICHAS.size) return;
   tb.querySelectorAll('tr.matriz-fila').forEach(tr=>{
     const celda=tr.querySelector('td.celda-ind'); if(!celda) return;
-    const previo=celda.querySelector('.alerta-ind'); if(previo) previo.remove();
+    celda.querySelectorAll('.alerta-ind').forEach(x=>x.remove());
     tr.style.background='';
+    // Aviso sobre el PROCESO (inventario). Es independiente del de la ficha.
+    try{
+      const ap=_alertaProceso(tr.getAttribute('data-ind'));
+      if(ap){
+        const c2=document.createElement('div');
+        c2.className='alerta-ind'; c2.style.marginTop='3px';
+        if(ap.tipo==='renombrado'){
+          tr.style.background='#fff6e5';
+          c2.innerHTML='<span title="El proceso se renombró en el Inventario y aquí sigue el nombre anterior. Ahora es: '+String(ap.nuevo).replace(/"/g,'&quot;').replace(/</g,'&lt;')+'. Corrígelo desde Control de sincronización." style="display:inline-block;font-size:9px;font-weight:700;color:#8a5a00;background:#fff1cf;border:1px solid #f0d9a8;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">🔄 Proceso renombrado</span>';
+        } else {
+          tr.style.background='#f3e8f7';
+          c2.innerHTML='<span title="El código '+ap.codigo+' ya no existe en el Inventario: el proceso se eliminó o cambió de código. Este indicador mide algo que ya no figura en la estructura. Revísalo en Control de sincronización." style="display:inline-block;font-size:9px;font-weight:700;color:#6b21a8;background:#f0dcf7;border:1px solid #ddb8ea;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">🚫 Proceso inexistente</span>';
+        }
+        celda.appendChild(c2);
+      }
+    }catch(_){}
     let al=null;
     try{ al=_alertaMatriz(tr.getAttribute('data-ind'), tr.getAttribute('data-rutaind'), tr.getAttribute('data-due')); }catch(_){}
     if(!al) return;
