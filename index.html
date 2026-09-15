@@ -6797,13 +6797,15 @@ async function abrirControlSync(){
         if(codViejo) cands = candidatosPorCodigo[codViejo] || [];
       }
       const soloInd = t => { const p=String(t||'').split(' — '); return p.length>1 ? p.slice(1).join(' — ') : String(t||''); };
+      // Se busca el texto más parecido de la ficha, SIN reservarlo para un solo
+      // indicador: varias escuelas comparten el mismo texto, y si el primero lo
+      // consumía, al resto le salía «No existe» y se ofrecía eliminarlo cuando en
+      // realidad solo le habían cambiado la redacción en la ficha.
       let mejor=null, mejorSim=-1;
       cands.forEach(c=>{
-        if(c._usado) return;
-        const s=similitud(soloInd(ind), soloInd(c.texto));
-        if(s>mejorSim){ mejorSim=s; mejor=c; }
+        const sim=similitud(soloInd(ind), soloInd(c.texto));
+        if(sim>mejorSim){ mejorSim=sim; mejor=c; }
       });
-      if(mejor) mejor._usado=true;
       desincronizados.push({ id:m.id, viejo:ind, nuevo: mejor?mejor.texto:'', due, rutaMat });
     });
 
