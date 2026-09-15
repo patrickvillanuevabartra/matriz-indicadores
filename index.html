@@ -6722,6 +6722,12 @@ async function abrirControlSync(){
     // elemento evita el caso peligroso de sugerir como "corrección" un indicador nuevo sin
     // relación (p.ej. uno eliminado en el elemento A y otro agregado en el elemento B).
     const candidatosPorRutaElem = {}; // (rutaBase ¦ elemento) → [{texto, indicador}]
+    // Segundo índice, por CÓDIGO del elemento (E01.03.02.01, M01.05.02.03…). El texto del
+    // elemento puede cambiar si el proceso se renombra, pero el código no. Sin este índice,
+    // un indicador cuyo proceso se renombró aparecía como «No existe» y se ofrecía eliminarlo,
+    // cuando en realidad seguía en la ficha con otra redacción.
+    const candidatosPorCodigo = {};   // código → [{texto, indicador}]
+    const _codElem = t => { const m=String(t||'').match(/^([A-Z]\d{2}(?:\.\d{2})+)/); return m?m[1]:''; };
     Object.keys(_SUBIND_POR_FICHA).forEach(k=>{
       (_SUBIND_POR_FICHA[k]||[]).forEach(it=>{
         const texto=(it.elemento?it.elemento+' — ':'')+it.indicador;
@@ -6731,6 +6737,9 @@ async function abrirControlSync(){
         if(!rutaBase) return;
         const clave = rutaBase+' ¦ '+norm(it.elemento||'');
         (candidatosPorRutaElem[clave]=candidatosPorRutaElem[clave]||[]).push({ texto, indicador:it.indicador });
+        // También por código de elemento, que sobrevive a un renombrado del proceso
+        const _cod=_codElem(it.elemento||texto);
+        if(_cod) (candidatosPorCodigo[_cod]=candidatosPorCodigo[_cod]||[]).push({ texto, indicador:it.indicador });
       });
     });
 
@@ -6780,7 +6789,13 @@ async function abrirControlSync(){
       // más parecido de su MISMO elemento (cada candidato se usa una sola vez).
       // Si su elemento no tiene ningún indicador nuevo disponible, es una ELIMINACIÓN
       // real (se quitó del formulario) y "En la ficha" mostrará "No existe".
-      const cands = candidatosPorRutaElem[rutaBase+' ¦ '+elemViejo] || [];
+      // Primero por elemento completo; si no hay, por código del elemento (el proceso
+      // pudo renombrarse y entonces el texto del elemento ya no coincide).
+      let cands = candidatosPorRutaElem[rutaBase+' ¦ '+elemViejo] || [];
+      if(!cands.length){
+        const codViejo=_codElem(String(ind).split(' — ')[0]||'');
+        if(codViejo) cands = candidatosPorCodigo[codViejo] || [];
+      }
       const soloInd = t => { const p=String(t||'').split(' — '); return p.length>1 ? p.slice(1).join(' — ') : String(t||''); };
       let mejor=null, mejorSim=-1;
       cands.forEach(c=>{
@@ -6854,6 +6869,14 @@ async function abrirControlSync(){
         });
       });
       // Referencias guardadas en la matriz
+      // Cuántos indicadores cuelgan de cada código: es el dato que permite medir
+      // el alcance antes de decidir qué hacer.
+      const indsPorCodigo = {};
+      (STATE.matriz||[]).forEach(r=>{
+        const t=String(leerCampo(r, MAT.indicador_txt.id,'Indicador')||'').trim();
+        const mm=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)/);
+        if(mm) indsPorCodigo[mm[1]] = (indsPorCodigo[mm[1]]||0) + 1;
+      });
       const cambiados=[]; const huerfanos=[];
       (STATE.matriz||[]).forEach(r=>{
         const v=r.values||{};
@@ -6872,17 +6895,19 @@ async function abrirControlSync(){
       });
 
       if(cambiados.length){
-        html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos renombrados en el Inventario ('+cambiados.length+')</h3>';
-        html+='<p class="hint" style="margin:0 0 8px"><b>Qué significa:</b> el proceso se renombró en el Inventario y en la Matriz quedó el nombre anterior.<br><br><b>Qué hacer:</b> pulsa <b>Actualizar</b> en cada fila. El nombre nuevo se copia a la Matriz, las fichas y los subindicadores de una sola vez.<br><br><b>Antes de empezar:</b> revisa la lista y descarga el Excel. El cambio no se puede deshacer. Si son varias filas, aplica una, comprueba que desaparece, y sigue con el resto.</p>';
-        html+='<p style="margin:0 0 10px"><button class="btn btn-sm" onclick="csActualizarTodos(this)">Actualizar los '+cambiados.length+' de la lista</button></p>';
-        html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Dice en la Matriz</th><th style="padding:8px 10px">Dice en el Inventario</th><th style="padding:8px 10px"></th></tr></thead><tbody>';
+        html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos cuyo nombre no coincide con el Inventario ('+cambiados.length+')</h3>';
+        html+='<p class="hint" style="margin:0 0 8px"><b>Qué significa:</b> el Inventario tiene ese código con un nombre distinto al que figura en la Matriz. Puede deberse a dos cosas, y el aplicativo no puede distinguirlas.<br><br>'
+          +'<b>Caso 1 — es el mismo proceso, solo renombrado.</b> Sus indicadores siguen siendo válidos. Corrige el texto desde <b>Inventario de procesos → Renumerar o renombrar un proceso</b>, poniendo el nombre viejo y el nuevo.<br><br>'
+          +'<b>Caso 2 — el código se reutilizó para otro proceso.</b> Entonces los indicadores que cuelgan de ese código miden el proceso anterior y <b>ya no corresponden</b>. No corrijas el nombre: hay que revisar esos indicadores y decidir si se reasignan a otro proceso o se dan de baja.<br><br>'
+          +'La columna <b>Indicadores</b> indica cuántos están en juego en cada caso.</p>';
+        html+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="background:var(--paper);text-align:left"><th style="padding:8px 10px">Código</th><th style="padding:8px 10px">Dice en la Matriz</th><th style="padding:8px 10px">Dice en el Inventario</th><th style="padding:8px 10px;text-align:right">Indicadores</th></tr></thead><tbody>';
         const esc = x => String(x||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
         cambiados.forEach((d,ix)=>{
-          html+=`<tr style="border-bottom:1px solid var(--line)" id="cs_inv_${ix}">
+          html+=`<tr style="border-bottom:1px solid var(--line)">
             <td style="padding:8px 10px"><code>${d.cod}</code></td>
             <td style="padding:8px 10px;color:#b26a00">${esc(d.antes)}</td>
             <td style="padding:8px 10px;color:var(--brand)">${esc(d.ahora)}</td>
-            <td style="padding:8px 10px;text-align:right"><button class="btn btn-sm" onclick="csActualizarProceso(this)" data-fila="cs_inv_${ix}" data-antes="${esc(d.antes)}" data-ahora="${esc(d.ahora)}">Actualizar</button></td>
+            <td style="padding:8px 10px;text-align:right"><strong>${indsPorCodigo[d.cod]||0}</strong></td>
           </tr>`;
         });
         html+='</tbody></table></div>';
