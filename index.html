@@ -5837,6 +5837,7 @@ const OBSERVACION_FIELD_ID = 'ciW4_dTX5cMykJvCoAt8k3';
 // reportes; el permiso sigue basándose únicamente en el correo.
 const RESP_TEC_NOMBRE_FIELD_ID  = 'dcLSkFydvdL4kiW67dOLeu';
 const RESP_TEC_CELULAR_FIELD_ID = 'c1ySoQW6joEykIW7zAwq46';
+const RESP_TEC_UNIDAD_FIELD_ID  = 'bQn2irW6zcSikGsSkdimoA';   // «Unidad responsable técnico»
 function _respTecActivo(){ return !!(RESP_TEC_FIELD_ID || (MAT.resp_tecnico && MAT.resp_tecnico.id)); }
 function _respTecId(){ return (MAT.resp_tecnico && MAT.resp_tecnico.id) || RESP_TEC_FIELD_ID; }
 // Texto crudo del campo (correos separados por coma, punto y coma o salto de línea)
@@ -7808,7 +7809,15 @@ function _rtFilaHTML(correoSel){
   const hay=ops.some(x=>String(x.correo).toLowerCase()===String(correoSel||'').toLowerCase());
   const info=_respTecPorCorreo(correoSel);
   const opciones = ['<option value="">— elige un responsable técnico —</option>']
-    .concat(ops.map(x=>`<option value="${attr(x.correo)}" ${String(x.correo).toLowerCase()===String(correoSel||'').toLowerCase()?'selected':''}>${String(x.nombre||x.correo).replace(/</g,'&lt;')}</option>`));
+    .concat(ops.map(x=>{
+      // Una misma persona puede estar registrada en varias unidades (por ejemplo,
+      // un técnico que atiende tres laboratorios). Sin la unidad, las opciones se
+      // ven idénticas y no hay forma de saber cuál se está eligiendo.
+      const etq = String(x.nombre||x.correo) + (x.unidad ? ' — ' + x.unidad : '');
+      const sel = String(x.correo).toLowerCase()===String(correoSel||'').toLowerCase() &&
+                  (!_RT_UNIDAD_SEL || String(x.unidad||'')===_RT_UNIDAD_SEL);
+      return `<option value="${attr(x.correo)}" data-unidad="${attr(x.unidad||'')}" ${sel?'selected':''}>${etq.replace(/</g,'&lt;')}</option>`;
+    }));
   // Si el valor guardado ya no está en la tabla, se conserva como opción para no perderlo
   if(correoSel && !hay){
     const otro=_respTecPorCorreo(correoSel);
@@ -7824,18 +7833,26 @@ function _rtFilaHTML(correoSel){
     <button type="button" class="icon-btn" title="Quitar" onclick="_rtQuitar(this)">✕</button>
   </div>`;
 }
+let _RT_UNIDAD_SEL = '';   // unidad del técnico elegido, para grabarla junto al resto
+
 function _rtSync(){
   const wrap=document.getElementById('em_resp_tec_wrap'), hid=document.getElementById('em_resp_tec');
   if(!wrap||!hid) return;
-  const correos=[];
+  const correos=[], unidades=[];
   wrap.querySelectorAll('.rt-fila').forEach(f=>{
-    const v=((f.querySelector('.rt-sel')||{}).value||'').trim();
+    const sel=f.querySelector('.rt-sel');
+    const v=((sel||{}).value||'').trim();
     const d=f.querySelector('.rt-datos');
     const info=_respTecPorCorreo(v);
-    if(d) d.textContent = info ? (info.correo+(info.celular?' · '+info.celular:'')) : v;
-    if(v && !correos.includes(v)) correos.push(v);
+    // La unidad sale de la opción elegida: una misma persona puede figurar en varias,
+    // y así queda registrado a cuál corresponde esta asignación.
+    const uni=(sel && sel.selectedOptions && sel.selectedOptions[0])
+      ? (sel.selectedOptions[0].getAttribute('data-unidad')||'') : '';
+    if(d) d.textContent = (info ? (info.correo+(info.celular?' · '+info.celular:'')) : v) + (uni?' · '+uni:'');
+    if(v && !correos.includes(v)){ correos.push(v); if(uni) unidades.push(uni); }
   });
   hid.value = correos.join(', ');
+  _RT_UNIDAD_SEL = unidades.join(', ');
 }
 window._rtSync=_rtSync;
 function _rtQuitar(btn){
@@ -7951,6 +7968,8 @@ async function guardarEdicionMatriz(){
       nombres.push(t&&t.nombre ? t.nombre : c); celus.push(t&&t.celular ? t.celular : ''); });
     campos[RESP_TEC_NOMBRE_FIELD_ID]  = nombres.join(', ');
     campos[RESP_TEC_CELULAR_FIELD_ID] = celus.filter(Boolean).join(', ');
+    // Unidad del técnico elegido: distingue a qué laboratorio corresponde la asignación
+    campos[RESP_TEC_UNIDAD_FIELD_ID]  = (typeof _RT_UNIDAD_SEL==='string' && _RT_UNIDAD_SEL) ? _RT_UNIDAD_SEL : '';
   }
   const btn=document.getElementById('em_guardar'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
