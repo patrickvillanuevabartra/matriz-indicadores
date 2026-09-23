@@ -2712,6 +2712,29 @@ function detectarSubprocesoSIPOC(){
 }
 window.detectarSubprocesoSIPOC=detectarSubprocesoSIPOC;
 
+
+/* Quita un componente (su SIPOC y sus indicadores) de la ficha. Hace falta sobre
+   todo al editar: si el proceso de la ficha cambió, pueden quedar componentes del
+   proceso anterior que ya no tienen casilla arriba, y sin este botón no había forma
+   de quitarlos. Si sus indicadores tienen metas, el aviso aparece al guardar. */
+function quitarComponente(prefijo, nombre){
+  const store = prefijo==='fi' ? SIPOC_FORM : SIPOC_ED;
+  if(!store || !store[nombre]) return;
+  const inds=(store[nombre].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean);
+  const msg='¿Quitar de la ficha el componente:\n\n'+nombre+'\n\n'
+    +(inds.length?('Se quitarán también su SIPOC y '+inds.length+' indicador(es). ')
+                 :'Se quitará también su SIPOC. ')
+    +'El cambio se aplica al pulsar Guardar; si te arrepientes, cierra sin guardar.';
+  if(!confirm(msg)) return;
+  delete store[nombre];
+  // Desmarcar su casilla, si la tiene
+  const cont=document.getElementById(prefijo+'_sipoc_checks');
+  if(cont) cont.querySelectorAll('input[type=checkbox]').forEach(cb=>{ if(cb.value===nombre) cb.checked=false; });
+  if(prefijo==='fi') renderSipocCardsForm(); else renderSipocModal();
+  if(typeof sincronizarSubtitulos==='function') sincronizarSubtitulos(prefijo, Object.keys(store));
+}
+window.quitarComponente=quitarComponente;
+
 function toggleSipocForm(cb){
   const nombre=cb.value;
   if(cb.checked){ if(!SIPOC_FORM[nombre]) SIPOC_FORM[nombre]={prov:'',entr:'',prod:'',recep:'',indicadores:['']}; }
@@ -2775,7 +2798,7 @@ function renderSipocCardsForm(){
         <button type="button" class="icon-btn" title="Quitar" onclick="quitarIndComp('fi','${safe}',${j})" ${d.indicadores.length<=1?'style="visibility:hidden"':''}>✕</button>
       </div>`).join('');
     return `<div class="sipoc-card">
-      <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
+      <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span><button type="button" class="icon-btn" title="Quitar este componente de la ficha" style="margin-left:auto;color:#c0392b;font-weight:700" onclick="quitarComponente('fi','${safe}')">✕</button></div>
       <div class="grid">
         <div class="field"><label>Proveedores ${ayudaFicha('prov')}</label>${_sipocListaHTML('fi',safe,'prov',d.prov,'Proveedor')}</div>
         <div class="field"><label>Entrada / Insumo ${ayudaFicha('entr')}</label>${_sipocListaHTML('fi',safe,'entr',d.entr,'Entrada/Insumo')}</div>
@@ -5695,7 +5718,7 @@ function renderSipocModal(){
         <button type="button" class="icon-btn" title="Quitar" onclick="quitarIndComp('ed','${safe}',${j})" ${d.indicadores.length<=1?'style="visibility:hidden"':''}>✕</button>
       </div>`).join('');
     return `<div class="sipoc-card">
-      <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span></div>
+      <div class="sipoc-card-head"><span class="badge-comp">SIPOC ${i+1}</span><span class="comp-name">${nombre.replace(/</g,'&lt;')}</span><button type="button" class="icon-btn" title="Quitar este componente de la ficha" style="margin-left:auto;color:#c0392b;font-weight:700" onclick="quitarComponente('ed','${safe}')">✕</button></div>
       <div class="grid">
         <div class="field"><label>Proveedores ${ayudaFicha('prov')}</label>${_sipocListaHTML('ed',safe,'prov',d.prov,'Proveedor')}</div>
         <div class="field"><label>Entrada / Insumo ${ayudaFicha('entr')}</label>${_sipocListaHTML('ed',safe,'entr',d.entr,'Entrada/Insumo')}</div>
