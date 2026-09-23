@@ -710,6 +710,10 @@
       <h1>Tablero de indicadores</h1>
       <p>Estado general del sistema de gestión: resumen, cumplimiento e indicadores que requieren atención.</p>
     </div>
+    <div id="rep_boton_wrap" style="display:none;margin:0 0 14px">
+      <button class="btn btn-primary" onclick="abrirReporteAvance()">📧 Reporte de avance a los responsables</button>
+      <span class="hint" style="margin-left:8px">Solo administrador · revisa y confirma antes de enviar</span>
+    </div>
     <div id="tablero_cuerpo"><div class="empty"><h3>Cargando tablero…</h3></div></div>
   </section>
 
@@ -814,6 +818,16 @@
         <span style="background:#dbe7ff;border:1px solid #adc4ee;border-radius:4px;padding:0 5px;color:#2b4c9b;font-weight:600">✏️ Texto corregido</span> se editó aquí y en la Matriz sigue la versión anterior → actualízalo en «Control de sincronización» (conserva sus metas).
       </p>
     </div>
+    <details class="guia-alertas" style="margin:0 0 16px;background:var(--card);border:1px solid var(--line);border-radius:12px">
+      <summary style="padding:13px 18px;cursor:pointer;font-weight:600;color:var(--brand);font-size:14px">💡 ¿Qué significan las alertas de las fichas? Léelo antes de hacer cambios</summary>
+      <div style="padding:0 18px 16px;font-size:13px;line-height:1.6;color:var(--slate)">
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#2b4c9b;background:#dbe7ff;border:1px solid #adc4ee;border-radius:8px;padding:2px 8px">✏️ Texto corregido</span></div><div><strong>Qué significa:</strong> la redacción de este indicador cambió en la ficha y en la Matriz sigue la anterior.<br><strong>Qué hacer:</strong> ve a la Matriz → <strong>🔄 Control de sincronización</strong> → <strong>Actualizar texto</strong>. Se conservan las metas.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#b06a00;background:#ffe9b8;border:1px solid #f0c987;border-radius:8px;padding:2px 8px">⏳ Falta desarrollar en la matriz</span></div><div><strong>Qué significa:</strong> el indicador está en la ficha pero todavía no existe en la Matriz.<br><strong>Qué hacer:</strong> ve a la Matriz y usa <strong>+ Agregar indicador desde ficha</strong>.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#6b21a8;background:#f0dcf7;border:1px solid #ddb8ea;border-radius:8px;padding:2px 8px">🚫 Proceso eliminado del Inventario</span></div><div><strong>Qué significa:</strong> el proceso de esta ficha ya no existe en el Inventario.<br><strong>Qué hacer:</strong> si la ficha sigue siendo necesaria, edítala (✏️) y elige el proceso vigente. Si ya no aplica, archívala (📦): así sus indicadores dejan de exigirse pero el histórico de metas se conserva.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#b06a00;background:#fff3e0;border:1px solid #f0c987;border-radius:8px;padding:2px 8px">⚠️ Proceso archivado</span></div><div><strong>Qué significa:</strong> algún proceso de la ruta de esta ficha fue archivado.<br><strong>Qué hacer:</strong> revisa si la ficha debe archivarse también.</div></div>
+        <p style="margin:12px 0 0;color:var(--mist)"><strong>Antes de quitar un indicador de una ficha:</strong> si ese indicador tiene metas registradas, el aplicativo te avisará al guardar. Si continúas, esas metas quedan en la Matriz sin ficha. <strong>Reedita la misma ficha</strong> siempre que el proceso sea el mismo; crea una nueva solo si el proceso es realmente otro.</p>
+      </div>
+    </details>
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
       <select id="listOficinaSel" onchange="filtrarFichasPorOficina()" style="flex:1;min-width:220px;padding:9px 11px;font-size:13px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--slate);font-family:inherit;cursor:pointer">
         <option value="">📋 Todas las oficinas</option>
@@ -865,6 +879,16 @@
       <p>Árbol de procesos y actividades en los distintos niveles. Busca, filtra, edita, archiva o elimina.</p>
       <p style="font-weight:600;color:var(--brand);margin-top:4px">Total: <span id="inv_total">0</span> elemento(s)</p>
     </div>
+    <details class="guia-alertas" style="margin:0 0 16px;background:var(--card);border:1px solid var(--line);border-radius:12px">
+      <summary style="padding:13px 18px;cursor:pointer;font-weight:600;color:var(--brand);font-size:14px">💡 Antes de cambiar un proceso, lee esto</summary>
+      <div style="padding:0 18px 16px;font-size:13px;line-height:1.6;color:var(--slate)">
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#2b4c9b;background:#dbe7ff;border:1px solid #adc4ee;border-radius:8px;padding:2px 8px">Renombrar un proceso</span></div><div><strong>Qué significa:</strong> cambiar el nombre manteniendo el mismo código.<br><strong>Qué hacer:</strong> hazlo sin miedo. La Matriz y las fichas mostrarán el nombre nuevo solas, al recargar.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#b06a00;background:#ffe9b8;border:1px solid #f0c987;border-radius:8px;padding:2px 8px">Crear un proceso nuevo</span></div><div><strong>Qué significa:</strong> añadir un proceso que no existía.<br><strong>Qué hacer:</strong> dale siempre un <strong>código nuevo</strong>. No afecta nada de lo existente.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#c0392b;background:#fadbd8;border:1px solid #f0b3ac;border-radius:8px;padding:2px 8px">Eliminar un proceso</span></div><div><strong>Qué significa:</strong> quitarlo del Inventario.<br><strong>Qué hacer:</strong> si tenía fichas o indicadores, quedarán huérfanos y aparecerán en morado (🚫). Después hay que reasignarlos o archivarlos. Si no tenía nada, desaparece sin más.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#6b21a8;background:#f0dcf7;border:1px solid #ddb8ea;border-radius:8px;padding:2px 8px">⛔ Reutilizar un código</span></div><div><strong>Qué significa:</strong> usar el código de un proceso eliminado para un proceso distinto.<br><strong>Qué hacer:</strong> <strong>no lo hagas.</strong> El aplicativo no puede distinguirlo de un renombrado, y mostraría el nombre nuevo junto a indicadores que miden el proceso anterior. Un proceso nuevo lleva siempre un código nuevo.</div></div>
+        <p style="margin:12px 0 0;color:var(--mist)">Haz los cambios desde este aplicativo y no directamente en QuintaDB: así el sistema puede avisarte en el momento.</p>
+      </div>
+    </details>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnNuevoProceso" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
       <button class="btn" id="btnExportInv" onclick="exportarInventarioExcel()" style="white-space:nowrap" title="Descarga el inventario tal como se ve (con los filtros aplicados)">⬇️ Exportar a Excel</button>
@@ -952,12 +976,20 @@
         <span style="background:#dbe7ff;border:1px solid #adc4ee;border-radius:4px;padding:0 5px;color:#2b4c9b;font-weight:600">✏️ Cambió en la ficha</span> el texto se corrigió en la ficha y aquí sigue el anterior → actualízalo en «Control de sincronización» (conserva sus metas).
         &nbsp;·&nbsp;
         <span style="background:#fadbd8;border:1px solid #f0b3ac;border-radius:4px;padding:0 5px;color:#c0392b;font-weight:600">⚠️ Ya no está en la ficha</span> el indicador se quitó del formulario → revísalo antes de eliminarlo.
-        &nbsp;·&nbsp;
-        <span style="background:#fff1cf;border:1px solid #f0d9a8;border-radius:4px;padding:0 5px;color:#8a5a00;font-weight:600">🔄 Proceso renombrado</span> el proceso cambió de nombre en el Inventario y aquí sigue el anterior.
+
         &nbsp;·&nbsp;
         <span style="background:#f0dcf7;border:1px solid #ddb8ea;border-radius:4px;padding:0 5px;color:#6b21a8;font-weight:600">🚫 Proceso inexistente</span> ese código ya no está en el Inventario → revísalo en «Control de sincronización».
       </p>
     </div>
+    <details class="guia-alertas" style="margin:0 0 16px;background:var(--card);border:1px solid var(--line);border-radius:12px">
+      <summary style="padding:13px 18px;cursor:pointer;font-weight:600;color:var(--brand);font-size:14px">💡 ¿Qué significan las alertas de esta tabla? Léelo antes de hacer cambios</summary>
+      <div style="padding:0 18px 16px;font-size:13px;line-height:1.6;color:var(--slate)">
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#2b4c9b;background:#dbe7ff;border:1px solid #adc4ee;border-radius:8px;padding:2px 8px">✏️ Cambió en la ficha</span></div><div><strong>Qué significa:</strong> la redacción del indicador se corrigió en su ficha y aquí sigue la anterior.<br><strong>Qué hacer:</strong> abre <strong>🔄 Control de sincronización</strong> y pulsa <strong>Actualizar texto</strong>. Se conservan las metas y los seguimientos.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#c0392b;background:#fadbd8;border:1px solid #f0b3ac;border-radius:8px;padding:2px 8px">⚠️ Ya no está en la ficha</span></div><div><strong>Qué significa:</strong> el indicador se quitó del formulario de su ficha.<br><strong>Qué hacer:</strong> confirma con el dueño de la ficha si todavía aplica. Si ya no aplica, elimínalo desde el Control de sincronización. <strong>Ojo:</strong> al eliminarlo se pierden sus metas y seguimientos.</div></div>
+        <div style="display:grid;grid-template-columns:230px 1fr;gap:4px 16px;padding:10px 0;border-top:1px solid var(--line)"><div><span style="display:inline-block;font-size:11px;font-weight:700;color:#6b21a8;background:#f0dcf7;border:1px solid #ddb8ea;border-radius:8px;padding:2px 8px">🚫 Proceso inexistente</span></div><div><strong>Qué significa:</strong> el proceso de este indicador ya no está en el Inventario: se eliminó o cambió de código.<br><strong>Qué hacer:</strong> si el indicador sigue siendo necesario, edita su ficha y elige el proceso vigente. Si ya no aplica, archiva la ficha para conservar el histórico. Coordínalo con la Subcomisión.</div></div>
+        <p style="margin:12px 0 0;color:var(--mist)">Los <strong>nombres de proceso</strong> se muestran siempre como están hoy en el Inventario: si un proceso se renombra, aquí se ve el nombre nuevo al recargar, sin hacer nada.</p>
+      </div>
+    </details>
 
     <!-- Resumen de avance: cuántos indicadores se vienen completando -->
     <div id="mat_resumen" style="margin-bottom:16px"></div>
@@ -2662,13 +2694,21 @@ function detectarSubprocesoSIPOC(){
   if(!det){ picker.classList.add('hidden'); checks.innerHTML=''; document.getElementById('fi_sipoc_cards').innerHTML=''; SIPOC_FORM={}; return; }
   picker.classList.remove('hidden');
   nivelLbl.textContent = det.nivelLabel;
-  // Checkboxes de los elementos detectados
+
+  // Al cambiar de proceso en los desplegables, los componentes detectados son otros.
+  // Se descartan los SIPOC que ya no pertenecen a este proceso: antes quedaban y
+  // aparecían tarjetas de un proceso distinto al que se estaba registrando.
+  const validos = new Set(det.elementos);
+  Object.keys(SIPOC_FORM).forEach(n=>{ if(!validos.has(n)) delete SIPOC_FORM[n]; });
+
+  // Checkboxes de los elementos detectados; quedan marcados los que sigan elegidos
   checks.innerHTML = det.elementos.map((el,i)=>`
     <label class="sipoc-check">
-      <input type="checkbox" value="${el.replace(/"/g,'&quot;')}" onchange="toggleSipocForm(this)">
+      <input type="checkbox" value="${el.replace(/"/g,'&quot;')}" ${SIPOC_FORM[el]?'checked':''} onchange="toggleSipocForm(this)">
       <span>${el.replace(/</g,'&lt;')}</span>
     </label>`).join('');
   renderSipocCardsForm();
+  if(typeof sincronizarSubtitulos==='function') sincronizarSubtitulos('fi', Object.keys(SIPOC_FORM));
 }
 window.detectarSubprocesoSIPOC=detectarSubprocesoSIPOC;
 
@@ -2702,37 +2742,21 @@ function quitarSubtitulosTexto(texto){
 // Inserta/actualiza los subtítulos 【 Componente 】 en cada campo, conservando el texto
 // que el usuario ya escribió bajo cada subtítulo. Quita los subtítulos de componentes desmarcados.
 function sincronizarSubtitulos(prefijo, componentes){
+  // La Sección III describe el proceso COMPLETO, igual que la Sección I: solo el
+  // SIPOC baja al detalle de cada componente. Por eso ya no se insertan subtítulos
+  // por componente aquí. La función se conserva para limpiar los que quedaron en
+  // fichas antiguas, de modo que al editarlas el texto se unifique.
   CAMPOS_SUBTITULO.forEach(campo=>{
     const el=document.getElementById(prefijo+'_'+campo);
     if(!el) return;
-    // Parsear el contenido actual en secciones por subtítulo
     const texto=el.value||'';
-    const bloques={}; // nombre → contenido
-    let sinTitulo='';
-    const re=/【\s*(.+?)\s*】/g;
-    let matches=[...texto.matchAll(re)];
-    if(matches.length){
-      for(let i=0;i<matches.length;i++){
-        const nombre=matches[i][1].trim();
-        const ini=matches[i].index+matches[i][0].length;
-        const fin=(i+1<matches.length)?matches[i+1].index:texto.length;
-        bloques[nombre]=texto.slice(ini,fin).replace(/^\n+|\n+$/g,'');
-      }
-      sinTitulo=texto.slice(0,matches[0].index).trim();
-    } else {
-      sinTitulo=texto.trim();
-    }
-    // Reconstruir: un subtítulo por cada componente marcado, conservando su contenido previo.
-    if(!componentes.length){ return; } // sin componentes, no tocar
-    let nuevo='';
-    componentes.forEach((n,idx)=>{
-      let contenido=bloques[n]!==undefined?bloques[n]:'';
-      // Si hay texto SIN subtítulo (ficha antigua en formato plano), adjuntarlo al primer
-      // componente para no perderlo.
-      if(idx===0 && sinTitulo){ contenido = sinTitulo + (contenido?'\n'+contenido:''); }
-      nuevo += '【 '+n+' 】\n'+(contenido?contenido+'\n':'\n')+'\n';
-    });
-    el.value=nuevo.replace(/\n+$/,'\n');
+    if(texto.indexOf('\u3010')===-1) return;   // sin subtítulos: nada que hacer
+    // Se quitan las marcas 【…】 y se conserva todo el contenido, en orden.
+    const limpio = texto
+      .replace(/\u3010[^\u3011]*\u3011/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/^\s+|\s+$/g, '');
+    el.value = limpio;
   });
 }
 window.sincronizarSubtitulos=sincronizarSubtitulos;
@@ -5058,6 +5082,7 @@ async function renderListado(){
   const tb=document.getElementById('tablaListado');
   try{
     try{ await loadInventario(); }catch(_){} // necesario para detectar procesos archivados en la ruta
+    _PROC_VIGENTES=null;   // los nombres de proceso se leen del Inventario recién cargado
     const niveles = LIST_FILTRO==='todos' ? ['N0','N1','N2','N3'] : [LIST_FILTRO];
     const todas=[];
     // Cargar las fichas de todos los niveles EN PARALELO (antes iban en serie, una tras otra).
@@ -5100,7 +5125,26 @@ async function renderListado(){
       html+=items.map(({r,nivel})=>{
         const ruta=rutaFicha(r,nivel), obj=objFicha(r,nivel), nInd=nIndFicha(r,nivel);
         const arch=_procesosArchivadosEnRuta(ruta);
-        const archTag = arch.length ? `<div style="margin-top:4px"><span title="Proceso(s) archivado(s): ${arch.join(', ').replace(/"/g,'&quot;')}" style="display:inline-block;font-size:10px;font-weight:600;color:#b06a00;background:#fff3e0;border:1px solid #f0c987;border-radius:8px;padding:1px 7px">⚠️ Proceso archivado</span></div>` : '';
+        // ¿El proceso de esta ficha sigue existiendo en el Inventario? Se mira el código
+        // más profundo de la ruta. Si ya no está, la ficha quedó huérfana: hay que
+        // reasignarla a un proceso vigente o archivarla.
+        let elimTag='';
+        try{
+          const vig=_construirProcesosVigentes();
+          if(vig && Object.keys(vig).length){
+            const cods=(String(ruta).match(/[A-Z]\d{2}(?:\.\d{2})+/g)||[]);
+            const cod=cods.length?cods[cods.length-1]:'';
+            if(cod && !vig[cod]){
+              const tip=('El proceso '+cod+' ya no existe en el Inventario: se eliminó o cambió de código. '
+                +'Esta ficha y sus indicadores apuntan a algo que ya no figura en la estructura. '
+                +'Si siguen siendo necesarios, edita la ficha y elige el proceso vigente. '
+                +'Si ya no aplican, archívala para conservar el histórico de metas.').replace(/"/g,'&quot;');
+              elimTag='<div style="margin-top:4px"><span title="'+tip+'" style="display:inline-block;font-size:10px;font-weight:700;color:#6b21a8;background:#f0dcf7;border:1px solid #ddb8ea;border-radius:8px;padding:1px 7px;cursor:help">🚫 Proceso eliminado del Inventario</span></div>';
+            }
+          }
+        }catch(_){}
+        const _archTagBase = arch.length ? `<div style="margin-top:4px"><span title="Proceso(s) archivado(s): ${arch.join(', ').replace(/"/g,'&quot;')}" style="display:inline-block;font-size:10px;font-weight:600;color:#b06a00;background:#fff3e0;border:1px solid #f0c987;border-radius:8px;padding:1px 7px">⚠️ Proceso archivado</span></div>` : '';
+        const archTag = elimTag + _archTagBase;
         const desagId='desag_'+nivel+'_'+r.id;
         _paraDesagregado.push({celdaId:desagId, r, nivel, nInd});
         // ¿Puedo editar esta ficha? (según los responsables técnicos de sus indicadores)
@@ -5111,7 +5155,7 @@ async function renderListado(){
         const _dbFicha = [ruta, obj, dueno].map(x=>String(x||'')).join(' ').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
         return `<tr class="fichas-fila" style="${_fichaACargo?'box-shadow:inset 3px 0 0 var(--brand);':(_miFicha?'':'opacity:.72;')}" data-buscar="${_dbFicha.replace(/"/g,'&quot;')}">
           <td><span class="badge-n ${nivel.toLowerCase()}">${nivel}</span></td>
-          <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${ruta.replace(/"/g,'&quot;')}">${ruta.length>60?ruta.slice(0,60)+'…':ruta}${archTag}</td>
+          <td class="mono" style="max-width:200px;font-size:12px;vertical-align:top" title="${_rutaViva(ruta).replace(/"/g,'&quot;')}">${_rutaViva(ruta).length>60?_rutaViva(ruta).slice(0,60)+'…':_rutaViva(ruta)}${archTag}</td>
           <td style="max-width:200px;vertical-align:top;font-size:12px" title="${obj?obj.replace(/"/g,'&quot;'):''}">${obj?(obj.length>80?obj.slice(0,80)+'…':obj):'<span class="hint">—</span>'}</td>
           <td id="${desagId}" style="vertical-align:top"><span class="hint">Cargando…</span></td>
           <td style="text-align:right;white-space:nowrap;vertical-align:top">
@@ -5357,7 +5401,7 @@ function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada, dueno){
     return `
     <tr style="${bgFila}">
       <td style="padding:4px 8px 4px 0;font-size:13px;color:var(--mist);text-align:right;white-space:nowrap;vertical-align:top">${i+1}.</td>
-      <td style="padding:4px 8px;font-size:13px;font-weight:600;color:var(--brand);vertical-align:top;border-right:2px solid var(--line)" title="${attr(it.elemento)}">${it.elemento?esc(it.elemento.length>34?it.elemento.slice(0,34)+'…':it.elemento):'<span class=hint>(sin elemento)</span>'}</td>
+      <td style="padding:4px 8px;font-size:13px;font-weight:600;color:var(--brand);vertical-align:top;border-right:2px solid var(--line)" title="${attr(_nombreVivo(it.elemento))}">${it.elemento?esc(_nombreVivo(it.elemento).length>34?_nombreVivo(it.elemento).slice(0,34)+'…':_nombreVivo(it.elemento)):'<span class=hint>(sin elemento)</span>'}</td>
       <td style="padding:4px 8px;font-size:14px;color:var(--slate);vertical-align:top" title="${attr(it.indicador)}">${esc(it.indicador.length>70?it.indicador.slice(0,70)+'…':it.indicador)}${pend}</td>
     </tr>`;
   }).join('');
@@ -5426,8 +5470,9 @@ async function editarFicha(nivel, id){
   // (que escribe en el editor RTE si existe, o en el textarea si no).
   if(typeof montarEditoresRTE==='function') montarEditoresRTE('ed_');
   const set=(elid,val)=>{ if(typeof setCampoFicha==='function') setCampoFicha(elid,val||''); else { const el=document.getElementById(elid); if(el) el.value=val||''; } };
-  // Para los campos de sección III: cargar el texto TAL COMO está guardado (con sus
-  // subtítulos 【Componente】 y su contenido). NO quitar los subtítulos aquí: si se quitan,
+  // Para los campos de sección III: se carga el texto guardado y, si viniera con
+  // subtítulos 【Componente】 de fichas antiguas, sincronizarSubtitulos() los quita
+  // al terminar de cargar. La Sección III describe el proceso completo, así que
   // la posterior llamada a sincronizarSubtitulos() no puede reubicar el contenido bajo su
   // componente y el texto del usuario se PIERDE al reabrir la ficha (bug crítico).
   const setIII=(elid,val)=>{ set(elid, val||''); };
@@ -5698,6 +5743,54 @@ async function guardarEdicion(){
   if(dueno && F.dueno_txt){ const selD=document.getElementById('ed_dueno'); const nom=selD&&selD.selectedOptions[0]?selD.selectedOptions[0].text:''; if(nom) campos[F.dueno_txt.id]=nom; }
   const sinInd=comps.filter(n=>{ const inds=(SIPOC_ED[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
   if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', '), true); return; }
+  // ── Aviso antes de quitar indicadores que ya tienen metas registradas ──
+  // Se simula el mismo reparto de registros que hace el guardado, para saber qué
+  // indicadores originales van a desaparecer de la ficha. Editar el texto de un
+  // indicador NO cuenta como quitarlo: ese registro se conserva y se actualiza.
+  try{
+    const usadosSim=new Set();
+    comps.forEach(n=>{
+      const comp=SIPOC_ED[n]; const sidPorInd=comp._sidPorInd||{}; const sidsPos=(comp._sids||[]);
+      (comp.indicadores||[]).map(x=>(x||'').trim()).filter(Boolean).forEach((ind,idx)=>{
+        let sid=sidsPos[idx];
+        if(sid && usadosSim.has(sid)) sid=null;
+        if(!sid){ const s2=sidPorInd[ind]; if(s2 && !usadosSim.has(s2)) sid=s2; }
+        if(sid) usadosSim.add(sid);
+      });
+    });
+    // Texto original de cada registro (sid → «Componente — Indicador»)
+    const textoDeSid={};
+    Object.keys(SIPOC_ED).forEach(n=>{
+      const spi=(SIPOC_ED[n]||{})._sidPorInd||{};
+      Object.keys(spi).forEach(ind=>{ textoDeSid[spi[ind]] = n+' — '+ind; });
+    });
+    const quitados=(ED_SIDS_ORIGINALES||[]).filter(sid=>sid && !usadosSim.has(sid)).map(sid=>textoDeSid[sid]).filter(Boolean);
+
+    if(quitados.length){
+      const norm = x => String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+      const oficinaFicha = norm((document.getElementById('ed_dueno')||{}).selectedOptions && document.getElementById('ed_dueno').selectedOptions[0] ? document.getElementById('ed_dueno').selectedOptions[0].text : '');
+      const tieneMetas = v => ['Programación metas','Seguimiento metas'].some(k=>{
+        const x=v[k]; return Array.isArray(x) ? x.length>0 : (x && String(x).trim() && String(x).trim()!==k);
+      });
+      const conMetas=[];
+      (STATE.matriz||[]).forEach(r=>{
+        const v=r.values||{};
+        const t=norm(leerCampo(r, MAT.indicador_txt.id,'Indicador')||'');
+        const ofi=norm(MAT.oficina_resp_ind?leerCampo(r,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'');
+        if(oficinaFicha && ofi && ofi!==oficinaFicha) return;
+        const q=quitados.find(x=>norm(x)===t);
+        if(q && tieneMetas(v) && !conMetas.includes(q)) conMetas.push(q);
+      });
+      if(conMetas.length){
+        const lista=conMetas.map(x=>'   · '+x.split(' — ').slice(1).join(' — ')).join('\n');
+        const ok=confirm('Vas a quitar '+conMetas.length+' indicador(es) que tienen metas registradas en la matriz:\n\n'
+          +lista+'\n\nSi continúas, esas metas y mediciones quedan en la matriz sin su ficha. '
+          +'Después los verás en el Control de sincronización como «No existe», donde podrás decidir qué hacer con ellos.\n\n¿Continuar?');
+        if(!ok) return;
+      }
+    }
+  }catch(e){ console.warn('[aviso metas] no se pudo comprobar:', e.message); }
+
   const btn=document.getElementById('ed_guardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
   try{
@@ -5908,6 +6001,26 @@ window._mismaPersona=_mismaPersona;
    consultando la tabla de responsables por su oficina dueña. Antes se usaba el
    nombre copiado dentro del indicador, que quedaba desactualizado en cuanto se
    cambiaba el responsable en QuintaDB. */
+/* ===== Nombre de proceso EN VIVO =====
+   Antes, cada indicador mostraba el nombre del proceso que quedó escrito al crearlo.
+   Si el proceso se renombraba en el Inventario, la Matriz seguía con el anterior.
+   Ahora el código es lo único que se usa para identificar el proceso, y el nombre se
+   lee del Inventario al mostrar. Renombrar un proceso se refleja solo, al recargar.
+   Lo guardado no se toca: se conserva igual para que las comparaciones con las
+   fichas sigan funcionando. */
+function _nombreVivo(texto){
+  const t=String(texto||'').trim();
+  const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.+)$/);
+  if(!m) return t;
+  const vig=(typeof _construirProcesosVigentes==='function') ? _construirProcesosVigentes() : null;
+  return (vig && vig[m[1]]) ? vig[m[1]] : t;   // si el código ya no existe, se deja como estaba
+}
+// Aplica lo mismo a una ruta completa «Tipo › N0 › N1 › …»
+function _rutaViva(ruta){
+  return String(ruta||'').split(/(\s*[›>]\s*)/).map(seg=>/^\s*[›>]\s*$/.test(seg)?seg:_nombreVivo(seg)).join('');
+}
+window._nombreVivo=_nombreVivo; window._rutaViva=_rutaViva;
+
 function _respVigenteDe(r){
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   let ofi='';
@@ -6896,7 +7009,9 @@ async function abrirControlSync(){
         });
       });
 
-      if(cambiados.length){
+      // Los procesos renombrados ya no se listan: la Matriz muestra el nombre vigente
+      // leyéndolo del Inventario, así que un renombrado se corrige solo al recargar.
+      if(false && cambiados.length){
         html+='<h3 style="margin:22px 0 6px;font-size:15px">Procesos cuyo nombre no coincide con el Inventario ('+cambiados.length+')</h3>';
         html+='<p class="hint" style="margin:0 0 8px"><b>Qué significa:</b> el Inventario tiene ese código con un nombre distinto al que figura en la Matriz. Puede deberse a dos cosas, y el aplicativo no puede distinguirlas.<br><br>'
           +'<b>Caso 1 — es el mismo proceso, solo renombrado.</b> Sus indicadores siguen siendo válidos. Corrige el texto desde <b>Inventario de procesos → Renumerar o renombrar un proceso</b>, poniendo el nombre viejo y el nuevo.<br><br>'
@@ -7121,7 +7236,7 @@ function _alertaMatriz(textoMat, rutaMat, dueno){
    en el inventario estas copias quedan desfasadas. */
 let _PROC_VIGENTES = null;   // código → nombre completo vigente
 function _construirProcesosVigentes(){
-  if(_PROC_VIGENTES) return _PROC_VIGENTES;
+  if(_PROC_VIGENTES && Object.keys(_PROC_VIGENTES).length) return _PROC_VIGENTES;
   const m = {};
   (STATE.inventario||[]).forEach(r=>{
     const v=r.values||{};
@@ -7162,10 +7277,12 @@ function pintarAlertasMatriz(){
     // Aviso sobre el PROCESO (inventario). Es independiente del de la ficha.
     try{
       const ap=_alertaProceso(tr.getAttribute('data-ind'));
-      if(ap){
+      // Solo se avisa si el proceso YA NO EXISTE. Un renombrado ya no necesita aviso:
+      // la Matriz muestra el nombre vigente leyéndolo del Inventario.
+      if(ap && ap.tipo==='inexistente'){
         const c2=document.createElement('div');
         c2.className='alerta-ind'; c2.style.marginTop='3px';
-        if(ap.tipo==='renombrado'){
+        if(ap.tipo==='renombrado'){ /* el nombre ya se muestra vigente: no hace falta avisar */ } else if(false){
           tr.style.background='#fff6e5';
           c2.innerHTML='<span title="El proceso se renombró en el Inventario y aquí sigue el nombre anterior. Ahora es: '+String(ap.nuevo).replace(/"/g,'&quot;').replace(/</g,'&lt;')+'. Corrígelo desde Control de sincronización." style="display:inline-block;font-size:9px;font-weight:700;color:#8a5a00;background:#fff1cf;border:1px solid #f0d9a8;border-radius:8px;padding:0 6px;white-space:nowrap;cursor:help">🔄 Proceso renombrado</span>';
         } else {
@@ -7200,6 +7317,8 @@ async function renderMatriz(){
     // El responsable de cada proceso se resuelve en vivo desde su tabla, así que
     // hay que tenerla cargada antes de pintar las filas y de decidir permisos.
     try{ await cargarMapaRespProceso(); }catch(_){}
+    // El nombre de cada proceso se lee del Inventario al mostrarlo: tiene que estar cargado.
+    try{ if(!(STATE.inventario||[]).length) await loadInventario(); _PROC_VIGENTES=null; }catch(_){}
     // Para el resumen: contar solo los indicadores VISIBLES según la oficina del usuario
     // (el rol Oficina ve un subconjunto). El buscador de texto no afecta al total del resumen.
     const recsVisibles = puedeVerTodo() ? recs : recs.filter(r=>{
@@ -7293,7 +7412,7 @@ async function renderMatriz(){
         // Subcabecera nivel 2: badge de nivel de ficha (N1/N2) + ruta del proceso — una vez por ficha
         const badgeNivelFicha = nivelFicha?`<span class="badge-n ${nivelFicha.toLowerCase()}" style="margin-right:8px">${nivelFicha}</span>`:'';
         html+=`<tr class="matriz-subcab" style="background:var(--card)"><td colspan="10" style="padding:8px 14px 8px 30px;border-top:1px dashed var(--line)">
-          ${badgeNivelFicha}<span class="mono" style="font-size:13px;color:var(--slate)">${fichaRutaTxt.replace(/</g,'&lt;')}</span>
+          ${badgeNivelFicha}<span class="mono" style="font-size:13px;color:var(--slate)">${_rutaViva(fichaRutaTxt).replace(/</g,'&lt;')}</span>
           <span style="color:var(--mist);font-size:12px;margin-left:6px">· ${inds.length} indicador(es)</span>
         </td></tr>`;
         html+=inds.map(r=>{
@@ -7311,7 +7430,7 @@ async function renderMatriz(){
         // Elemento del nivel de análisis: el último segmento de la ruta (lo que enlaza con la ficha)
         const segsR=String(rutaFull||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
         const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
-        const elemento = (segsR.length && !generico.test(segsR[segsR.length-1])) ? segsR[segsR.length-1] : (partes.length>1?partes[0].trim():'');
+        const elemento = _nombreVivo((segsR.length && !generico.test(segsR[segsR.length-1])) ? segsR[segsR.length-1] : (partes.length>1?partes[0].trim():''));
         const avance = (r._avancePeriodos && r._avancePeriodos.length)
           ? barraAvancePeriodos(r._avancePeriodos)
           : (r._periodos>0
@@ -7494,7 +7613,7 @@ function renderFichaComboLista(opts){
   cont.innerHTML=opts.map(o=>`
     <div class="ag-ficha-item" onclick="seleccionarFicha('${o.value}')" style="padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer">
       ${o.dueno?`<div style="font-size:13px;font-weight:600;color:var(--brand)">👤 ${o.dueno.replace(/</g,'&lt;')}</div>`:''}
-      <div style="font-size:12px;color:var(--slate);margin-top:2px">${badge(o.nivel)}<span class="mono">${o.ruta.replace(/</g,'&lt;')}</span></div>
+      <div style="font-size:12px;color:var(--slate);margin-top:2px">${badge(o.nivel)}<span class="mono">${_rutaViva(o.ruta).replace(/</g,'&lt;')}</span></div>
     </div>`).join('');
   [...cont.querySelectorAll('.ag-ficha-item')].forEach(el=>{
     el.onmouseenter=()=>el.style.background='var(--paper)';
@@ -9604,6 +9723,11 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
   #asis-clip{background:none;border:1px solid var(--line);border-radius:9px;cursor:pointer;
     font-size:17px;padding:0 10px;color:var(--slate);align-self:flex-end;height:38px}
   #asis-clip:hover{background:#eef4f1}
+  #asis-mic{background:none;border:1px solid var(--line);border-radius:9px;cursor:pointer;
+    font-size:16px;padding:0 10px;color:var(--slate);align-self:flex-end;height:38px}
+  #asis-mic:hover{background:#eef4f1}
+  #asis-mic.grabando{background:#fdecea;border-color:#e6a49a;color:#c0392b;animation:asisLat 1.1s infinite}
+  @keyframes asisLat{0%,100%{box-shadow:0 0 0 0 rgba(192,57,43,.35)}70%{box-shadow:0 0 0 7px rgba(192,57,43,0)}}
   .asis-msg img.asis-mini{max-width:130px;border-radius:8px;margin-top:6px;display:block}
   .asis-nota{font-size:10.5px;color:var(--mist);padding:0 14px 8px;background:var(--card);line-height:1.4}
   .asis-esc{display:flex;gap:4px;align-items:center;padding:4px 0}
@@ -9629,6 +9753,7 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
       onchange="asisAdjuntar(this.files); this.value='';">
     <button id="asis-clip" title="Adjuntar una captura" aria-label="Adjuntar una captura"
       onclick="document.getElementById('asis-file').click()">📎</button>
+    <button id="asis-mic" title="Dictar la pregunta" aria-label="Dictar la pregunta" onclick="asisDictar()">🎙️</button>
     <textarea id="asis-input" rows="1" placeholder="Escribe tu pregunta o pega una captura…"
       oninput="asisAutoAlto(this)" onkeydown="asisTecla(event)" onpaste="asisPegar(event)"></textarea>
     <button id="asis-enviar" onclick="asisEnviar()">Enviar</button>
@@ -9811,6 +9936,228 @@ function asisPintarAdjuntos(){
   });
 }
 
+
+/* ===================== DICTADO POR VOZ =====================
+   Mismo mecanismo del Portal del Coordinador. Funciona en Chrome y Edge.
+   El texto dictado se escribe en la caja: el usuario lo revisa antes de enviar. */
+let ASIS_REC=null, ASIS_GRABANDO=false, ASIS_STREAM=null;
+function asisAviso(t){ if(typeof asisPintar==='function') asisPintar('bot', t); }
+function asisSoportaDictado(){ return !!(window.SpeechRecognition || window.webkitSpeechRecognition); }
+
+function asisDictar(){
+  const mic=document.getElementById('asis-mic');
+  const inp=document.getElementById('asis-input');
+  if(!asisSoportaDictado()){ asisAviso('Tu navegador no permite dictar. Funciona en Chrome y en Edge.'); return; }
+  if(ASIS_GRABANDO){ try{ASIS_REC.stop();}catch(e){} return; }
+
+  const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  ASIS_REC = new Rec();
+  ASIS_REC.lang='es-PE';
+  ASIS_REC.continuous=true;        // no se corta en la primera pausa
+  ASIS_REC.interimResults=true;
+  ASIS_REC.maxAlternatives=1;
+
+  const previo = inp.value.trim();
+  let cerrado='';
+
+  ASIS_REC.onstart=()=>{ ASIS_GRABANDO=true; mic.classList.add('grabando');
+    mic.title='Detener el dictado'; inp.placeholder='Escuchando… habla y pulsa el micrófono al terminar'; };
+
+  ASIS_REC.onresult=(ev)=>{
+    let enCurso='';
+    for(let i=ev.resultIndex;i<ev.results.length;i++){
+      const t=ev.results[i][0].transcript;
+      if(ev.results[i].isFinal) cerrado += t + ' '; else enCurso += t;
+    }
+    inp.value = ((previo ? previo+' ' : '') + cerrado + enCurso).replace(/\s+/g,' ');
+    if(typeof asisAutoAlto==='function') asisAutoAlto(inp);
+  };
+
+  ASIS_REC.onerror=(ev)=>{
+    const M={
+      'not-allowed':'El navegador bloqueó el micrófono. Pulsa el candado de la barra de direcciones y permítelo para este sitio.',
+      'service-not-allowed':'Windows no está dejando usar el micrófono. Revisa Configuración › Privacidad › Micrófono.',
+      'no-speech':'No se escuchó nada. Revisa que el micrófono sea el predeterminado y vuelve a intentarlo.',
+      'audio-capture':'No se encontró ningún micrófono conectado.',
+      'network':'El dictado necesita conexión a internet.',
+      'aborted':''
+    };
+    const t=M[ev.error];
+    if(t===undefined) asisAviso('El dictado falló: '+ev.error); else if(t) asisAviso(t);
+  };
+
+  ASIS_REC.onend=()=>{
+    ASIS_GRABANDO=false; mic.classList.remove('grabando'); mic.title='Dictar la pregunta';
+    inp.placeholder='Escribe tu pregunta o pega una captura…';
+    if(ASIS_STREAM){ try{ ASIS_STREAM.getTracks().forEach(t=>t.stop()); }catch(e){} ASIS_STREAM=null; }
+    inp.focus();
+  };
+
+  const arrancar=()=>{ try{ ASIS_REC.start(); }catch(e){ asisAviso('No se pudo iniciar el dictado: '+e.message); } };
+  if(navigator.mediaDevices && navigator.mediaDevices.getUserMedia){
+    navigator.mediaDevices.getUserMedia({audio:true})
+      .then(st=>{ ASIS_STREAM=st; arrancar(); })
+      .catch(err=>{
+        if(err && err.name==='NotAllowedError') asisAviso('No se dio permiso al micrófono. Pulsa el candado de la barra de direcciones y permítelo.');
+        else if(err && err.name==='NotFoundError') asisAviso('No se detectó ningún micrófono en este equipo.');
+        else arrancar();
+      });
+  } else arrancar();
+}
+window.asisDictar=asisDictar;
+document.addEventListener('DOMContentLoaded',()=>{
+  const mic=document.getElementById('asis-mic');
+  if(mic && !asisSoportaDictado()) mic.style.display='none';
+});
+
+/* ===================== DATOS PARA EL ASISTENTE =====================
+   El asistente recibe SOLO los indicadores que el usuario ya ve en su pantalla:
+   una oficina, los suyos; el administrador, todos. Así no se abre ningún acceso
+   nuevo a la base ni se carga el proxy. La clasificación es la misma del Tablero. */
+async function asisDatos(){
+  try{
+    if(!(STATE.matriz||[]).length && typeof loadMatriz==='function') await loadMatriz();
+    const recs=(STATE.matriz||[]);
+    const visibles=recs.filter(r=>{
+      if(puedeVerTodo()) return true;
+      const ofiMed=leerCampo(r, MAT.oficina_medicion.id,'Oficina o área responsable de la medición');
+      const ofiDue=MAT.oficina_resp_ind?leerCampo(r,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+      return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
+    });
+    const filas=visibles.slice(0,600).map(r=>{
+      const t=String(leerCampo(r,MAT.indicador_txt.id,'Indicador')||'');
+      const partes=t.split(' — ');
+      const elem=partes.length>1?partes[0].trim():'';
+      const cod=(elem.match(/^([A-Z]\d{2}(?:\.\d{2})+)/)||[])[1]||'';
+      const vig=(typeof _respVigenteDe==='function')?_respVigenteDe(r):null;
+      const ofiDue=MAT.oficina_resp_ind?leerCampo(r,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+      const ofiMed=leerCampo(r, MAT.oficina_medicion.id,'Oficina o área responsable de la medición');
+      const tieneMeta=(r._progMetas||0)>0, tieneSeg=(r._periodos||0)>0;
+      return {
+        codigo: cod,
+        proceso: (typeof _nombreVivo==='function')?_nombreVivo(elem):elem,
+        indicador: partes.length>1?partes.slice(1).join(' — '):t,
+        oficina: ofiDue||ofiMed||'',
+        responsable: (vig&&vig.responsable)||leerCampo(r,MAT.resp_med_txt.id,'Responsable medición')||'',
+        tecnico: (typeof RESP_TEC_NOMBRE_FIELD_ID!=='undefined')?(leerCampo(r,RESP_TEC_NOMBRE_FIELD_ID,'Nombre responsable técnico')||''):'',
+        frecuencia: leerCampo(r,MAT.frecuencia_medicion.id,'Frecuencia de medición')||'',
+        metas: r._progMetas||0,
+        seguimientos: r._periodos||0,
+        avance: (r._avance===null||r._avance===undefined)?null:r._avance,
+        estado: tieneSeg?'meta y seguimiento':(tieneMeta?'solo meta':'sin meta ni seguimiento')
+      };
+    });
+    return { ambito: puedeVerTodo()?'toda la Facultad':(SESION&&SESION.oficina)||'', total: visibles.length, indicadores: filas };
+  }catch(e){ console.warn('[asistente] no se pudieron preparar los datos:', e.message); return null; }
+}
+window.asisDatos=asisDatos;
+
+
+/* ===================== REPORTE DE AVANCE POR CORREO =====================
+   Solo el administrador. Calcula, por oficina, las tres cifras acordadas:
+   % con meta programada, % con seguimiento y avance promedio. Son las mismas que
+   usa el Tablero y el asistente. Muestra todo antes de enviar, y el envío lo hace
+   el script «Reportes SGOE» de Apps Script, que decide él mismo el destinatario
+   buscando el correo del responsable en la tabla de responsables de proceso. */
+const REPORTE_URL   = 'https://script.google.com/macros/s/AKfycbxURiAsosVJadzK0SJBCQy_TCbb894LD9x8e2XsZ4C9-Vu9csF4EUIVXS9fFTfw-ah7/exec';   // URL de la aplicación web «Reportes SGOE» (termina en /exec)
+const REPORTE_CLAVE = 'sgoe-3c78adb6d278e43be845034b';   // la misma CLAVE_ENVIO configurada en ese script
+
+function _repCifrasPorOficina(){
+  const grupos={};
+  (STATE.matriz||[]).forEach(r=>{
+    const ofiDue=MAT.oficina_resp_ind?leerCampo(r,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
+    const ofi=(ofiDue||leerCampo(r,MAT.oficina_medicion.id,'Oficina o área responsable de la medición')||'').trim();
+    if(!ofi) return;
+    (grupos[ofi]=grupos[ofi]||[]).push(r);
+  });
+  return Object.keys(grupos).sort().map(ofi=>{
+    const rs=grupos[ofi], total=rs.length;
+    const conSeg=rs.filter(r=>(r._periodos||0)>0).length;
+    const conMeta=rs.filter(r=>(r._progMetas||0)>0 || (r._periodos||0)>0).length;
+    const avs=rs.map(r=>r._avance).filter(x=>x!==null && x!==undefined && !isNaN(x));
+    const prom=avs.length? Math.round(avs.reduce((a,b)=>a+Number(b),0)/avs.length*10)/10 : null;
+    return { oficina:ofi, cifras:{ total, conMeta, conSeguimiento:conSeg, sinMeta: total-conMeta, avancePromedio: prom } };
+  });
+}
+
+function _repSemaforo(parte,total){
+  const p= total? Math.round(parte/total*100):0;
+  return (p>=80?'🟢':(p>=50?'🟡':'🔴'))+' '+p+' %';
+}
+
+async function abrirReporteAvance(){
+  if(!esAdmin()){ toast('Solo el administrador puede enviar reportes.', true); return; }
+  try{ await loadMatriz(); }catch(_){}
+  const filas=_repCifrasPorOficina();
+  const sinConfig = !REPORTE_URL || !REPORTE_CLAVE;
+  const html = `
+  <div id="rep_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
+   <div style="background:var(--card);border-radius:14px;max-width:960px;width:100%;max-height:90vh;overflow:auto;padding:22px 24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <h2 style="margin:0;font-size:20px">📧 Reporte de avance a los responsables de proceso</h2>
+      <button class="icon-btn" onclick="document.getElementById('rep_modal').remove()">✕</button>
+    </div>
+    <div style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:10px 0 14px;font-size:13px;line-height:1.55;color:var(--slate)">
+      <b>Qué se envía:</b> a cada responsable, un correo con tres cifras de su oficina: % de indicadores con meta, % con seguimiento y avance promedio, con su semáforo.<br>
+      <b>A quién:</b> al correo registrado en la tabla de responsables de proceso. Si una oficina no tiene correo, se indica y no se envía.<br>
+      <b>Recomendado:</b> primero pulsa <b>Enviarme una prueba</b>: te llegan a ti todos los correos para revisarlos. Luego envía a los responsables.
+    </div>
+    ${sinConfig?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:11px 13px;margin-bottom:12px;color:#8a5a00"><b>Falta configurar el envío.</b> Completa <code>REPORTE_URL</code> y <code>REPORTE_CLAVE</code> en este archivo con los datos del script «Reportes SGOE».</div>`:''}
+    <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--paper);text-align:left">
+        <th style="padding:8px"><input type="checkbox" id="rep_todos" checked onchange="document.querySelectorAll('.rep_chk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:8px">Oficina</th><th style="padding:8px;text-align:right">Indicadores</th>
+        <th style="padding:8px;text-align:right">Con meta</th><th style="padding:8px;text-align:right">Con seguimiento</th>
+        <th style="padding:8px;text-align:right">Avance promedio</th><th style="padding:8px">Resultado</th>
+      </tr></thead><tbody>
+      ${filas.map((f,i)=>`<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:7px 8px"><input type="checkbox" class="rep_chk" data-i="${i}" checked></td>
+        <td style="padding:7px 8px">${f.oficina.replace(/</g,'&lt;')}</td>
+        <td style="padding:7px 8px;text-align:right">${f.cifras.total}</td>
+        <td style="padding:7px 8px;text-align:right">${_repSemaforo(f.cifras.conMeta,f.cifras.total)} <span class="hint">· ${f.cifras.conMeta} de ${f.cifras.total}</span></td>
+        <td style="padding:7px 8px;text-align:right">${_repSemaforo(f.cifras.conSeguimiento,f.cifras.total)} <span class="hint">· ${f.cifras.conSeguimiento} de ${f.cifras.total}</span></td>
+        <td style="padding:7px 8px;text-align:right">${f.cifras.avancePromedio===null?'<span class="hint">sin registros</span>':f.cifras.avancePromedio+' %'}</td>
+        <td style="padding:7px 8px" id="rep_res_${i}"></td></tr>`).join('')}
+      </tbody></table></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+      <button class="btn" ${sinConfig?'disabled':''} onclick="enviarReporteAvance('prueba')">Enviarme una prueba</button>
+      <button class="btn btn-primary" ${sinConfig?'disabled':''} onclick="enviarReporteAvance('real')">Enviar a los responsables seleccionados</button>
+    </div>
+   </div></div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+  window._REP_FILAS=filas;
+}
+window.abrirReporteAvance=abrirReporteAvance;
+
+async function enviarReporteAvance(modo){
+  if(!esAdmin()) return;
+  const sel=[...document.querySelectorAll('.rep_chk')].filter(c=>c.checked).map(c=>Number(c.getAttribute('data-i')));
+  if(!sel.length){ toast('Marca al menos una oficina.', true); return; }
+  if(modo==='real' && !confirm('Se enviará el reporte a los responsables de '+sel.length+' oficina(s).\n\n¿Ya revisaste la prueba? ¿Continuar?')) return;
+  const envios=sel.map(i=>({ oficina:_REP_FILAS[i].oficina, cifras:_REP_FILAS[i].cifras }));
+  sel.forEach(i=>{ const c=document.getElementById('rep_res_'+i); if(c) c.textContent='Enviando…'; });
+  try{
+    const r=await fetch(REPORTE_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ clave:REPORTE_CLAVE, app:'indicadores', modo, envios }) });
+    const d=await r.json();
+    if(!d.ok){ toast('No se pudo enviar: '+(d.error||'error desconocido'), true); sel.forEach(i=>{ const c=document.getElementById('rep_res_'+i); if(c) c.textContent=''; }); return; }
+    (d.resultados||[]).forEach(res=>{
+      const i=_REP_FILAS.findIndex(f=>f.oficina===res.oficina);
+      const c=document.getElementById('rep_res_'+i);
+      if(c) c.innerHTML = res.ok ? `<span style="color:var(--brand)">✓ ${res.prueba?'prueba enviada':'enviado a '+String(res.para).replace(/</g,'&lt;')}</span>`
+                                : `<span style="color:#c0392b" title="${String(res.motivo||'').replace(/"/g,'&quot;')}">✕ ${String(res.motivo||'').replace(/</g,'&lt;')}</span>`;
+    });
+    toast(modo==='prueba' ? 'Pruebas enviadas a tu correo. Revísalas antes de enviar a los responsables.' : 'Reportes enviados.');
+  }catch(e){ toast('No se pudo contactar con el servicio de envío: '+e.message, true); }
+}
+window.enviarReporteAvance=enviarReporteAvance;
+
+// Mostrar el botón solo al administrador
+document.addEventListener('DOMContentLoaded',()=>{ setInterval(()=>{
+  const w=document.getElementById('rep_boton_wrap'); if(!w) return;
+  w.style.display = (typeof esAdmin==='function' && SESION && esAdmin()) ? 'block' : 'none';
+}, 1500); });
+
 async function asisEnviar(){
   if(ASIS_OCUPADO) return;
   const inp=document.getElementById('asis-input');
@@ -9838,7 +10185,8 @@ async function asisEnviar(){
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ mensaje:pregunta, historial:ASIS_HIST.slice(0,-1), pantalla:asisPantalla(),
-        imagenes: imgs.map(function(im){ return { mime:im.mime, datos:im.datos }; }) })
+        imagenes: imgs.map(function(im){ return { mime:im.mime, datos:im.datos }; }),
+        datos: await asisDatos() })
     });
     const data=await r.json().catch(()=>({}));
     if(r.ok && data.ok!==false && data.respuesta){
