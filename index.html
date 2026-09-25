@@ -2784,6 +2784,61 @@ function sincronizarSubtitulos(prefijo, componentes){
 }
 window.sincronizarSubtitulos=sincronizarSubtitulos;
 
+/* ===== ¿El componente requiere indicador? =====
+   Cada componente del SIPOC puede declararse «sin indicador» con una justificación.
+   Se guarda en la columna «Indicador no aplica» de la ficha, con el mismo formato
+   etiquetado del SIPOC: una línea por componente, «[Componente] justificación».
+   Los componentes que no figuran ahí requieren indicador (así las fichas antiguas
+   no cambian). Un componente sin indicador no genera nada en la Matriz. */
+const NOAPLICA_ID = { N0:'cIWRfAvaXdGioJiSkcWQvj', N1:'cmW6ZdTbrgW5FdKCo0W6uh', N2:'c0fSkKW7jdKOoBaSkaz8kL', N3:'ddVSkQbSnggAGoWOJdOCok' };
+function _leerNoAplica(r, nivel){
+  const id=NOAPLICA_ID[nivel]; if(!id) return {};
+  try{ return parsearSipocCampo(leerCampo(r, id, 'Indicador no aplica')||''); }catch(e){ return {}; }
+}
+function _textoNoAplica(store){
+  return Object.keys(store||{}).filter(n=>store[n] && store[n].noAplica)
+    .map(n=>'['+n+'] '+String(store[n].motivoNoAplica||'').replace(/\s*\n\s*/g,' ').trim()).join('\n');
+}
+function _bloqueIndComp(pref, i, safe, d, indsHtml, puedeAnadir){
+  const store = pref==='fi' ? 'SIPOC_FORM' : 'SIPOC_ED';
+  const no = !!d.noAplica;
+  const escT = t=>String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const pregunta = `<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:0 0 10px;padding:9px 12px;background:#f5f9f7;border:1px solid var(--line);border-radius:9px">
+      <b style="font-size:14px">¿Este componente requiere indicador de desempeño?</b>
+      <label style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="radio" name="ap_${pref}_${i}" ${!no?'checked':''} onchange="sipocSetAplica('${pref}','${safe}',true)"> Sí</label>
+      <label style="display:flex;gap:5px;align-items:center;cursor:pointer"><input type="radio" name="ap_${pref}_${i}" ${no?'checked':''} onchange="sipocSetAplica('${pref}','${safe}',false)"> No</label>
+    </div>`;
+  if(no){
+    return `<div class="ind-row"><div class="field">${pregunta}
+      <label>¿Por qué no aplica un indicador a este componente? <span class="req">*</span></label>
+      <textarea rows="2" style="width:100%" placeholder="Ej.: su resultado ya se mide en el indicador del proceso padre; es una actividad de apoyo sin un producto propio que medir…" oninput="${store}['${safe}'].motivoNoAplica=this.value">${escT(d.motivoNoAplica)}</textarea>
+      <div class="hint" style="margin-top:4px">Este componente no tendrá indicadores en la Matriz. La justificación queda registrada en la ficha y se muestra en Fichas registradas.</div>
+    </div></div>`;
+  }
+  return `<div class="ind-row"><div class="field">${pregunta}
+      <label>Indicadores de desempeño de este componente <span class="req">*</span> ${ayudaFicha('indicador')}</label>
+      ${indsHtml}
+      ${puedeAnadir?`<button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('${pref}','${safe}')">+ Añadir indicador</button>`:''}
+    </div></div>`;
+}
+function sipocSetAplica(pref, nombre, aplica){
+  const store=_sipocStore(pref); const d=store[nombre]; if(!d) return;
+  const repintar=()=>{ if(pref==='fi') renderSipocCardsForm(); else renderSipocModal(); };
+  if(!aplica){
+    const inds=(d.indicadores||[]).map(x=>(x||'').trim()).filter(Boolean);
+    if(inds.length && !confirm('Este componente tiene '+inds.length+' indicador(es).\n\nSi indicas que no requiere indicador, se quitarán de la ficha al guardar. '
+       +'Si alguno tiene metas registradas en la Matriz, te avisaremos antes de guardar.\n\n¿Continuar?')){ repintar(); return; }
+    d._indsPrevios = d.indicadores;   // por si vuelve a «Sí» antes de guardar
+    d.indicadores = [''];
+    d.noAplica = true;
+  } else {
+    d.noAplica = false;
+    if(d._indsPrevios){ d.indicadores = d._indsPrevios; delete d._indsPrevios; }
+  }
+  repintar();
+}
+window.sipocSetAplica=sipocSetAplica;
+
 function renderSipocCardsForm(){
   const cont=document.getElementById('fi_sipoc_cards');
   const nombres=Object.keys(SIPOC_FORM);
@@ -2805,12 +2860,7 @@ function renderSipocCardsForm(){
         <div class="field"><label>Producto ${ayudaFicha('prod')}</label>${_sipocListaHTML('fi',safe,'prod',d.prod,'Producto')}</div>
         <div class="field"><label>Receptor final del producto ${ayudaFicha('recep')}</label>${_sipocListaHTML('fi',safe,'recep',d.recep,'Receptor final de producto')}</div>
       </div>
-      <div class="ind-row">
-        <div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span> ${ayudaFicha('indicador')}</label>
-        ${indsHtml}
-        <button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('fi','${safe}')">+ Añadir indicador</button>
-        </div>
-      </div>
+      ${_bloqueIndComp('fi', i, safe, d, indsHtml, true)}
     </div>`;
   }).join('');
 }
@@ -2959,12 +3009,16 @@ document.getElementById('formFicha').addEventListener('submit', async (e)=>{
     put(F.producto, join('prod'));
     put(F.receptor, join('recep'));
   }
+  { const t=_textoNoAplica(SIPOC_FORM); if(t && NOAPLICA_ID[NIVEL]) campos[NOAPLICA_ID[NIVEL]]=t; }
   // Dueño (relación) — se manda como relación si se eligió
   const dueno=g('fi_dueno');
 
   // Validar que cada componente marcado tenga indicador
-  const sinInd = comps.filter(n=>{ const inds=(SIPOC_FORM[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
-  if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', '), true); return; }
+  // Cada componente necesita al menos un indicador, o bien declararse «sin indicador» con su justificación
+  const sinInd = comps.filter(n=>{ if(SIPOC_FORM[n].noAplica) return false; const inds=(SIPOC_FORM[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
+  if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', ')+'. Si ese componente no requiere indicador, márcalo con «No» y justifícalo.', true); return; }
+  const sinMotivo=comps.filter(n=>SIPOC_FORM[n].noAplica && !String(SIPOC_FORM[n].motivoNoAplica||'').trim());
+  if(sinMotivo.length){ toast('Falta justificar por qué no aplica indicador en: '+sinMotivo.join(', '), true); return; }
 
   const btn=document.getElementById('btnFichaGuardar');
   btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…';
@@ -5222,7 +5276,7 @@ async function cargarDesagregadoIndicadores(lista){
       const rutaF = rutaFicha(r, nivel);
       const F_n = (nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
       const duenoF = leerDueno(r, F_n) || '';
-      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items, rutaF, _fichaArchivada(r,nivel), duenoF);
+      _DESAG_CACHE[key]=_pintaDesagregado(naLabel, items, rutaF, _fichaArchivada(r,nivel), duenoF, _leerNoAplica(r,nivel));
       const c2=document.getElementById(celdaId);
       if(c2) c2.innerHTML=_DESAG_CACHE[key];
     }catch(_){ const c=document.getElementById(celdaId); if(c) c.innerHTML='<span class="hint">—</span>'; }
@@ -5391,8 +5445,9 @@ function _indEnMatriz(elemento, indicador, rutaFichaTxt, dueno){
 
 // Arma el HTML de la celda: encabezado con el nivel de análisis y el total, y una
 // sub-tabla con una fila por indicador (Elemento del nivel | Indicador).
-function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada, dueno){
-  if(!items.length) return '<span class="hint">Sin indicadores</span>';
+function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada, dueno, noAplica){
+  const naComp = Object.keys(noAplica||{});
+  if(!items.length && !naComp.length) return '<span class="hint">Sin indicadores</span>';
   const esc=s=>String(s||'').replace(/</g,'&lt;');
   const attr=s=>String(s||'').replace(/"/g,'&quot;');
   const naPill = naLabel
@@ -5400,7 +5455,7 @@ function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada, dueno){
     : '';
   const head = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
       ${naPill}
-      <span style="font-size:13px;color:var(--mist);font-weight:600">${items.length} indicador(es)</span>
+      <span style="font-size:13px;color:var(--mist);font-weight:600">${items.length} indicador(es)${naComp.length?' · '+naComp.length+' componente(s) sin indicador':''}</span>
     </div>`;
   const filas = items.map((it,i)=>{
     // En fichas ARCHIVADAS no se marca el ámbar de "falta en matriz": no aplica.
@@ -5427,7 +5482,14 @@ function _pintaDesagregado(naLabel, items, rutaFichaTxt, esArchivada, dueno){
       <td style="padding:4px 8px;font-size:13px;font-weight:600;color:var(--brand);vertical-align:top;border-right:2px solid var(--line)" title="${attr(_nombreVivo(it.elemento))}">${it.elemento?esc(_nombreVivo(it.elemento).length>34?_nombreVivo(it.elemento).slice(0,34)+'…':_nombreVivo(it.elemento)):'<span class=hint>(sin elemento)</span>'}</td>
       <td style="padding:4px 8px;font-size:14px;color:var(--slate);vertical-align:top" title="${attr(it.indicador)}">${esc(it.indicador.length>70?it.indicador.slice(0,70)+'…':it.indicador)}${pend}</td>
     </tr>`;
-  }).join('');
+  }).join('')
+  // Componentes declarados «sin indicador», en gris y con su justificación
+  + naComp.map(comp=>`
+    <tr style="background:#f4f5f5">
+      <td style="padding:4px 8px 4px 0;font-size:13px;color:var(--mist);text-align:right;vertical-align:top">—</td>
+      <td style="padding:4px 8px;font-size:13px;font-weight:600;color:var(--mist);vertical-align:top;border-right:2px solid var(--line)" title="${attr(_nombreVivo(comp))}">${esc(_nombreVivo(comp).length>34?_nombreVivo(comp).slice(0,34)+'…':_nombreVivo(comp))}</td>
+      <td style="padding:4px 8px;font-size:13px;color:var(--mist);vertical-align:top"><span title="${attr('Justificación: '+(noAplica[comp]||''))}" style="display:inline-block;font-size:10px;font-weight:700;color:#5f6b66;background:#e6e9e8;border:1px solid #cfd5d2;border-radius:8px;padding:0 6px;cursor:help">⊘ No aplica indicador</span> <span style="font-style:italic">${esc(String(noAplica[comp]||'').slice(0,90))}</span></td>
+    </tr>`).join('');
   const tabla = `<table style="border-collapse:collapse;width:100%">
       <thead><tr>
         <th style="width:18px"></th>
@@ -5553,6 +5615,22 @@ async function editarFicha(nivel, id){
   ED_PENDIENTES = indicadoresGuardados.filter(g=>g.comp);
   detectarSubprocesoModal();
   // detectarSubprocesoModal ya asoció los componentes guardados a SIPOC_ED y marcó checkboxes.
+  // Componentes declarados «sin indicador»: se marcan, y si no tenían indicadores
+  // (y por eso no se asociaron) se añaden con su SIPOC guardado.
+  try{
+    const na=_leerNoAplica(r, ED_STATE.nivel);
+    Object.keys(na).forEach(comp=>{
+      if(!SIPOC_ED[comp]){
+        SIPOC_ED[comp]={ prov:(ED_SIPOC_RAW.prov||{})[comp]||'', entr:(ED_SIPOC_RAW.entr||{})[comp]||'',
+          prod:(ED_SIPOC_RAW.prod||{})[comp]||'', recep:(ED_SIPOC_RAW.recep||{})[comp]||'',
+          indicadores:[''], _sids:[], _sidPorInd:{} };
+        const cb=[...document.querySelectorAll('#ed_sipoc_checks input[type=checkbox]')].find(x=>x.value===comp);
+        if(cb) cb.checked=true;
+      }
+      SIPOC_ED[comp].noAplica=true;
+      SIPOC_ED[comp].motivoNoAplica=na[comp];
+    });
+  }catch(e){ console.warn('[no aplica] no se pudo leer:', e.message); }
   renderSipocModal();
   // Regenerar subtítulos SOLO para los componentes marcados (coherencia: sin marca, sin subtítulo)
   sincronizarSubtitulos('ed', Object.keys(SIPOC_ED));
@@ -5725,10 +5803,7 @@ function renderSipocModal(){
         <div class="field"><label>Producto ${ayudaFicha('prod')}</label>${_sipocListaHTML('ed',safe,'prod',d.prod,'Producto')}</div>
         <div class="field"><label>Receptor final del producto ${ayudaFicha('recep')}</label>${_sipocListaHTML('ed',safe,'recep',d.recep,'Receptor final de producto')}</div>
       </div>
-      <div class="ind-row"><div class="field"><label>Indicadores de desempeño de este componente <span class="req">*</span> ${ayudaFicha('indicador')}</label>
-        ${indsHtml}
-        ${esAdmin()?`<button type="button" class="btn btn-accent btn-sm" style="align-self:flex-start;margin-top:4px" onclick="anadirIndComp('ed','${safe}')">+ Añadir indicador</button>`:''}
-        </div></div>
+      ${_bloqueIndComp('ed', i, safe, d, indsHtml, esAdmin())}
     </div>`;
   }).join('');
 }
@@ -5761,11 +5836,16 @@ async function guardarEdicion(){
     put(F.proveedores, join('prov')); put(F.entrada, join('entr'));
     put(F.producto, join('prod')); put(F.receptor, join('recep'));
   }
+  // Se escribe siempre, aunque quede vacío: así se borra si todos vuelven a «Sí»
+  if(NOAPLICA_ID[nivel]) campos[NOAPLICA_ID[nivel]] = _textoNoAplica(SIPOC_ED);
   const dueno=g('ed_dueno');
   // Dueño como TEXTO (robusto): incluirlo en los campos base (una llamada menos)
   if(dueno && F.dueno_txt){ const selD=document.getElementById('ed_dueno'); const nom=selD&&selD.selectedOptions[0]?selD.selectedOptions[0].text:''; if(nom) campos[F.dueno_txt.id]=nom; }
-  const sinInd=comps.filter(n=>{ const inds=(SIPOC_ED[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
-  if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', '), true); return; }
+  // Cada componente necesita al menos un indicador, o bien declararse «sin indicador» con su justificación
+  const sinInd=comps.filter(n=>{ if(SIPOC_ED[n].noAplica) return false; const inds=(SIPOC_ED[n].indicadores||[]).map(x=>(x||'').trim()).filter(Boolean); return !inds.length; });
+  if(comps.length && sinInd.length){ toast('Falta al menos un indicador en: '+sinInd.join(', ')+'. Si ese componente no requiere indicador, márcalo con «No» y justifícalo.', true); return; }
+  const sinMotivo=comps.filter(n=>SIPOC_ED[n].noAplica && !String(SIPOC_ED[n].motivoNoAplica||'').trim());
+  if(sinMotivo.length){ toast('Falta justificar por qué no aplica indicador en: '+sinMotivo.join(', '), true); return; }
   // ── Aviso antes de quitar indicadores que ya tienen metas registradas ──
   // Se simula el mismo reparto de registros que hace el guardado, para saber qué
   // indicadores originales van a desaparecer de la ficha. Editar el texto de un
