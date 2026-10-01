@@ -889,6 +889,10 @@
         <p style="margin:12px 0 0;color:var(--mist)">Haz los cambios desde este aplicativo y no directamente en QuintaDB: así el sistema puede avisarte en el momento.</p>
       </div>
     </details>
+    <div id="ac_boton_wrap" style="display:none;margin:0 0 16px;padding:12px 16px;background:#eef7f2;border:1px solid #a8d5bd;border-radius:12px;align-items:center;gap:14px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="abrirAsistenteCambios()">🔀 Asistente de cambios</button>
+      <span style="font-size:13px;color:var(--slate)">Para renombrar, mover, dividir, fusionar o retirar un proceso. Te guía paso a paso y te muestra a qué afecta <b>antes</b> de cambiar nada.</span>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-primary" id="btnNuevoProceso" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
       <button class="btn" id="btnExportInv" onclick="exportarInventarioExcel()" style="white-space:nowrap" title="Descarga el inventario tal como se ve (con los filtros aplicados)">⬇️ Exportar a Excel</button>
@@ -10423,6 +10427,573 @@ document.addEventListener('DOMContentLoaded',()=>{ setInterval(()=>{
   const w=document.getElementById('rep_boton_wrap'); if(!w) return;
   w.style.display = (typeof esAdmin==='function' && SESION && esAdmin()) ? 'block' : 'none';
 }, 1500); });
+
+/* =====================================================================
+   ASISTENTE DE CAMBIOS AL MAPA DE PROCESOS  (ISO 21001 · 6.3)
+   Conduce un cambio paso a paso. Cada paso se habilita solo cuando el
+   anterior está completo; nada se aplica sin haber visto antes el impacto.
+   ① Qué cambiar  ② Detalle  ③ Impacto  ④ Decisiones  ⑤ Aplicar  ⑥ Cerrar
+   Reglas de seguridad:
+   · Para mover, dividir o fusionar, el destino debe existir ANTES en el
+     Inventario (se comprueba). Así nunca se tocan los enlaces internos.
+   · Solo se escribe en campos de TEXTO de una lista cerrada; jamás en
+     relaciones ni listas desplegables.
+   · Antes de aplicar se descarga un respaldo y se abre la bitácora.
+===================================================================== */
+const AC_RIESGOS_ENT = 'cKsCkOEcvgW59zuCkyFCkN';
+const AC_BITACORA = { ent:'bKjSkAW5fdGkBdOSk3W4D_', codigo:'bqBs3dHmjkE6bpjcPFp8kH', fecha:'ctwZvRj3LcQyoGW4xcNCkv',
+  tipo:'dcKCkNWPHoW4ZcSmk8mc5v', proceso:'ddUJBdLNTcPioWc8oVoHjp', detalle:'ddIeddJ0XpWQLUq29NfCoT', motivo:'amWPThig9oW7ZcMWVcIWGJ',
+  impacto:'b7fKzZWPXcJQZdPmoICHiw', decisiones:'cwW4WqWR5bkOoxW7tcISoh', estado:'dcKmkEEmjkWQHZW79GFCo-',
+  responsable:'ddMSkOzSjpWOFdQt_dMCoY', resultado:'dcJH5OctDdQQBcPgWxWPTY', oficinas:'cFgNBdQmnpWQRdSSk3WOio' };
+// Únicos campos en los que el asistente escribe (todos de texto)
+const AC_CAMPOS = {
+  MATRIZ:['Indicador','Proceso (ruta)'], SUBIND:['Indicador'], RIESGO:['Proceso'],
+  FICHA:['Proceso','Proveedores/Cliente','Entrada/Insumo','Producto','Receptor final del producto','Indicadores de desempeño','Controles',
+         'Documentos internos ','Documentos externos','Recursos Humanos','Sistemas Informáticos','Registros','Instalaciones','Equipos','Indicador no aplica']
+};
+const AC_PASOS = ['Qué cambiar','Detalle','Impacto','Decisiones','Aplicar','Cerrar el cambio'];
+const AC_TIPOS = {
+  renombrar:{ t:'Renombrar', d:'El mismo proceso, con otro nombre. Conserva su código.' },
+  mover:    { t:'Mover',     d:'El mismo proceso pasa a otro lugar del mapa. Ej.: tutoría de M01.05.04 a M02.02.01.' },
+  dividir:  { t:'Dividir',   d:'El proceso se separa en dos o más procesos.' },
+  fusionar: { t:'Fusionar',  d:'El proceso se une a otro que ya existe.' },
+  retirar:  { t:'Retirar',   d:'El proceso deja de existir.' }
+};
+let AC = null;
+
+const _acEsc = t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const _acReCod = c => c.replace(/\./g,'\\.');
+const _acCodRe = cod => new RegExp('(^|[^0-9.])'+_acReCod(cod)+'(?![0-9])');
+const _acNorm = t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+function acCodigo(t){ const m=String(t||'').match(/^([A-Z]\d{2}(?:\.\d{2})+|[A-Z]\d{2})/); return m?m[1]:''; }
+function acVig(){ return _construirProcesosVigentes(); }
+function acEsDescendiente(c, padre){ return c.indexOf(padre+'.')===0; }
+
+/* ----- rutas: se reconstruyen desde el Inventario vigente ----- */
+function acTipoDeLetra(letra){
+  for(const r of (STATE.inventario||[])){
+    const v=r.values||{}; const n0=String(v['Proceso nivel 0']||'');
+    if(n0.charAt(0)===letra){ const t=String(v['Tipo de proceso']||'').trim(); if(t && t!=='Tipo de proceso' && !/^[a-zA-Z0-9_\-]{22}$/.test(t)) return t; }
+  }
+  return '';
+}
+function acRutaDe(cod){
+  const vig=acVig(), seg=cod.split('.'), partes=[];
+  for(let i=1;i<=seg.length;i++){ const c=seg.slice(0,i).join('.'); if(vig[c]) partes.push(vig[c]); }
+  const tipo=acTipoDeLetra(cod.charAt(0));
+  return (tipo?[tipo]:[]).concat(partes).join(' › ');
+}
+// Mover: la ruta pasa a colgar del destino; los subprocesos conservan su sufijo
+function acTransformarRuta(ruta, viejo, nuevo){
+  const segs=String(ruta).split(/\s*›\s*/);
+  const k=segs.findIndex(s=>acCodigo(s.trim())===viejo);
+  if(k<0) return acReemplazarCodigos(ruta, viejo, nuevo);
+  const vig=acVig();
+  const cola=segs.slice(k+1).map(s=>{ const c=acCodigo(s.trim()); if(c && acEsDescendiente(c,viejo)){ const nc=nuevo+c.slice(viejo.length); return vig[nc]||s.replace(c,nc); } return s; });
+  return [acRutaDe(nuevo)].concat(cola).join(' › ');
+}
+function acReemplazarCodigos(txt, viejo, nuevo){
+  return String(txt).replace(new RegExp('(^|[^0-9.])'+_acReCod(viejo)+'((?:\\.\\d{2})*)(?![0-9])','g'), (m,a,suf)=>a+nuevo+suf);
+}
+
+/* ===================== apertura y pintado ===================== */
+async function abrirAsistenteCambios(){
+  if(!esAdmin()){ toast('Solo el administrador puede usar el asistente de cambios.', true); return; }
+  if(AC && document.getElementById('ac_modal')){ acMostrar(); return; }
+  try{ STATE.inventario=[]; await loadInventario(); }catch(_){}
+  _PROC_VIGENTES=null;
+  const vig=acVig();
+  AC = { paso:0, hecho:-1, proceso:'', tipo:'', detalle:{}, motivo:'', impacto:null, revisado:false,
+         dec:{ fichas:'', ind:'', rie:'', indDestino:'', rieDestino:'', parteInd:{}, parteRie:{} },
+         aplicado:false, resultado:null, bitacoraId:null, codigoCambio:'', confirmacion:'',
+         invOk:false, avisoOk:false, sinAviso:false, procesos:Object.keys(vig).sort().map(c=>vig[c]) };
+  document.body.insertAdjacentHTML('beforeend', `
+  <div id="ac_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
+   <div style="background:var(--card);border-radius:14px;max-width:1000px;width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:16px 22px 0;display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <h2 style="margin:0;font-size:20px">🔀 Asistente de cambios al mapa de procesos</h2>
+      <span><button class="btn btn-sm" onclick="acMinimizar()" title="Ir al aplicativo; el asistente te espera">▁ Minimizar</button>
+      <button class="icon-btn" onclick="cerrarAsistenteCambios()">✕</button></span>
+    </div>
+    <div id="ac_barra" style="padding:12px 22px 10px;border-bottom:1px solid var(--line)"></div>
+    <div id="ac_cuerpo" style="flex:1;min-height:0;overflow:auto;padding:16px 22px"></div>
+    <div style="display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding:12px 22px">
+      <div id="ac_estado" class="hint" style="flex:1;font-size:13px"></div>
+      <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
+      <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
+    </div>
+   </div></div>
+  <button id="ac_flotante" onclick="acMostrar()" style="display:none;position:fixed;left:20px;bottom:20px;z-index:9998;background:var(--brand);color:#fff;border:none;border-radius:24px;padding:11px 18px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer">🔀 Volver al asistente de cambios</button>`);
+  acPintar();
+}
+window.abrirAsistenteCambios=abrirAsistenteCambios;
+function acMinimizar(){ document.getElementById('ac_modal').style.display='none'; document.getElementById('ac_flotante').style.display='block'; }
+function acMostrar(){ document.getElementById('ac_modal').style.display='flex'; document.getElementById('ac_flotante').style.display='none'; acPintar(); }
+window.acMinimizar=acMinimizar; window.acMostrar=acMostrar;
+
+function cerrarAsistenteCambios(){
+  if(AC && AC.aplicado && AC.paso<5+1 && !AC.finalizado){
+    if(!confirm('El cambio YA SE APLICÓ, pero falta cerrarlo (Inventario y aviso a las oficinas).\n\nSi cierras ahora, la bitácora quedará como «Aplicado, sin cerrar». ¿Cerrar de todos modos?')) return;
+  } else if(AC && AC.hecho>=0 && !AC.aplicado && !confirm('¿Cerrar el asistente? No se aplicó ningún cambio; lo que llenaste se perderá.')) return;
+  ['ac_modal','ac_flotante'].forEach(id=>{ const e=document.getElementById(id); if(e) e.remove(); }); AC=null;
+}
+window.cerrarAsistenteCambios=cerrarAsistenteCambios;
+
+function acPintar(){
+  if(!AC) return;
+  document.getElementById('ac_barra').innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">'+AC_PASOS.map((n,i)=>{
+    const act=i===AC.paso, ok=i<=AC.hecho;
+    const bg= act?'var(--brand)': ok?'#e3f3ea':'#f1f3f2', fg= act?'#fff': ok?'var(--brand)':'#9aa5a0';
+    return `<div style="flex:1;min-width:105px;background:${bg};color:${fg};border-radius:8px;padding:7px 8px;font-size:12.5px;font-weight:600;text-align:center">${ok&&!act?'✓':(i+1)+'.'} ${n}</div>`;
+  }).join('')+'</div>';
+  document.getElementById('ac_cuerpo').innerHTML = [acPaso1,acPaso2,acPaso3,acPaso4,acPaso5,acPaso6][AC.paso]();
+  const atras=document.getElementById('ac_atras');
+  atras.style.visibility = (AC.paso>0 && !AC.aplicado) ? 'visible':'hidden';
+  document.getElementById('ac_sig').textContent = AC.paso===5 ? 'Finalizar ✓' : 'Siguiente →';
+  acValidar();
+}
+
+/* ===================== ① Qué cambiar ===================== */
+function acPaso1(){
+  return `<p style="margin:0 0 12px;color:var(--slate)">Elige el proceso y el tipo de cambio. <b>Hasta el paso 4 no se modifica nada</b>: puedes explorar con tranquilidad.</p>
+  <label style="font-weight:600;display:block;margin-bottom:4px">Proceso</label>
+  <input placeholder="Escribe el código o parte del nombre…" oninput="acFiltrar(this.value)" value="${_acEsc(AC.proceso)}"
+    style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;margin-bottom:6px">
+  <div id="ac_lista" style="max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-bottom:16px">${acListaHTML(AC.proceso)}</div>
+  <label style="font-weight:600;display:block;margin-bottom:6px">Tipo de cambio</label>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">
+  ${Object.keys(AC_TIPOS).map(k=>`<label style="border:1px solid ${AC.tipo===k?'var(--brand)':'var(--line)'};background:${AC.tipo===k?'#eef7f2':'transparent'};border-radius:9px;padding:9px 11px;cursor:pointer;display:block">
+      <input type="radio" name="ac_tipo" value="${k}" ${AC.tipo===k?'checked':''} onchange="AC.tipo=this.value;AC.detalle={};acInvalidarDesde(1);acPintar()"> <b>${AC_TIPOS[k].t}</b>
+      <div class="hint" style="font-size:12px;margin-top:3px">${AC_TIPOS[k].d}</div></label>`).join('')}
+  </div>`;
+}
+function acListaHTML(q){
+  const n=_acNorm(q);
+  const hits=AC.procesos.filter(p=>!n || _acNorm(p).includes(n)).slice(0,80);
+  if(!hits.length) return '<div class="hint" style="padding:10px">Ningún proceso coincide.</div>';
+  return hits.map(p=>`<div onclick="acElegir(this.dataset.p)" data-p="${_acEsc(p)}" style="padding:7px 11px;cursor:pointer;font-size:13px;${p===AC.proceso?'background:#eef7f2;font-weight:700;color:var(--brand)':''}">${_acEsc(p)}</div>`).join('');
+}
+function acFiltrar(q){ document.getElementById('ac_lista').innerHTML=acListaHTML(q); }
+function acElegir(p){ if(AC.proceso!==p){ AC.proceso=p; acInvalidarDesde(1); } acPintar(); }
+window.acFiltrar=acFiltrar; window.acElegir=acElegir;
+
+/* ===================== ② Detalle ===================== */
+function acOpcionesProceso(sel, excluir){
+  const cod=acCodigo(AC.proceso);
+  return '<option value="">— Elige un proceso del Inventario —</option>'+AC.procesos.filter(p=>{ const c=acCodigo(p); return c!==cod && !acEsDescendiente(c,cod) && (!excluir||!excluir(c)); })
+    .map(p=>`<option ${sel===p?'selected':''} value="${_acEsc(p)}">${_acEsc(p)}</option>`).join('');
+}
+function acPaso2(){
+  const d=AC.detalle, nom=AC.proceso.replace(/^\S+\s*/,''), cod=acCodigo(AC.proceso);
+  const sel=(k,lbl,ayuda,excluir)=>`<label style="font-weight:600;display:block;margin:10px 0 4px">${lbl}</label>
+    <select onchange="acDetalle('${k}',this.value)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">${acOpcionesProceso(d[k],excluir)}</select>
+    <div class="hint" style="margin-top:4px">${ayuda}</div>`;
+  let h=`<div style="background:#f5f9f7;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:6px"><b>${AC_TIPOS[AC.tipo].t}:</b> ${_acEsc(AC.proceso)}</div>`;
+  if(AC.tipo==='renombrar') h+=`<label style="font-weight:600;display:block;margin:10px 0 4px">Nombre nuevo (sin el código)</label>
+    <input value="${_acEsc(d.nombre||'')}" placeholder="${_acEsc(nom)}" oninput="acDetalle('nombre',this.value)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">`;
+  if(AC.tipo==='mover') h+=sel('destino','Proceso de destino','<b>Debe existir ya en el Inventario</b>, con sus subprocesos. Si aún no lo creaste, minimiza el asistente, créalo en el Inventario y vuelve.',
+                                c=>c.split('.').length!==cod.split('.').length);
+  if(AC.tipo==='fusionar') h+=sel('destino','Proceso al que se une (el que permanece)','Sus indicadores y riesgos podrán reasignarse a este proceso en el paso 4.');
+  if(AC.tipo==='dividir') h+=`<label style="font-weight:600;display:block;margin:10px 0 4px">Procesos resultantes: sus códigos, uno por línea</label>
+    <textarea rows="4" oninput="acDetalle('partes',this.value)" placeholder="Ej.:\nM02.03.01\nM02.03.02" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">${_acEsc(d.partes||'')}</textarea>
+    <div class="hint" style="margin-top:4px"><b>Deben existir ya en el Inventario.</b> En el paso 4 decidirás a cuál pasa cada indicador y cada riesgo.</div>
+    <div id="ac_partes" style="margin-top:6px;font-size:13px">${acPartesHTML()}</div>`;
+  if(AC.tipo==='retirar') h+=`<p style="margin:10px 0 0">El proceso <b>dejará de existir</b>. En el paso 3 verás qué depende de él y en el paso 4 decidirás qué hacer con cada cosa.</p>`;
+  h+=`<label style="font-weight:600;display:block;margin:16px 0 4px">Motivo del cambio <span style="color:#c0392b">*</span></label>
+    <textarea rows="2" oninput="AC.motivo=this.value;acInvalidarDesde(2);acValidar()" placeholder="Ej.: reorganización del mapa aprobada en la revisión por la dirección de septiembre" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">${_acEsc(AC.motivo)}</textarea>
+    <div class="hint" style="margin-top:4px">Queda registrado en la bitácora como evidencia de la planificación del cambio (ISO 21001, cláusula 6.3).</div>
+    <div id="ac_conflicto" style="margin-top:10px"></div>`;
+  return h;
+}
+function acPartes(){ const vig=acVig(); return String(AC.detalle.partes||'').split('\n').map(x=>acCodigo(x.trim())).filter(Boolean).map(c=>({c, nombre:vig[c]||''})); }
+function acPartesHTML(){ return acPartes().map(p=>`<div>${p.nombre?'✓ '+_acEsc(p.nombre):'<span style="color:#c0392b">✕ '+_acEsc(p.c)+' no existe en el Inventario</span>'}</div>`).join(''); }
+function acDetalle(k,v){ AC.detalle[k]=v; acInvalidarDesde(2); const p=document.getElementById('ac_partes'); if(p) p.innerHTML=acPartesHTML(); acValidar(); }
+window.acDetalle=acDetalle;
+
+function acConflictos(){
+  const cod=acCodigo(AC.proceso), d=AC.detalle, vig=acVig(), err=[];
+  if(AC.tipo==='renombrar'){
+    if(!String(d.nombre||'').trim()) err.push('Escribe el nombre nuevo.');
+    else if(_acNorm(d.nombre)===_acNorm(AC.proceso.replace(/^\S+\s*/,''))) err.push('El nombre nuevo es igual al actual.');
+  }
+  if(AC.tipo==='mover'){
+    if(!d.destino) err.push('Elige el proceso de destino.');
+    else { // los subprocesos del origen deben tener su equivalente en el destino
+      const dc=acCodigo(d.destino);
+      const falta=Object.keys(vig).filter(c=>acEsDescendiente(c,cod)).map(c=>dc+c.slice(cod.length)).filter(nc=>!vig[nc]);
+      if(falta.length) err.push('Crea primero en el Inventario estos subprocesos del destino: '+falta.join(', ')+'.');
+    }
+  }
+  if(AC.tipo==='fusionar' && !d.destino) err.push('Elige el proceso al que se une.');
+  if(AC.tipo==='dividir'){
+    const ps=acPartes();
+    if(ps.length<2) err.push('Indica al menos dos procesos resultantes.');
+    const no=ps.filter(p=>!p.nombre).map(p=>p.c); if(no.length) err.push('Crea primero en el Inventario: '+no.join(', ')+'.');
+  }
+  if(!String(AC.motivo||'').trim()) err.push('Escribe el motivo del cambio.');
+  return err;
+}
+
+/* ===================== ③ Impacto (solo lectura) ===================== */
+function acPaso3(){
+  if(!AC.impacto){ setTimeout(acCalcularImpacto, 50); return '<p>⏳ Calculando el impacto en fichas, indicadores y riesgos… puede tardar unos segundos.</p>'; }
+  const I=AC.impacto, cod=acCodigo(AC.proceso);
+  const tarjeta=(n,et,sub,color)=>`<div style="flex:1;min-width:140px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;border-left:4px solid ${color}">
+      <div style="font-size:24px;font-weight:700">${n}</div><div style="font-weight:600;font-size:13px">${et}</div><div class="hint" style="font-size:12px">${sub||''}</div></div>`;
+  const lista=(tit,arr,fmt)=> arr.length? `<details style="margin-top:10px"><summary style="cursor:pointer;font-weight:600">${tit} (${arr.length})</summary>
+      <div style="max-height:220px;overflow:auto;font-size:12.5px;margin-top:6px">${arr.map(fmt).join('')}</div></details>`:'';
+  let nota='';
+  if(AC.tipo==='renombrar') nota='<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:10px 12px;margin-bottom:12px">✅ <b>Cambio de bajo riesgo.</b> Los nombres de proceso se muestran en vivo desde el Inventario: todo lo de abajo mostrará el nombre nuevo solo, sin perder nada.</div>';
+  else if(I.indConMetas) nota=`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:10px 12px;margin-bottom:12px">⚠️ <b>${I.indConMetas} indicador(es) tienen metas o seguimientos registrados.</b> En el paso 4 decidirás qué hacer con ellos; su historial nunca se borra.</div>`;
+  return `<p style="margin:0 0 12px;color:var(--slate)">Esto es lo que depende de <b>${_acEsc(AC.proceso)}</b> y de sus subprocesos (todo lo que empieza por <code>${cod}</code>). <b>Todavía no se ha cambiado nada.</b></p>
+    ${nota}
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      ${tarjeta(I.subprocesos,'Subprocesos','en el Inventario','#6b5b95')}
+      ${tarjeta(I.fichas.length,'Fichas registradas',I.fichasArch?I.fichasArch+' ya archivadas':'','#2e8b8b')}
+      ${tarjeta(I.indicadores.length,'Indicadores en la Matriz',I.indConMetas+' con metas o seguimiento','#e67e22')}
+      ${tarjeta(I.riesgos.length,'Riesgos y oportunidades',I.riesgosError?'no se pudieron leer':'','#c0392b')}
+      ${tarjeta(I.oficinas.length,'Oficinas afectadas','','#1a9ad6')}
+    </div>
+    ${lista('Oficinas afectadas', I.oficinas, o=>`<div style="padding:3px 0">· ${_acEsc(o)}</div>`)}
+    ${lista('Fichas registradas', I.fichas, f=>`<div style="padding:3px 0">· <b>${f.nivel}</b> · ${_acEsc(String(f.ruta).split('›').pop().trim())} <span class="hint">— ${_acEsc(f.dueno)}${f.archivada?' · archivada':''}</span></div>`)}
+    ${lista('Indicadores en la Matriz', I.indicadores, x=>`<div style="padding:3px 0">· ${_acEsc(x.texto)} <span class="hint">— ${_acEsc(x.oficina)}${x.conMetas?' · <b style="color:#b26a00">con metas</b>':''}</span></div>`)}
+    ${lista('Riesgos y oportunidades', I.riesgos, x=>`<div style="padding:3px 0">· <b>${_acEsc(x.codigo||'(sin código)')}</b> ${_acEsc(x.desc)}</div>`)}
+    <label style="display:flex;gap:8px;align-items:flex-start;margin-top:18px;padding:11px 13px;background:#f5f9f7;border:1px solid var(--line);border-radius:9px;cursor:pointer">
+      <input type="checkbox" ${AC.revisado?'checked':''} onchange="AC.revisado=this.checked;acValidar()" style="margin-top:3px">
+      <span><b>He revisado el impacto</b> y entiendo a qué afecta este cambio.</span></label>`;
+}
+async function acCalcularImpacto(){
+  const cod=acCodigo(AC.proceso), re=_acCodRe(cod);
+  const I={ subprocesos:0, fichas:[], fichasArch:0, indicadores:[], indConMetas:0, subind:[], riesgos:[], oficinas:[] };
+  const ofis=new Set();
+  try{
+    const vig=acVig();
+    I.subprocesos=Object.keys(vig).filter(c=>acEsDescendiente(c,cod)).length;
+    for(const n of ['N0','N1','N2','N3']){
+      const ent=CONFIG.ENTITIES['FICHA_'+n]; if(!ent) continue;
+      const d=await API.records(ent);
+      (d.records||[]).forEach(r=>{
+        const v=r.values||{}; const ruta=String(v['Proceso']||'');
+        if(!re.test(ruta)) return;
+        const due=String(v['Dueño del proceso']||v['Nombre Dueño del proceso']||'').trim();
+        const arch=String(v['Estado del registro']||'')==='Archivado';
+        I.fichas.push({nivel:n, ent, ruta, dueno:due, archivada:arch, id:r.id, v});
+        if(arch) I.fichasArch++; else if(due) ofis.add(due);
+      });
+      await new Promise(r=>setTimeout(r,250));
+    }
+    const ds=await API.records(CONFIG.ENTITIES.SUBIND_FICHA);
+    (ds.records||[]).forEach(r=>{ const v=r.values||{}; if(re.test(String(v['Indicador']||''))) I.subind.push({id:r.id, v, texto:String(v['Indicador']||'')}); });
+    STATE.matriz=[]; await loadMatriz(true);
+    (STATE.matriz||[]).forEach(m=>{
+      const t=String(leerCampo(m, MAT.indicador_txt.id,'Indicador')||''), ruta=String(leerCampo(m, MAT.proceso_ruta.id,'Proceso (ruta)')||'');
+      if(!re.test(t) && !re.test(ruta)) return;
+      const ofi=String(leerCampo(m, MAT.oficina_medicion.id,'Oficina o área responsable de la medición')||'').trim();
+      const conMetas=(m._progMetas||0)>0 || (m._periodos||0)>0;
+      I.indicadores.push({texto:t, oficina:ofi, conMetas, id:m.id, v:m.values||{}}); if(conMetas) I.indConMetas++; if(ofi) ofis.add(ofi);
+    });
+    try{
+      const dr=await API.records(AC_RIESGOS_ENT);
+      (dr.records||[]).forEach(r=>{
+        const v=r.values||{}; if(String(v['Estado del registro']||'')==='Archivado') return;
+        if(!re.test(String(v['Proceso']||''))) return;
+        I.riesgos.push({codigo:String(v['Código']||''), desc:String(v['Riesgo']||v['Oportunidad']||'').slice(0,110), id:r.id, v});
+      });
+    }catch(e){ I.riesgosError=true; }
+    I.oficinas=[...ofis].sort();
+    AC.impacto=I;
+  }catch(e){
+    document.getElementById('ac_cuerpo').innerHTML=`<p style="color:#c0392b">No se pudo calcular el impacto: ${_acEsc(e.message)}</p><button class="btn" onclick="AC.impacto=null;acPintar()">Reintentar</button>`;
+    return;
+  }
+  acPintar();
+}
+
+/* ===================== ④ Decisiones ===================== */
+function acRadio(grupo, valor, actual, texto, ayuda){
+  return `<label style="display:block;border:1px solid ${actual===valor?'var(--brand)':'var(--line)'};background:${actual===valor?'#eef7f2':'transparent'};border-radius:9px;padding:8px 11px;margin:5px 0;cursor:pointer">
+    <input type="radio" name="ac_${grupo}" ${actual===valor?'checked':''} onchange="AC.dec.${grupo}='${valor}';acPintar()"> ${texto}${ayuda?`<div class="hint" style="font-size:12px;margin:2px 0 0 22px">${ayuda}</div>`:''}</label>`;
+}
+function acPaso4(){
+  const I=AC.impacto, t=AC.tipo, D=AC.dec;
+  const bloque=(tit,n,cont)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:4px">${tit} <span class="hint">(${n})</span></div>${cont}</div>`;
+  if(t==='renombrar') return `<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ <b>No hay decisiones que tomar.</b> Las fichas, los indicadores y los riesgos muestran el nombre del proceso en vivo: verán el nombre nuevo en cuanto lo cambies en el Inventario, en el último paso.</div>`;
+  let h=`<p style="margin:0 0 12px;color:var(--slate)">Decide qué pasa con cada grupo afectado. La opción recomendada ya está marcada. <b>Ningún historial de metas se borra.</b></p>`;
+  if(I.fichas.length){
+    const ops = t==='mover'
+      ? acRadio('fichas','trasladar',D.fichas,'<b>Trasladar</b> las fichas al nuevo lugar (recomendado)','Se actualiza su ruta y los códigos de sus componentes. Siguen vigentes.')+acRadio('fichas','archivar',D.fichas,'Marcarlas <b>obsoletas</b>','Quedan archivadas; habrá que crear fichas nuevas.')
+      : acRadio('fichas','archivar',D.fichas,'Marcarlas <b>obsoletas</b> (recomendado)', t==='dividir'?'Cada proceso resultante necesitará su propia ficha nueva.':'Quedan archivadas, consultables como antecedente.')+acRadio('fichas','mantener',D.fichas,'Mantenerlas sin cambios','Quedarán marcadas en morado cuando retires el proceso del Inventario.');
+    h+=bloque('📄 Fichas registradas', I.fichas.length, ops);
+  }
+  const grupo=(clave,tit,arr,destKey,parteKey,etiq)=>{
+    if(!arr.length) return '';
+    if(t==='mover') return bloque(tit, arr.length, `<div style="padding:4px 0">✅ Se <b>trasladan</b> al nuevo lugar con todas sus metas y seguimientos.</div>`);
+    if(t==='dividir'){
+      const ps=acPartes();
+      return bloque(tit, arr.length, `<div class="hint" style="margin-bottom:6px">Elige a qué proceso resultante pasa cada uno. <b>Es obligatorio</b> decidir cada uno.</div>`+arr.map(x=>`
+        <div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);flex-wrap:wrap">
+          <div style="flex:1;min-width:240px;font-size:13px">${_acEsc(x[etiq]).slice(0,120)}</div>
+          <select onchange="AC.dec.${parteKey}['${x.id}']=this.value;acValidar()" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px">
+            <option value="">— Elige —</option>${ps.map(p=>`<option value="${_acEsc(p.c)}" ${D[parteKey][x.id]===p.c?'selected':''}>${_acEsc(p.nombre)}</option>`).join('')}
+            <option value="__mantener" ${D[parteKey][x.id]==='__mantener'?'selected':''}>Mantener sin cambios</option></select></div>`).join(''));
+    }
+    const reco = t==='fusionar';
+    let ops = acRadio(clave,'reasignar',D[clave], reco?'<b>Reasignar</b> al proceso que permanece (recomendado)':'<b>Reasignar</b> a otro proceso', 'Conservan sus metas y seguimientos; solo cambia el proceso al que pertenecen.')
+            + acRadio(clave,'mantener',D[clave], reco?'Dejar sin cambios':'<b>Dejar para revisar después</b> (recomendado)', 'Quedarán marcados en morado como «Proceso inexistente» cuando retires el proceso.');
+    if(t==='retirar' && D[clave]==='reasignar') ops+=`<div style="margin:6px 0 0 22px"><select onchange="AC.dec.${destKey}=this.value;acValidar()" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit">${acOpcionesProceso(D[destKey])}</select></div>`;
+    return bloque(tit, arr.length, ops);
+  };
+  h+=grupo('ind','📊 Indicadores de la Matriz', I.indicadores.concat([]), 'indDestino','parteInd','texto');
+  h+=grupo('rie','⚠️ Riesgos y oportunidades', I.riesgos.map(r=>Object.assign({etq:(r.codigo?r.codigo+' · ':'')+r.desc},r)), 'rieDestino','parteRie','etq');
+  if(!I.fichas.length && !I.indicadores.length && !I.riesgos.length) h+='<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ Nada depende de este proceso: no hay decisiones que tomar.</div>';
+  return h;
+}
+function acDecisionesDefecto(){
+  const t=AC.tipo, D=AC.dec;
+  if(!D.fichas) D.fichas = t==='mover'?'trasladar':'archivar';
+  if(!D.ind) D.ind = t==='fusionar'?'reasignar':'mantener';
+  if(!D.rie) D.rie = t==='fusionar'?'reasignar':'mantener';
+  if(t==='fusionar'){ D.indDestino=AC.detalle.destino; D.rieDestino=AC.detalle.destino; }
+}
+function acFaltanDecisiones(){
+  const I=AC.impacto, t=AC.tipo, D=AC.dec, f=[];
+  if(t==='dividir'){
+    const sinI=I.indicadores.filter(x=>!D.parteInd[x.id]).length, sinR=I.riesgos.filter(x=>!D.parteRie[x.id]).length;
+    if(sinI) f.push(sinI+' indicador(es) sin decidir'); if(sinR) f.push(sinR+' riesgo(s) sin decidir');
+  }
+  if(t==='retirar'){
+    if(I.indicadores.length && D.ind==='reasignar' && !D.indDestino) f.push('elige a qué proceso se reasignan los indicadores');
+    if(I.riesgos.length && D.rie==='reasignar' && !D.rieDestino) f.push('elige a qué proceso se reasignan los riesgos');
+  }
+  return f;
+}
+
+/* ===================== ⑤ Aplicar ===================== */
+function acPlan(){
+  // Traduce las decisiones a operaciones concretas sobre campos de texto
+  const I=AC.impacto, t=AC.tipo, D=AC.dec, cod=acCodigo(AC.proceso), vig=acVig(), ops=[];
+  const destMover = t==='mover' ? acCodigo(AC.detalle.destino) : '';
+  const reasignar=(texto, dest)=>{ const p=String(texto).split(' — '); const ind=p.length>1?p.slice(1).join(' — '):texto; return vig[dest]+' — '+ind; };
+  const campos=(v, lista, fn)=>{ const c={}; lista.forEach(k=>{ const x=v[k]; if(typeof x==='string' && x.trim() && x!==k){ const n=fn(k,x); if(n!==x) c[k]=n; } }); return c; };
+  if(t==='renombrar') return ops;
+  I.fichas.forEach(f=>{
+    if(f.archivada) return;
+    if(D.fichas==='archivar') ops.push({tabla:'Ficha '+f.nivel, ent:f.ent, id:f.id, v:f.v, campos:{'Estado del registro':'Archivado'}, que:'archivar'});
+    else if(D.fichas==='trasladar'){ const c=campos(f.v, AC_CAMPOS.FICHA, (k,x)=> k==='Proceso'? acTransformarRuta(x,cod,destMover) : acReemplazarCodigos(x,cod,destMover));
+      if(Object.keys(c).length) ops.push({tabla:'Ficha '+f.nivel, ent:f.ent, id:f.id, v:f.v, campos:c, que:'trasladar'}); }
+  });
+  const destDe=(clave,x,parteKey,destKey)=>{
+    if(t==='mover') return {mover:true};
+    if(t==='dividir'){ const p=D[parteKey][x.id]; return (!p||p==='__mantener')?null:{dest:p}; }
+    if(D[clave]!=='reasignar') return null;
+    const d=acCodigo(t==='fusionar'?AC.detalle.destino:D[destKey]); return d?{dest:d}:null;
+  };
+  I.indicadores.forEach(x=>{
+    const d=destDe('ind',x,'parteInd','indDestino'); if(!d) return;
+    const c = d.mover
+      ? campos(x.v, AC_CAMPOS.MATRIZ, (k,s)=> k==='Proceso (ruta)'? acTransformarRuta(s,cod,destMover) : acReemplazarCodigos(s,cod,destMover))
+      : { 'Indicador':reasignar(x.v['Indicador']||x.texto, d.dest), 'Proceso (ruta)':acRutaDe(d.dest) };
+    if(Object.keys(c).length) ops.push({tabla:'Matriz de indicadores', ent:CONFIG.ENTITIES.MATRIZ_IND, id:x.id, v:x.v, campos:c, que:d.mover?'trasladar':'reasignar'});
+    // su subindicador de ficha acompaña al indicador
+  });
+  I.subind.forEach(x=>{
+    let c=null;
+    if(t==='mover') c=campos(x.v, AC_CAMPOS.SUBIND, (k,s)=>acReemplazarCodigos(s,cod,destMover));
+    if(c && Object.keys(c).length) ops.push({tabla:'Indicadores de ficha', ent:CONFIG.ENTITIES.SUBIND_FICHA, id:x.id, v:x.v, campos:c, que:'trasladar'});
+  });
+  I.riesgos.forEach(x=>{
+    const d=destDe('rie',x,'parteRie','rieDestino'); if(!d) return;
+    const c = d.mover ? campos(x.v, AC_CAMPOS.RIESGO, (k,s)=>acTransformarRuta(s,cod,destMover)) : { 'Proceso':acRutaDe(d.dest) };
+    if(Object.keys(c).length) ops.push({tabla:'Riesgos', ent:AC_RIESGOS_ENT, id:x.id, v:x.v, campos:c, que:d.mover?'trasladar':'reasignar'});
+  });
+  return ops;
+}
+function acPaso5(){
+  const cod=acCodigo(AC.proceso);
+  if(AC.aplicado){
+    const R=AC.resultado||{ok:0,errores:[]};
+    return `<div style="background:${R.errores.length?'#fff6e5':'#e3f3ea'};border:1px solid ${R.errores.length?'#f0d9a8':'#a8d5bd'};border-radius:10px;padding:14px 16px">
+      <b style="font-size:16px">${R.errores.length?'⚠️ Cambio aplicado con observaciones':'✅ Cambio aplicado'}</b>
+      <div style="margin-top:6px">${R.ok} registro(s) actualizados${R.errores.length?' · <b>'+R.errores.length+' no se pudieron actualizar</b>':''}. Bitácora: <b>${_acEsc(AC.codigoCambio)}</b>. Se descargó el respaldo.</div>
+      ${R.errores.length?`<div style="max-height:150px;overflow:auto;font-size:12.5px;margin-top:8px">${R.errores.map(e=>'· '+_acEsc(e)).join('<br>')}</div>
+        <label style="display:flex;gap:8px;margin-top:10px;cursor:pointer"><input type="checkbox" ${AC.aceptoErrores?'checked':''} onchange="AC.aceptoErrores=this.checked;acValidar()"> Lo revisaré después; continuar para cerrar el cambio.</label>`:''}
+      </div><p class="hint" style="margin-top:10px">Ya no se puede volver atrás. Falta el último paso: el Inventario y el aviso a las oficinas.</p>`;
+  }
+  const ops=acPlan(), por={};
+  ops.forEach(o=>{ const k=o.tabla+' · '+o.que; por[k]=(por[k]||0)+1; });
+  return `<p style="margin:0 0 10px;color:var(--slate)">Resumen de lo que se va a hacer. <b>Este es el único paso que modifica la base.</b></p>
+    <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:14px">
+      <div><b>Cambio:</b> ${AC_TIPOS[AC.tipo].t} · ${_acEsc(AC.proceso)}${AC.detalle.destino?' → '+_acEsc(AC.detalle.destino):''}${AC.tipo==='renombrar'?' → '+_acEsc(cod+' '+AC.detalle.nombre):''}</div>
+      <div><b>Motivo:</b> ${_acEsc(AC.motivo)}</div>
+      <div style="margin-top:8px"><b>Operaciones:</b> ${ops.length?Object.keys(por).map(k=>`<div>· ${_acEsc(k)}: <b>${por[k]}</b></div>`).join(''):'ninguna sobre fichas, indicadores ni riesgos.'}</div>
+    </div>
+    <div style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13.5px">
+      Al aplicar: <b>1)</b> se descarga un respaldo de todo lo que se modificará, <b>2)</b> se abre la bitácora del cambio, <b>3)</b> se actualizan los registros uno a uno.
+      <label style="font-weight:600;display:block;margin:12px 0 4px">Para confirmar, escribe el código del proceso: <code>${cod}</code></label>
+      <input value="${_acEsc(AC.confirmacion)}" oninput="AC.confirmacion=this.value.trim();acValidar()" style="width:200px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit">
+      <button class="btn btn-primary" id="ac_aplicar" onclick="acAplicar()" style="margin-left:10px" disabled>Aplicar el cambio</button>
+      <div id="ac_progreso" style="margin-top:10px"></div>
+    </div>`;
+}
+function acDescargarRespaldo(ops){
+  const datos={ cambio:AC.codigoCambio, fecha:new Date().toISOString(), proceso:AC.proceso, tipo:AC.tipo, detalle:AC.detalle,
+    registros: ops.map(o=>({ tabla:o.tabla, entidad:o.ent, id:o.id, antes:Object.fromEntries(Object.keys(o.campos).map(k=>[k,o.v[k]])), despues:o.campos })) };
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(datos,null,2)],{type:'application/json'}));
+  a.download='respaldo-'+AC.codigoCambio+'.json'; document.body.appendChild(a); a.click(); a.remove();
+}
+function acResumenTexto(){
+  const I=AC.impacto;
+  return `Subprocesos: ${I.subprocesos} · Fichas: ${I.fichas.length} · Indicadores: ${I.indicadores.length} (${I.indConMetas} con metas) · Riesgos: ${I.riesgos.length}\nOficinas: ${I.oficinas.join('; ')}`;
+}
+async function acAplicar(){
+  const btn=document.getElementById('ac_aplicar'), prog=document.getElementById('ac_progreso');
+  if(btn.disabled || AC.aplicando) return;
+  AC.aplicando=true; btn.disabled=true;
+  const ops=acPlan(), d=new Date(), p2=n=>String(n).padStart(2,'0');
+  AC.codigoCambio='CC-'+d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'-'+p2(d.getHours())+p2(d.getMinutes());
+  try{
+    acDescargarRespaldo(ops);
+    prog.innerHTML='⏳ Abriendo la bitácora…';
+    const B=AC_BITACORA, c={};
+    c[B.codigo]=AC.codigoCambio; c[B.fecha]=d.toISOString().slice(0,10); c[B.tipo]=AC_TIPOS[AC.tipo].t;
+    c[B.proceso]=AC.proceso; c[B.motivo]=AC.motivo; c[B.impacto]=acResumenTexto(); c[B.estado]='En aplicación';
+    c[B.responsable]=(SESION&&(SESION.nombre||SESION.usuario))||'';
+    c[B.detalle]= AC.tipo==='renombrar' ? 'Nuevo nombre: '+acCodigo(AC.proceso)+' '+AC.detalle.nombre : (AC.detalle.destino?'Destino: '+AC.detalle.destino:'') + (AC.detalle.partes?'Partes: '+acPartes().map(x=>x.nombre).join('; '):'');
+    c[B.decisiones]=`Fichas: ${AC.dec.fichas||'-'} · Indicadores: ${AC.dec.ind||'-'} · Riesgos: ${AC.dec.rie||'-'}`;
+    const rb=await API.saveForm(null, c, B.ent);
+    AC.bitacoraId = (rb && (rb.id || (rb.record&&rb.record.id))) || null;
+  }catch(e){ prog.innerHTML='<span style="color:#c0392b">No se pudo abrir la bitácora: '+_acEsc(e.message)+'. No se aplicó nada.</span>'; AC.aplicando=false; btn.disabled=false; return; }
+  let ok=0; const errores=[];
+  for(let i=0;i<ops.length;i++){
+    const o=ops[i];
+    prog.innerHTML=`⏳ Aplicando ${i+1} de ${ops.length}… no cierres esta ventana.`;
+    try{
+      const mapa=_mapaCamposDeRegistro(o.v), campos={};
+      for(const k in o.campos){ const fid=mapa[k]; if(!fid) throw new Error('columna «'+k+'» no identificada'); campos[fid]=o.campos[k]; }
+      await API.saveForm(o.id, campos, o.ent); ok++;
+    }catch(e){ errores.push(o.tabla+' · '+o.id+': '+e.message); }
+    await new Promise(r=>setTimeout(r, (i+1)%20===0?3000:400));
+  }
+  AC.resultado={ok, errores}; AC.aplicado=true; AC.aplicando=false; AC.hecho=Math.max(AC.hecho,4);
+  try{ const B=AC_BITACORA, c={}; c[B.estado]= errores.length?'Aplicado con errores':'Aplicado';
+    c[B.resultado]=ok+' registro(s) actualizados.'+(errores.length?'\nErrores:\n'+errores.join('\n'):'');
+    if(AC.bitacoraId) await API.saveForm(AC.bitacoraId, c, B.ent); }catch(_){}
+  STATE.matriz=[]; _PROC_VIGENTES=null;
+  acPintar();
+}
+window.acAplicar=acAplicar;
+
+/* ===================== ⑥ Cerrar el cambio ===================== */
+function acTareaInventario(){
+  const cod=acCodigo(AC.proceso);
+  if(AC.tipo==='renombrar') return { titulo:'Renombra el proceso en el Inventario', texto:`Cambia el nombre de <b>${_acEsc(AC.proceso)}</b> a <b>${_acEsc(cod+' '+AC.detalle.nombre)}</b> con el ✏️ del Inventario.` };
+  return { titulo:'Retira del Inventario el proceso antiguo', texto:`Elimina del Inventario <b>${_acEsc(AC.proceso)}</b> y sus subprocesos (todo lo que empieza por <code>${cod}</code>), con la papelera 🗑️. Hazlo de abajo hacia arriba.`
+    + (AC.tipo==='retirar' && AC.dec.ind==='mantener' && AC.impacto.indicadores.length ? '<br><span class="hint">Los indicadores que dejaste para revisar quedarán marcados en morado. Es lo esperado.</span>':'') };
+}
+async function acVerificarInventario(){
+  const el=document.getElementById('ac_inv_estado'); el.innerHTML='⏳ Comprobando el Inventario…';
+  try{ STATE.inventario=[]; await loadInventario(); }catch(_){}
+  _PROC_VIGENTES=null; const vig=acVig(), cod=acCodigo(AC.proceso);
+  if(AC.tipo==='renombrar') AC.invOk = !!vig[cod] && _acNorm(vig[cod])===_acNorm(cod+' '+AC.detalle.nombre);
+  else AC.invOk = !vig[cod] && !Object.keys(vig).some(c=>acEsDescendiente(c,cod));
+  acPintar();
+  if(!AC.invOk) toast(AC.tipo==='renombrar'?'Todavía no aparece el nombre nuevo en el Inventario.':'El proceso antiguo todavía figura en el Inventario.', true);
+}
+window.acVerificarInventario=acVerificarInventario;
+function acIrInventario(){ acMinimizar(); try{ const b=document.getElementById('navInventario'); if(b) b.click(); }catch(_){} toast('Haz el cambio en el Inventario y vuelve con el botón «Volver al asistente».'); }
+window.acIrInventario=acIrInventario;
+
+function acAvisos(){
+  const I=AC.impacto, por={};
+  I.oficinas.forEach(o=>por[o]={fichas:0,indicadores:0});
+  I.fichas.forEach(f=>{ if(por[f.dueno]) por[f.dueno].fichas++; });
+  I.indicadores.forEach(x=>{ if(por[x.oficina]) por[x.oficina].indicadores++; });
+  return Object.keys(por).map(o=>({oficina:o, fichas:por[o].fichas, indicadores:por[o].indicadores}));
+}
+async function acEnviarAvisos(modo){
+  if(typeof REPORTE_URL==='undefined' || !REPORTE_URL){ toast('El servicio de correos no está configurado.', true); return; }
+  const sel=[...document.querySelectorAll('.ac_av')].filter(c=>c.checked).map(c=>c.value);
+  if(!sel.length){ toast('Marca al menos una oficina.', true); return; }
+  if(modo==='real' && !confirm('Se enviará el aviso a los responsables de '+sel.length+' oficina(s). ¿Continuar?')) return;
+  const est=document.getElementById('ac_av_estado'); est.innerHTML='⏳ Enviando…';
+  const vig=acVig(), cod=acCodigo(AC.proceso);
+  const despues = AC.tipo==='renombrar'? cod+' '+AC.detalle.nombre : AC.tipo==='dividir'? acPartes().map(p=>p.nombre).join('; ') : AC.tipo==='retirar'? '' : (AC.detalle.destino||'');
+  const filas=acAvisos().filter(a=>sel.includes(a.oficina));
+  try{
+    const r=await fetch(REPORTE_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({ clave:REPORTE_CLAVE, app:'cambios', modo, envios: filas.map(a=>({ oficina:a.oficina,
+        cambio:{ codigo:AC.codigoCambio, tipo:AC.tipo, antes:AC.proceso, despues, motivo:AC.motivo, fichas:a.fichas, indicadores:a.indicadores,
+                 decFichas:AC.dec.fichas, decInd:AC.dec.ind } })) })});
+    const d=await r.json();
+    if(!d.ok){ est.innerHTML='<span style="color:#c0392b">✕ '+_acEsc(d.error||'error')+'</span>'; return; }
+    const ok=(d.resultados||[]).filter(x=>x.ok), mal=(d.resultados||[]).filter(x=>!x.ok);
+    est.innerHTML = (modo==='prueba'?`✅ <b>${ok.length} prueba(s)</b> enviadas a tu correo.`:`✅ <b>${ok.length} aviso(s)</b> enviados.`)
+      + (mal.length?`<br><span style="color:#c0392b">⚠️ ${mal.length} sin enviar: ${mal.map(x=>_acEsc(x.oficina+' ('+x.motivo+')')).join('; ')}</span>`:'');
+    if(modo==='real' && ok.length){ AC.avisoOk=true; AC.oficinasAvisadas=ok.map(x=>x.oficina); acValidar(); }
+  }catch(e){ est.innerHTML='<span style="color:#c0392b">✕ No se pudo contactar con el servicio de correos.</span>'; }
+}
+window.acEnviarAvisos=acEnviarAvisos;
+function acPaso6(){
+  const T=acTareaInventario(), av=acAvisos();
+  return `<p style="margin:0 0 12px;color:var(--slate)">Dos tareas para cerrar el cambio. <b>«Finalizar» se habilita cuando ambas estén hechas.</b></p>
+   <div style="border:1px solid ${AC.invOk?'#a8d5bd':'var(--line)'};background:${AC.invOk?'#f2faf5':'transparent'};border-radius:10px;padding:12px 14px;margin-bottom:12px">
+     <div style="font-weight:700">${AC.invOk?'✅':'1.'} ${T.titulo}</div>
+     <div style="margin:6px 0 10px;font-size:13.5px">${T.texto}</div>
+     ${AC.invOk?'<div style="color:var(--brand);font-weight:600">Comprobado en el Inventario.</div>':`<button class="btn btn-sm" onclick="acIrInventario()">Ir al Inventario</button>
+     <button class="btn btn-sm btn-primary" onclick="acVerificarInventario()">Ya lo hice: comprobar</button> <span id="ac_inv_estado" class="hint"></span>`}
+   </div>
+   <div style="border:1px solid ${AC.avisoOk||AC.sinAviso?'#a8d5bd':'var(--line)'};background:${AC.avisoOk||AC.sinAviso?'#f2faf5':'transparent'};border-radius:10px;padding:12px 14px">
+     <div style="font-weight:700">${AC.avisoOk||AC.sinAviso?'✅':'2.'} Avisar a las oficinas afectadas</div>
+     ${av.length?`<div class="hint" style="margin:4px 0 8px">Cada responsable recibe qué cambió y qué debe hacer. Envía primero una prueba a tu correo.</div>
+     ${av.map(a=>`<label style="display:block;font-size:13.5px;padding:3px 0"><input type="checkbox" class="ac_av" value="${_acEsc(a.oficina)}" checked> ${_acEsc(a.oficina)} <span class="hint">· ${a.fichas} ficha(s), ${a.indicadores} indicador(es)</span></label>`).join('')}
+     <div style="margin-top:8px"><button class="btn btn-sm" onclick="acEnviarAvisos('prueba')">Enviarme una prueba</button>
+       <button class="btn btn-sm btn-primary" onclick="acEnviarAvisos('real')">Enviar los avisos</button></div>`
+     :'<div class="hint" style="margin:4px 0 8px">Ninguna oficina está afectada.</div>'}
+     <div id="ac_av_estado" style="margin-top:8px;font-size:13px"></div>
+     <label style="display:flex;gap:8px;margin-top:10px;cursor:pointer;font-size:13px"><input type="checkbox" ${AC.sinAviso?'checked':''} onchange="AC.sinAviso=this.checked;acPintar()"> Este cambio no requiere aviso a las oficinas.</label>
+   </div>`;
+}
+async function acFinalizar(){
+  try{ const B=AC_BITACORA, c={}; c[B.estado]='Completado';
+    c[B.oficinas]= AC.sinAviso?'Sin aviso (decisión del administrador)':(AC.oficinasAvisadas||[]).join('\n');
+    if(AC.bitacoraId) await API.saveForm(AC.bitacoraId, c, B.ent); }catch(_){}
+  AC.finalizado=true;
+  toast('✅ Cambio '+AC.codigoCambio+' completado y registrado en la bitácora.');
+  ['ac_modal','ac_flotante'].forEach(id=>{ const e=document.getElementById(id); if(e) e.remove(); }); AC=null;
+  try{ if(typeof renderInventario==='function') renderInventario(); }catch(_){}
+}
+
+/* ===================== navegación y validación ===================== */
+function acInvalidarDesde(paso){ if(AC.aplicado) return; if(AC.hecho>=paso-1) AC.hecho=paso-1; if(paso<=2){ AC.impacto=null; AC.revisado=false; AC.dec={ fichas:'', ind:'', rie:'', indDestino:'', rieDestino:'', parteInd:{}, parteRie:{} }; } }
+function acValidar(){
+  const sig=document.getElementById('ac_sig'), est=document.getElementById('ac_estado'); if(!sig||!AC) return;
+  let ok=false, msg='';
+  if(AC.paso===0){ ok=!!(AC.proceso && AC.tipo); msg= ok?'Listo para continuar.':'Elige un proceso y un tipo de cambio.'; }
+  if(AC.paso===1){ const err=acConflictos(); ok=!err.length; msg= ok?'Detalle completo y sin conflictos.':err[0];
+    const c=document.getElementById('ac_conflicto');
+    if(c) c.innerHTML = err.filter(e=>/Crea primero|igual/.test(e)).map(e=>`<div style="color:#c0392b;font-size:13px">⚠️ ${_acEsc(e)}</div>`).join(''); }
+  if(AC.paso===2){ ok=!!(AC.impacto && AC.revisado); msg= !AC.impacto?'Calculando el impacto…': AC.revisado?'Impacto revisado.':'Revisa el impacto y marca la casilla para continuar.'; }
+  if(AC.paso===3){ const f=acFaltanDecisiones(); ok=!f.length; msg= ok?'Decisiones completas.':'Falta: '+f.join('; ')+'.'; }
+  if(AC.paso===4){
+    const b=document.getElementById('ac_aplicar');
+    if(b) b.disabled = AC.confirmacion!==acCodigo(AC.proceso) || !!AC.aplicando;
+    ok = AC.aplicado && (!AC.resultado.errores.length || AC.aceptoErrores);
+    msg = AC.aplicado ? (ok?'Cambio aplicado. Continúa para cerrarlo.':'Revisa las observaciones para continuar.') : 'Escribe el código para confirmar y pulsa «Aplicar el cambio».';
+  }
+  if(AC.paso===5){ ok = AC.invOk && (AC.avisoOk || AC.sinAviso); msg = ok?'Todo listo: pulsa Finalizar.': !AC.invOk?'Falta completar y comprobar la tarea en el Inventario.':'Falta enviar el aviso a las oficinas.'; }
+  sig.disabled=!ok; est.textContent=msg;
+}
+function acSiguiente(){
+  if(document.getElementById('ac_sig').disabled) return;
+  if(AC.paso===5){ acFinalizar(); return; }
+  AC.hecho=Math.max(AC.hecho,AC.paso); AC.paso++;
+  if(AC.paso===3) acDecisionesDefecto();
+  acPintar();
+}
+function acAtras(){ if(AC.paso>0 && !AC.aplicado){ AC.paso--; acPintar(); } }
+window.acSiguiente=acSiguiente; window.acAtras=acAtras;
+
+document.addEventListener('DOMContentLoaded',()=>{ setInterval(()=>{ const w=document.getElementById('ac_boton_wrap'); if(w) w.style.display=(typeof esAdmin==='function' && SESION && esAdmin())?'flex':'none'; },1500); });
 
 async function asisEnviar(){
   if(ASIS_OCUPADO) return;
