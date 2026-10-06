@@ -894,7 +894,7 @@
       <span style="font-size:13px;color:var(--slate)">Para renombrar, mover, dividir, fusionar o retirar un proceso. Te guía paso a paso y te muestra a qué afecta <b>antes</b> de cambiar nada.</span>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-primary" id="btnNuevoProceso" onclick="abrirNuevoProceso()" style="white-space:nowrap">+ Nuevo proceso</button>
+      <button class="btn btn-primary" id="btnNuevoProceso" onclick="abrirAsistenteCambios('crear')" style="white-space:nowrap">+ Nuevo proceso</button>
       <button class="btn" id="btnExportInv" onclick="exportarInventarioExcel()" style="white-space:nowrap" title="Descarga el inventario tal como se ve (con los filtros aplicados)">⬇️ Exportar a Excel</button>
       <div class="conn" style="margin-bottom:0;flex:1;min-width:200px">
         <input id="invBuscar" placeholder="Buscar por proceso, actividad o ruta…" style="border:0;background:transparent;flex:1;padding:0" oninput="renderInventario()">
@@ -10379,6 +10379,7 @@ async function abrirReporteAvance(){
     </div>
    </div></div>`;
   document.body.insertAdjacentHTML('beforeend', html);
+  if(typeof _ajustarModalZoom==='function') _ajustarModalZoom('rep_modal');
 }
 window.abrirReporteAvance=abrirReporteAvance;
 
@@ -10457,16 +10458,66 @@ const AC_TIPOS = {
   mover:    { t:'Mover',     d:'El mismo proceso pasa a otro lugar del mapa. Ej.: tutoría de M01.05.04 a M02.02.01.' },
   dividir:  { t:'Dividir',   d:'El proceso se separa en dos o más procesos.' },
   fusionar: { t:'Fusionar',  d:'El proceso se une a otro que ya existe.' },
-  retirar:  { t:'Retirar',   d:'El proceso deja de existir.' }
+  retirar:  { t:'Retirar',   d:'El proceso deja de existir.' },
+  crear:    { t:'Crear',     d:'Un proceso nuevo en el mapa. Ej.: M02.01.01 Coordinación del servicio bibliotecario.' }
 };
 let AC = null;
+
+/* El body del aplicativo tiene zoom:1.22. Una ventana fija calculada con «vh» o con
+   inset:0 queda un 22 % más grande que la pantalla y se corta arriba y abajo. Aquí se
+   dimensiona dividiendo por el zoom real, para que siempre quepa completa. */
+function _ajustarModalZoom(id){
+  const ov=document.getElementById(id); if(!ov) return;
+  const z=parseFloat(getComputedStyle(document.body).zoom)||1;
+  Object.assign(ov.style,{ inset:'auto', left:'0', top:'0', width:(window.innerWidth/z)+'px', height:(window.innerHeight/z)+'px' });
+  const box=ov.firstElementChild; if(box) box.style.maxHeight=Math.max(300, window.innerHeight/z-32)+'px';
+}
+window._ajustarModalZoom=_ajustarModalZoom;
+window.addEventListener('resize',()=>['ac_modal','rep_modal'].forEach(_ajustarModalZoom));
 
 const _acEsc = t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 const _acReCod = c => c.replace(/\./g,'\\.');
 const _acCodRe = cod => new RegExp('(^|[^0-9.])'+_acReCod(cod)+'(?![0-9])');
 const _acNorm = t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
 function acCodigo(t){ const m=String(t||'').match(/^([A-Z]\d{2}(?:\.\d{2})+|[A-Z]\d{2})/); return m?m[1]:''; }
-function acVig(){ return _construirProcesosVigentes(); }
+function acVig(){ const v=_construirProcesosVigentes(); return (AC && AC.nuevos) ? Object.assign({}, v, AC.nuevos) : v; }
+const AC_NIVEL_POR_PROFUNDIDAD = { 1:'n0', 2:'n1', 3:'n2', 4:'n3', 5:'proc' };
+const AC_NOMBRE_NIVEL = { 1:'nivel 0', 2:'nivel 1', 3:'nivel 2', 4:'nivel 3', 5:'procedimiento' };
+// Procesos que el asistente creará en el Inventario para un «mover» a un lugar nuevo:
+// los padres que falten, el destino y la copia de cada subproceso con su mismo nombre.
+function acListaACrear(){
+  if(AC.tipo==='crear'){
+    const c=String(AC.detalle.codigoNuevo||'').trim().toUpperCase(), real=_construirProcesosVigentes();
+    if(!/^[A-Z]\d{2}(\.\d{2}){0,4}$/.test(c) || real[c]) return [];
+    const out=[], seg=c.split('.');
+    for(let i=1;i<seg.length;i++){ const a=seg.slice(0,i).join('.'); if(!real[a]) out.push({cod:a, nombre:String((AC.detalle.anc||{})[a]||'').trim(), padre:true}); }
+    out.push({cod:c, nombre:String(AC.detalle.nombreNuevo||'').trim()});
+    return out.map(x=>Object.assign(x,{ key:AC_NIVEL_POR_PROFUNDIDAD[x.cod.split('.').length] }));
+  }
+  if(AC.tipo!=='mover') return [];
+  const viejo=acCodigo(AC.proceso), real0=_construirProcesosVigentes();
+  if((AC.detalle.modo||'nuevo')==='existente'){
+    // Destino que ya existe: se crean solo los subprocesos espejo que le falten
+    const dc=acCodigo(AC.detalle.destino||''); if(!dc) return [];
+    return Object.keys(real0).filter(c=>acEsDescendiente(c,viejo)).sort((a,b)=>a.split('.').length-b.split('.').length||a.localeCompare(b))
+      .map(c=>({cod:dc+c.slice(viejo.length), nombre:real0[c].replace(/^\S+\s*/,'')})).filter(x=>!real0[x.cod])
+      .map(x=>Object.assign(x,{ key:AC_NIVEL_POR_PROFUNDIDAD[x.cod.split('.').length] }));
+  }
+  const nuevo=String(AC.detalle.codigoNuevo||'').trim().toUpperCase();
+  if(!/^[A-Z]\d{2}(\.\d{2})+$/.test(nuevo)) return [];
+  const real=_construirProcesosVigentes(), out=[], seg=nuevo.split('.');
+  for(let i=1;i<seg.length;i++){ const c=seg.slice(0,i).join('.'); if(!real[c]) out.push({cod:c, nombre:String((AC.detalle.anc||{})[c]||'').trim(), padre:true}); }
+  out.push({cod:nuevo, nombre:String(AC.detalle.nombreNuevo||AC.proceso.replace(/^\S+\s*/,'')).trim()});
+  Object.keys(real).filter(c=>acEsDescendiente(c,viejo)).sort((a,b)=>a.split('.').length-b.split('.').length||a.localeCompare(b))
+    .forEach(c=>out.push({cod:nuevo+c.slice(viejo.length), nombre:real[c].replace(/^\S+\s*/,'')}));
+  return out.map(x=>Object.assign(x,{ key:AC_NIVEL_POR_PROFUNDIDAD[x.cod.split('.').length] }));
+}
+function acActualizarNuevos(){
+  const l=acListaACrear(); AC.nuevos={};
+  l.forEach(x=>{ if(x.nombre) AC.nuevos[x.cod]=x.cod+' '+x.nombre; });
+  if(AC.tipo==='crear'){ const c=String(AC.detalle.codigoNuevo||'').trim().toUpperCase(); AC.proceso = AC.nuevos[c] || ''; }
+  if(AC.tipo==='mover' && (AC.detalle.modo||'nuevo')==='nuevo'){ const c=String(AC.detalle.codigoNuevo||'').trim().toUpperCase(); AC.detalle.destino = AC.nuevos[c] || ''; }
+}
 function acEsDescendiente(c, padre){ return c.indexOf(padre+'.')===0; }
 
 /* ----- rutas: se reconstruyen desde el Inventario vigente ----- */
@@ -10497,7 +10548,7 @@ function acReemplazarCodigos(txt, viejo, nuevo){
 }
 
 /* ===================== apertura y pintado ===================== */
-async function abrirAsistenteCambios(){
+async function abrirAsistenteCambios(tipoIni, procesoIni){
   if(!esAdmin()){ toast('Solo el administrador puede usar el asistente de cambios.', true); return; }
   if(AC && document.getElementById('ac_modal')){ acMostrar(); return; }
   try{ STATE.inventario=[]; await loadInventario(); }catch(_){}
@@ -10524,11 +10575,14 @@ async function abrirAsistenteCambios(){
     </div>
    </div></div>
   <button id="ac_flotante" onclick="acMostrar()" style="display:none;position:fixed;left:20px;bottom:20px;z-index:9998;background:var(--brand);color:#fff;border:none;border-radius:24px;padding:11px 18px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.2);cursor:pointer">🔀 Volver al asistente de cambios</button>`);
+  if(tipoIni && AC_TIPOS[tipoIni]) AC.tipo=tipoIni;
+  if(procesoIni && AC.tipo!=='crear') AC.proceso=procesoIni;
+  _ajustarModalZoom('ac_modal');
   acPintar();
 }
 window.abrirAsistenteCambios=abrirAsistenteCambios;
 function acMinimizar(){ document.getElementById('ac_modal').style.display='none'; document.getElementById('ac_flotante').style.display='block'; }
-function acMostrar(){ document.getElementById('ac_modal').style.display='flex'; document.getElementById('ac_flotante').style.display='none'; acPintar(); }
+function acMostrar(){ document.getElementById('ac_modal').style.display='flex'; _ajustarModalZoom('ac_modal'); document.getElementById('ac_flotante').style.display='none'; acPintar(); }
 window.acMinimizar=acMinimizar; window.acMostrar=acMostrar;
 
 function cerrarAsistenteCambios(){
@@ -10539,6 +10593,67 @@ function cerrarAsistenteCambios(){
 }
 window.cerrarAsistenteCambios=cerrarAsistenteCambios;
 
+
+/* ===================== GUÍA DE CADA PASO =====================
+   Un recuadro al inicio de cada paso: para qué sirve, qué hacer, un ejemplo y,
+   si hay dudas, un acceso directo al asistente de IA ya con el contexto del paso. */
+const AC_GUIA = [
+ { que:'Elige <b>qué proceso</b> quieres cambiar y <b>qué tipo de cambio</b> es.',
+   pasos:['Escribe el código del proceso (por ejemplo <code>M01.05.04</code>) o parte de su nombre, y <b>haz clic</b> en él en la lista.',
+          'Elige el tipo de cambio. Si dudas: ¿sigue siendo el mismo proceso? → <b>Renombrar</b> o <b>Mover</b>. ¿Se parte en varios? → <b>Dividir</b>. ¿Se une a otro? → <b>Fusionar</b>. ¿Desaparece? → <b>Retirar</b>.'],
+   ejemplo:'Patricia quiere que Tutoría pase a Gestión del bienestar universitario: proceso <code>M01.05.04</code>, tipo <b>Mover</b>. Para un proceso que todavía no existe, elige <b>Crear</b>.' },
+ { que:'Completa los <b>datos del cambio</b> y escribe el <b>motivo</b>.',
+   pasos:['Llena lo que pide según el tipo de cambio. Si falta algo o hay un error, la línea de abajo te dirá exactamente qué.',
+          'El motivo es obligatorio: queda registrado en la bitácora como evidencia para la auditoría.'],
+   ejemplo:'Mover Tutoría a un lugar nuevo: código <code>M02.02.01</code>. Como <code>M02.02</code> no existe, te pide su nombre: «Tutoría, asesoría y consejería». El asistente creará ambos.',
+   nota:'Al mover, el proceso <b>conserva su nivel</b>: un proceso de nivel 2 sigue siendo de nivel 2. Por eso <code>M01.05.04</code> va a <code>M02.02.01</code> y no a <code>M02.02</code>.' },
+ { que:'Revisa <b>cómo quedará</b> y <b>a qué afecta</b> el cambio. <b>Todavía no se modifica nada.</b>',
+   pasos:['Mira la vista previa «Así quedará»: lo marcado con 🆕 lo creará el asistente.',
+          'Revisa sobre todo los <b>indicadores con metas</b> y las <b>oficinas afectadas</b>: a ellas habrá que avisarles al final.',
+          'Cuando lo hayas revisado, marca la casilla del final.'],
+   ejemplo:'Si ves «5 indicadores · 3 con metas», esas metas se conservarán: solo cambia el proceso al que pertenecen.' },
+ { que:'Decide qué pasa con las <b>fichas</b>, los <b>indicadores</b> y los <b>riesgos</b> afectados.',
+   pasos:['La opción recomendada ya viene marcada. Si no tienes un motivo para cambiarla, déjala.',
+          'Ningún historial de metas se borra con estas decisiones.'],
+   ejemplo:'Al retirar un proceso, si no sabes todavía a dónde llevar sus indicadores, elige «Dejar para revisar después»: quedarán marcados en morado y podrás decidir con calma.' },
+ { que:'<b>Confirma y aplica</b> el cambio. <b>Es el único paso que modifica la base.</b>',
+   pasos:['Revisa por última vez la vista previa y el resumen.',
+          'Escribe el código del proceso para confirmar y pulsa «Aplicar el cambio».',
+          'El asistente descarga un <b>respaldo</b>, abre la <b>bitácora</b>, crea lo que haga falta en el Inventario y traslada todo. <b>No cierres la ventana</b> mientras trabaja.'],
+   ejemplo:'Para Tutoría escribirías <code>M01.05.04</code>. Si algo falla al crear el destino, el asistente deshace lo creado y no toca nada más.',
+   nota:'Guarda el archivo de respaldo (<code>respaldo-CC-….json</code>) en una carpeta compartida de la Coordinación.' },
+ { que:'<b>Cierra el cambio</b>: dos tareas y listo.',
+   pasos:['<b>Inventario:</b> pulsa «Ir al Inventario», haz lo que se indica y vuelve con el botón «Volver al asistente». Luego pulsa «Ya lo hice: comprobar».',
+          '<b>Oficinas:</b> envía primero una prueba a tu correo; si se ve bien, envía los avisos.',
+          'Cuando ambas tareas estén en verde, pulsa <b>Finalizar</b>.'],
+   ejemplo:'Para retirar el <code>M01.05.04</code> antiguo, bórralo con la papelera de abajo hacia arriba: primero los procedimientos, luego los subprocesos y al final el proceso.' }
+];
+function acGuia(paso){
+  const g=AC_GUIA[paso]; if(!g) return '';
+  return `<details open style="background:#f2f7fc;border:1px solid #c9dcf0;border-radius:11px;padding:10px 14px;margin-bottom:14px;font-size:13.5px;line-height:1.55">
+    <summary style="cursor:pointer;font-weight:700;color:#2b4c7e">💡 Paso ${paso+1} de 6 · ¿Qué hago aquí?</summary>
+    <div style="margin-top:6px">${g.que}</div>
+    <ol style="margin:6px 0 0 18px;padding:0">${g.pasos.map(x=>`<li style="margin:2px 0">${x}</li>`).join('')}</ol>
+    <div style="margin-top:8px;background:#fff;border-left:3px solid #2b4c7e;padding:6px 10px;border-radius:0 6px 6px 0"><b>Ejemplo:</b> ${g.ejemplo}</div>
+    ${g.nota?`<div style="margin-top:8px;background:#fff6e5;border-left:3px solid #e0a020;padding:6px 10px;border-radius:0 6px 6px 0"><b>Importante:</b> ${g.nota}</div>`:''}
+    <div style="margin-top:8px"><button type="button" class="btn btn-sm" onclick="acPreguntarAsistente()">💬 ¿Tienes dudas? Pregúntale al asistente</button></div>
+  </details>`;
+}
+// Abre el chat con una pregunta ya encabezada con el contexto del paso actual
+function acPreguntarAsistente(){
+  if(!AC) return;
+  const ctx='Estoy en el paso '+(AC.paso+1)+' («'+AC_PASOS[AC.paso]+'») del Asistente de cambios'
+    +(AC.tipo?', haciendo un cambio de tipo «'+AC_TIPOS[AC.tipo].t+'»':'')
+    +(AC.proceso?' sobre '+AC.proceso:'')+'. Mi duda es: ';
+  acMinimizar();
+  // Se abre un instante después: el chat se cierra con un clic fuera de él, y el clic
+  // del botón no debe cerrarlo nada más abrirse.
+  setTimeout(()=>{ try{ asisAbrir(); }catch(_){} }, 80);
+  setTimeout(()=>{ const i=document.getElementById('asis-input'); if(i){ i.value=ctx; i.focus(); i.setSelectionRange(ctx.length,ctx.length); } }, 380);
+  toast('Escribe tu duda en el chat. Para volver, usa «Volver al asistente de cambios».');
+}
+window.acPreguntarAsistente=acPreguntarAsistente;
+
 function acPintar(){
   if(!AC) return;
   document.getElementById('ac_barra').innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">'+AC_PASOS.map((n,i)=>{
@@ -10546,7 +10661,7 @@ function acPintar(){
     const bg= act?'var(--brand)': ok?'#e3f3ea':'#f1f3f2', fg= act?'#fff': ok?'var(--brand)':'#9aa5a0';
     return `<div style="flex:1;min-width:105px;background:${bg};color:${fg};border-radius:8px;padding:7px 8px;font-size:12.5px;font-weight:600;text-align:center">${ok&&!act?'✓':(i+1)+'.'} ${n}</div>`;
   }).join('')+'</div>';
-  document.getElementById('ac_cuerpo').innerHTML = [acPaso1,acPaso2,acPaso3,acPaso4,acPaso5,acPaso6][AC.paso]();
+  document.getElementById('ac_cuerpo').innerHTML = acGuia(AC.paso) + [acPaso1,acPaso2,acPaso3,acPaso4,acPaso5,acPaso6][AC.paso]();
   const atras=document.getElementById('ac_atras');
   atras.style.visibility = (AC.paso>0 && !AC.aplicado) ? 'visible':'hidden';
   document.getElementById('ac_sig').textContent = AC.paso===5 ? 'Finalizar ✓' : 'Siguiente →';
@@ -10555,26 +10670,43 @@ function acPintar(){
 
 /* ===================== ① Qué cambiar ===================== */
 function acPaso1(){
+  if(AC.tipo==='crear') return `<p style="margin:0 0 12px;color:var(--slate)">Vas a <b>crear un proceso nuevo</b>. En el paso siguiente indicarás su código y su nombre; no hace falta elegir nada de la lista.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">${acTiposHTML()}</div>`;
   return `<p style="margin:0 0 12px;color:var(--slate)">Elige el proceso y el tipo de cambio. <b>Hasta el paso 4 no se modifica nada</b>: puedes explorar con tranquilidad.</p>
-  <label style="font-weight:600;display:block;margin-bottom:4px">Proceso</label>
-  <input placeholder="Escribe el código o parte del nombre…" oninput="acFiltrar(this.value)" value="${_acEsc(AC.proceso)}"
+  <label style="font-weight:600;display:block;margin-bottom:4px">Proceso <span class="hint" style="font-weight:400">— escribe para buscar y <b>haz clic</b> en el proceso para elegirlo</span></label>
+  ${AC.proceso?`<div style="display:flex;align-items:center;gap:8px;background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:8px 11px;margin-bottom:6px;font-size:14px">✅ <b>Elegido:</b> ${_acEsc(AC.proceso)}</div>`:''}
+  <input placeholder="Escribe el código o parte del nombre…" oninput="acFiltrar(this.value)" value=""
     style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;margin-bottom:6px">
-  <div id="ac_lista" style="max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-bottom:16px">${acListaHTML(AC.proceso)}</div>
+  <div id="ac_lista" style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-bottom:16px">${acListaHTML(AC.proceso)}</div>
   <label style="font-weight:600;display:block;margin-bottom:6px">Tipo de cambio</label>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">
-  ${Object.keys(AC_TIPOS).map(k=>`<label style="border:1px solid ${AC.tipo===k?'var(--brand)':'var(--line)'};background:${AC.tipo===k?'#eef7f2':'transparent'};border-radius:9px;padding:9px 11px;cursor:pointer;display:block">
-      <input type="radio" name="ac_tipo" value="${k}" ${AC.tipo===k?'checked':''} onchange="AC.tipo=this.value;AC.detalle={};acInvalidarDesde(1);acPintar()"> <b>${AC_TIPOS[k].t}</b>
-      <div class="hint" style="font-size:12px;margin-top:3px">${AC_TIPOS[k].d}</div></label>`).join('')}
+  ${acTiposHTML()}
   </div>`;
 }
+function acTiposHTML(){
+  return `${Object.keys(AC_TIPOS).map(k=>`<label style="border:1px solid ${AC.tipo===k?'var(--brand)':'var(--line)'};background:${AC.tipo===k?'#eef7f2':'transparent'};border-radius:9px;padding:7px 10px;cursor:pointer;display:block;font-size:14px">
+      <input type="radio" name="ac_tipo" value="${k}" ${AC.tipo===k?'checked':''} onchange="acCambiarTipo(this.value)"> <b>${AC_TIPOS[k].t}</b>
+      <div class="hint" style="font-size:11.5px;margin-top:2px;line-height:1.35">${AC_TIPOS[k].d}</div></label>`).join('')}`;
+}
+function acCambiarTipo(t){
+  if(t==='crear' || AC.tipo==='crear') AC.proceso='';
+  AC.tipo=t; AC.detalle={}; AC.nuevos={}; acInvalidarDesde(1); acPintar();
+}
+window.acCambiarTipo=acCambiarTipo;
+
 function acListaHTML(q){
   const n=_acNorm(q);
   const hits=AC.procesos.filter(p=>!n || _acNorm(p).includes(n)).slice(0,80);
   if(!hits.length) return '<div class="hint" style="padding:10px">Ningún proceso coincide.</div>';
   return hits.map(p=>`<div onclick="acElegir(this.dataset.p)" data-p="${_acEsc(p)}" style="padding:7px 11px;cursor:pointer;font-size:13px;${p===AC.proceso?'background:#eef7f2;font-weight:700;color:var(--brand)':''}">${_acEsc(p)}</div>`).join('');
 }
-function acFiltrar(q){ document.getElementById('ac_lista').innerHTML=acListaHTML(q); }
-function acElegir(p){ if(AC.proceso!==p){ AC.proceso=p; acInvalidarDesde(1); } acPintar(); }
+function acFiltrar(q){
+  // Si se escribe un código exacto (p. ej. M01.05.04), se elige directamente
+  const c=String(q||'').trim().toUpperCase(), vig=_construirProcesosVigentes();
+  if(/^[A-Z]\d{2}(\.\d{2})*$/.test(c) && vig[c] && AC.proceso!==vig[c]){ AC.proceso=vig[c]; AC.detalle={}; AC.nuevos={}; acInvalidarDesde(1); acPintar(); return; }
+  document.getElementById('ac_lista').innerHTML=acListaHTML(q);
+}
+function acElegir(p){ if(AC.proceso!==p){ AC.proceso=p; AC.detalle={}; AC.nuevos={}; acInvalidarDesde(1); } acPintar(); }
 window.acFiltrar=acFiltrar; window.acElegir=acElegir;
 
 /* ===================== ② Detalle ===================== */
@@ -10584,6 +10716,20 @@ function acOpcionesProceso(sel, excluir){
     .map(p=>`<option ${sel===p?'selected':''} value="${_acEsc(p)}">${_acEsc(p)}</option>`).join('');
 }
 function acPaso2(){
+  if(AC.tipo==='crear'){
+    const d=AC.detalle;
+    return `<div style="background:#f5f9f7;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:6px;font-size:13.5px">
+        El <b>nivel</b> lo da el código: <code>M02</code> es nivel 0, <code>M02.01</code> nivel 1, <code>M02.01.01</code> nivel 2, <code>M02.01.01.01</code> nivel 3 y
+        <code>M02.01.01.01.01</code> un procedimiento. Si algún proceso padre no existe, el asistente lo creará también.</div>
+      <label style="font-weight:600;display:block;margin:10px 0 4px">Código del proceso nuevo</label>
+      <input value="${_acEsc(d.codigoNuevo||'')}" placeholder="Ej.: M02.01.01" oninput="acDetalle('codigoNuevo',this.value);acPintarDetalleNuevo()" style="width:220px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">
+      <label style="font-weight:600;display:block;margin:10px 0 4px">Nombre (sin el código)</label>
+      <input value="${_acEsc(d.nombreNuevo||'')}" placeholder="Ej.: Coordinación del servicio bibliotecario especializado" oninput="acDetalle('nombreNuevo',this.value);acPintarDetalleNuevo()" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">
+      <div id="ac_nuevo_det">${acDetalleNuevoHTML()}</div>
+      <label style="font-weight:600;display:block;margin:16px 0 4px">Motivo <span style="color:#c0392b">*</span></label>
+      <textarea rows="2" oninput="AC.motivo=this.value;acInvalidarDesde(2);acValidar()" placeholder="Ej.: nuevo proceso aprobado en la revisión del mapa de octubre" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">${_acEsc(AC.motivo)}</textarea>
+      <div id="ac_conflicto" style="margin-top:10px"></div>`;
+  }
   const d=AC.detalle, nom=AC.proceso.replace(/^\S+\s*/,''), cod=acCodigo(AC.proceso);
   const sel=(k,lbl,ayuda,excluir)=>`<label style="font-weight:600;display:block;margin:10px 0 4px">${lbl}</label>
     <select onchange="acDetalle('${k}',this.value)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">${acOpcionesProceso(d[k],excluir)}</select>
@@ -10591,8 +10737,24 @@ function acPaso2(){
   let h=`<div style="background:#f5f9f7;border:1px solid var(--line);border-radius:9px;padding:10px 12px;margin-bottom:6px"><b>${AC_TIPOS[AC.tipo].t}:</b> ${_acEsc(AC.proceso)}</div>`;
   if(AC.tipo==='renombrar') h+=`<label style="font-weight:600;display:block;margin:10px 0 4px">Nombre nuevo (sin el código)</label>
     <input value="${_acEsc(d.nombre||'')}" placeholder="${_acEsc(nom)}" oninput="acDetalle('nombre',this.value)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">`;
-  if(AC.tipo==='mover') h+=sel('destino','Proceso de destino','<b>Debe existir ya en el Inventario</b>, con sus subprocesos. Si aún no lo creaste, minimiza el asistente, créalo en el Inventario y vuelve.',
-                                c=>c.split('.').length!==cod.split('.').length);
+  if(AC.tipo==='mover'){
+    const prof=cod.split('.').length, modo=d.modo||'nuevo';
+    h+=`<div style="background:#f5f9f7;border:1px solid var(--line);border-radius:9px;padding:9px 12px;margin:8px 0;font-size:13px">
+      <b>${_acEsc(cod)}</b> es un proceso de <b>${AC_NOMBRE_NIVEL[prof]}</b>. Al moverlo <b>sigue siendo de ${AC_NOMBRE_NIVEL[prof]}</b>, para que sus fichas e indicadores sigan siendo válidos.
+      Ejemplo: tutoría <code>M01.05.04</code> pasa a <code>M02.02.01</code>, dentro de <code>M02.02</code>.</div>
+      <label style="font-weight:600;display:block;margin:10px 0 4px">¿A dónde se mueve?</label>
+      <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="ac_modo" ${modo==='nuevo'?'checked':''} onchange="acDetalle('modo','nuevo');acPintar()"> A un <b>lugar nuevo</b>: el asistente lo crea en el Inventario</label>
+      <label style="display:block;margin:3px 0;cursor:pointer"><input type="radio" name="ac_modo" ${modo==='existente'?'checked':''} onchange="acDetalle('modo','existente');acPintar()"> A un proceso que <b>ya existe</b> en el Inventario</label>`;
+    if(modo==='existente') h+=sel('destino','Proceso de destino','Recibirá todo lo que hoy cuelga de '+_acEsc(cod)+'. Si le faltan subprocesos, el asistente los creará con los mismos nombres.', c=>c.split('.').length!==prof)+`<div id="ac_nuevo_det">${acDetalleNuevoHTML()}</div>`;
+    else {
+      const lista=acListaACrear();
+      h+=`<label style="font-weight:600;display:block;margin:10px 0 4px">Código nuevo (${AC_NOMBRE_NIVEL[prof]})</label>
+        <input value="${_acEsc(d.codigoNuevo||'')}" placeholder="Ej.: M02.02.01" oninput="acDetalle('codigoNuevo',this.value);acPintarDetalleNuevo()" style="width:220px;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">
+        <label style="font-weight:600;display:block;margin:10px 0 4px">Nombre en el nuevo lugar</label>
+        <input value="${_acEsc(d.nombreNuevo!=null?d.nombreNuevo:AC.proceso.replace(/^\S+\s*/,''))}" oninput="acDetalle('nombreNuevo',this.value)" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">
+        <div id="ac_nuevo_det">${acDetalleNuevoHTML()}</div>`;
+    }
+  }
   if(AC.tipo==='fusionar') h+=sel('destino','Proceso al que se une (el que permanece)','Sus indicadores y riesgos podrán reasignarse a este proceso en el paso 4.');
   if(AC.tipo==='dividir') h+=`<label style="font-weight:600;display:block;margin:10px 0 4px">Procesos resultantes: sus códigos, uno por línea</label>
     <textarea rows="4" oninput="acDetalle('partes',this.value)" placeholder="Ej.:\nM02.03.01\nM02.03.02" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit">${_acEsc(d.partes||'')}</textarea>
@@ -10605,24 +10767,53 @@ function acPaso2(){
     <div id="ac_conflicto" style="margin-top:10px"></div>`;
   return h;
 }
+function acDetalleNuevoHTML(){
+  const lista=acListaACrear(); if(!lista.length) return '';
+  const padres=lista.filter(x=>x.padre);
+  return (padres.length?`<div style="margin-top:12px;padding:10px 12px;border:1px solid #f0d9a8;background:#fff6e5;border-radius:9px">
+      <b>Estos procesos padre no existen y se crearán.</b> Escribe su nombre:
+      ${padres.map(x=>`<div style="display:flex;gap:8px;align-items:center;margin-top:6px"><code style="min-width:80px">${x.cod}</code>
+        <input value="${_acEsc((AC.detalle.anc||{})[x.cod]||'')}" placeholder="Nombre de ${x.cod}" oninput="acNombrePadre('${x.cod}',this.value)" style="flex:1;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit"></div>`).join('')}</div>`:'')
+    + `<details style="margin-top:10px" open><summary style="cursor:pointer;font-size:13px"><b>${AC.tipo==='mover'&&(AC.detalle.modo||'nuevo')==='existente'?'Faltan '+lista.length+' subproceso(s) en el destino: el asistente los creará':'Se crearán '+lista.length+' proceso(s) en el Inventario'}</b></summary>
+      <div style="max-height:160px;overflow:auto;font-size:12.5px;margin-top:6px">${lista.map(x=>`<div>· <code>${x.cod}</code> ${_acEsc(x.nombre||'(falta el nombre)')}</div>`).join('')}</div></details>`;
+}
+function acPintarDetalleNuevo(){ const el=document.getElementById('ac_nuevo_det'); if(el) el.innerHTML=acDetalleNuevoHTML(); }
+function acNombrePadre(c,v){ AC.detalle.anc=AC.detalle.anc||{}; AC.detalle.anc[c]=v; acActualizarNuevos(); acInvalidarDesde(2); acValidar(); }
+window.acPintarDetalleNuevo=acPintarDetalleNuevo; window.acNombrePadre=acNombrePadre;
+
 function acPartes(){ const vig=acVig(); return String(AC.detalle.partes||'').split('\n').map(x=>acCodigo(x.trim())).filter(Boolean).map(c=>({c, nombre:vig[c]||''})); }
 function acPartesHTML(){ return acPartes().map(p=>`<div>${p.nombre?'✓ '+_acEsc(p.nombre):'<span style="color:#c0392b">✕ '+_acEsc(p.c)+' no existe en el Inventario</span>'}</div>`).join(''); }
-function acDetalle(k,v){ AC.detalle[k]=v; acInvalidarDesde(2); const p=document.getElementById('ac_partes'); if(p) p.innerHTML=acPartesHTML(); acValidar(); }
+function acDetalle(k,v){ AC.detalle[k]=v; acActualizarNuevos(); acInvalidarDesde(2); if(k==='destino') acPintarDetalleNuevo(); const p=document.getElementById('ac_partes'); if(p) p.innerHTML=acPartesHTML(); acValidar(); }
 window.acDetalle=acDetalle;
 
 function acConflictos(){
   const cod=acCodigo(AC.proceso), d=AC.detalle, vig=acVig(), err=[];
+  if(AC.tipo==='crear'){
+    const real=_construirProcesosVigentes(), c=String(d.codigoNuevo||'').trim().toUpperCase();
+    if(!/^[A-Z]\d{2}(\.\d{2}){0,4}$/.test(c)) err.push('Escribe un código válido, por ejemplo M02.01.01.');
+    else if(real[c]) err.push('El código '+c+' ya existe: «'+real[c]+'». Elige otro: los códigos no se reutilizan.');
+    else if(!acTipoDeLetra(c.charAt(0))) err.push('No hay ningún proceso que empiece por «'+c.charAt(0)+'»: revisa la letra del código.');
+    else { if(!String(d.nombreNuevo||'').trim()) err.push('Escribe el nombre del proceso nuevo.');
+           const sinNom=acListaACrear().filter(x=>x.padre && !x.nombre).map(x=>x.cod); if(sinNom.length) err.push('Escribe el nombre de: '+sinNom.join(', ')+'.'); }
+    if(!String(AC.motivo||'').trim()) err.push('Escribe el motivo.');
+    return err;
+  }
   if(AC.tipo==='renombrar'){
     if(!String(d.nombre||'').trim()) err.push('Escribe el nombre nuevo.');
     else if(_acNorm(d.nombre)===_acNorm(AC.proceso.replace(/^\S+\s*/,''))) err.push('El nombre nuevo es igual al actual.');
   }
-  if(AC.tipo==='mover'){
+  if(AC.tipo==='mover' && (d.modo||'nuevo')==='nuevo'){
+    const real=_construirProcesosVigentes(), c=String(d.codigoNuevo||'').trim().toUpperCase();
+    if(!/^[A-Z]\d{2}(\.\d{2})+$/.test(c)) err.push('Escribe el código nuevo, por ejemplo M02.02.01.');
+    else if(c.split('.').length!==cod.split('.').length) err.push('El código nuevo debe ser del mismo nivel que '+cod+' ('+cod.split('.').length+' segmentos), para que sus fichas sigan siendo válidas. Ejemplo: M02.02.01.');
+    else if(c===cod) err.push('El código nuevo es igual al actual.');
+    else if(real[c]) err.push('El código '+c+' ya existe («'+real[c]+'»). Si quieres mover el proceso ahí, elige «A un proceso que ya existe».');
+    else if(acEsDescendiente(c,cod)) err.push('No se puede mover un proceso dentro de sí mismo.');
+    else { const sinNom=acListaACrear().filter(x=>!x.nombre).map(x=>x.cod); if(sinNom.length) err.push('Escribe el nombre de: '+sinNom.join(', ')+'.'); }
+  }
+  else if(AC.tipo==='mover'){
     if(!d.destino) err.push('Elige el proceso de destino.');
-    else { // los subprocesos del origen deben tener su equivalente en el destino
-      const dc=acCodigo(d.destino);
-      const falta=Object.keys(vig).filter(c=>acEsDescendiente(c,cod)).map(c=>dc+c.slice(cod.length)).filter(nc=>!vig[nc]);
-      if(falta.length) err.push('Crea primero en el Inventario estos subprocesos del destino: '+falta.join(', ')+'.');
-    }
+
   }
   if(AC.tipo==='fusionar' && !d.destino) err.push('Elige el proceso al que se une.');
   if(AC.tipo==='dividir'){
@@ -10635,6 +10826,60 @@ function acConflictos(){
 }
 
 /* ===================== ③ Impacto (solo lectura) ===================== */
+function acVistaPrevia(){
+  const t=AC.tipo, vig=acVig(), viejo=acCodigo(AC.proceso), nuevos=AC.nuevos||{};
+  const real=_construirProcesosVigentes();
+  const cadena=c=>{ const s=c.split('.'), out=[]; for(let i=1;i<=s.length;i++) out.push(s.slice(0,i).join('.')); return out; };
+  const arbol=(raiz, mapa, marcarNuevo)=>{
+    const codigos=cadena(raiz).concat(Object.keys(mapa).filter(c=>acEsDescendiente(c,raiz)).sort((a,b)=>a.split('.').length-b.split('.').length||a.localeCompare(b)));
+    const base=raiz.split('.').length;
+    return codigos.filter((c,i,a)=>a.indexOf(c)===i && mapa[c]).map(c=>{
+      const prof=c.split('.').length, esRaiz=c===raiz, nuevo=marcarNuevo && nuevos[c] && !real[c];
+      const sangria='&nbsp;'.repeat(Math.max(0,prof-1)*3)+(prof>1?'└ ':'');
+      return `<div style="white-space:nowrap;${esRaiz?'font-weight:700;color:var(--brand)':''};${prof>base?'font-size:12px;color:var(--slate)':''}">${sangria}${_acEsc(mapa[c])}${nuevo?' <span title="Lo crea el asistente">🆕</span>':''}</div>`;
+    }).join('');
+  };
+  let destino='', despues='', nota='';
+  if(t==='mover'){ destino=acCodigo(AC.detalle.destino||''); }
+  if(t==='crear'){
+    const c=acCodigo(AC.proceso), padre=c.split('.').slice(0,-1).join('.');
+    const antes = padre && real[padre] ? arbol(padre, real, false) : '<div class="hint">(todavía no existe esta rama)</div>';
+    return `<div style="border:1px solid var(--brand);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-weight:700;font-size:15px;margin-bottom:8px">👁️ Así quedará</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;overflow:auto">
+        <div style="background:#f6f7f7;border-radius:9px;padding:10px 12px"><div class="hint" style="font-weight:700;margin-bottom:4px">ANTES</div>${antes}</div>
+        <div style="background:#eef7f2;border-radius:9px;padding:10px 12px"><div class="hint" style="font-weight:700;margin-bottom:4px">DESPUÉS</div>${arbol(c, vig, true)}</div>
+      </div></div>`;
+  }
+  if(t==='renombrar'){ const m=Object.assign({},real); m[viejo]=viejo+' '+AC.detalle.nombre; despues=arbol(viejo,m,false); }
+  else if(t==='mover' && destino){
+    const m=Object.assign({},vig);
+    Object.keys(real).filter(c=>acEsDescendiente(c,viejo)).forEach(c=>{ const nc=destino+c.slice(viejo.length); if(!m[nc]) m[nc]=nc+' '+real[c].replace(/^\S+\s*/,''); });
+    despues=arbol(destino,m,true);
+  } else if(t==='fusionar'){ despues=`<div style="font-weight:700;color:var(--brand)">${_acEsc(AC.detalle.destino)}</div><div class="hint" style="font-size:12px">recibe los indicadores y riesgos que decidas en el paso 4</div>`; nota='El proceso de origen se retira al final.'; }
+  else if(t==='dividir'){ despues=acPartes().map(p=>`<div style="font-weight:700;color:var(--brand)">${_acEsc(p.nombre)}</div>`).join('')+'<div class="hint" style="font-size:12px">cada uno recibe los indicadores y riesgos que le asignes en el paso 4</div>'; }
+  else if(t==='retirar'){ despues='<div style="color:#c0392b;font-weight:700">El proceso deja de existir</div>'; }
+  if(!despues) return '';
+  // Ejemplos reales: cómo cambiará el texto de algunos indicadores
+  const ej=(AC.impacto.indicadores||[]).slice(0,3).map(x=>{
+    let n=x.texto;
+    if(t==='mover' && destino) n=acReemplazarCodigos(x.texto,viejo,destino);
+    else if(t==='renombrar'){ const p=x.texto.split(' — '); n=(p[0].indexOf(viejo+' ')===0? viejo+' '+AC.detalle.nombre : p[0])+(p.length>1?' — '+p.slice(1).join(' — '):''); }
+    else return '';
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px"><div><span class="hint">Antes:</span> ${_acEsc(x.texto)}</div>
+      <div><span class="hint">Después:</span> <b>${_acEsc(n)}</b> ${x.conMetas?'<span style="color:var(--brand)">✓ conserva sus metas</span>':''}</div></div>`;
+  }).join('');
+  return `<div style="border:1px solid var(--brand);border-radius:12px;padding:12px 14px;margin-bottom:14px">
+    <div style="font-weight:700;font-size:15px;margin-bottom:8px">👁️ Así quedará</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;overflow:auto">
+      <div style="background:#f6f7f7;border-radius:9px;padding:10px 12px"><div class="hint" style="font-weight:700;margin-bottom:4px">ANTES</div>${arbol(viejo,real,false)}</div>
+      <div style="background:#eef7f2;border-radius:9px;padding:10px 12px"><div class="hint" style="font-weight:700;margin-bottom:4px">DESPUÉS</div>${despues}</div>
+    </div>
+    ${nota?`<div class="hint" style="margin-top:6px">${nota}</div>`:''}
+    ${ej?`<div style="margin-top:10px"><div style="font-weight:600;font-size:13px">Ejemplos de indicadores</div>${ej}</div>`:''}
+  </div>`;
+}
+
 function acPaso3(){
   if(!AC.impacto){ setTimeout(acCalcularImpacto, 50); return '<p>⏳ Calculando el impacto en fichas, indicadores y riesgos… puede tardar unos segundos.</p>'; }
   const I=AC.impacto, cod=acCodigo(AC.proceso);
@@ -10645,7 +10890,7 @@ function acPaso3(){
   let nota='';
   if(AC.tipo==='renombrar') nota='<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:10px 12px;margin-bottom:12px">✅ <b>Cambio de bajo riesgo.</b> Los nombres de proceso se muestran en vivo desde el Inventario: todo lo de abajo mostrará el nombre nuevo solo, sin perder nada.</div>';
   else if(I.indConMetas) nota=`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:10px 12px;margin-bottom:12px">⚠️ <b>${I.indConMetas} indicador(es) tienen metas o seguimientos registrados.</b> En el paso 4 decidirás qué hacer con ellos; su historial nunca se borra.</div>`;
-  return `<p style="margin:0 0 12px;color:var(--slate)">Esto es lo que depende de <b>${_acEsc(AC.proceso)}</b> y de sus subprocesos (todo lo que empieza por <code>${cod}</code>). <b>Todavía no se ha cambiado nada.</b></p>
+  return acVistaPrevia() + `<p style="margin:0 0 12px;color:var(--slate)">Esto es lo que depende de <b>${_acEsc(AC.proceso)}</b> y de sus subprocesos (todo lo que empieza por <code>${cod}</code>). <b>Todavía no se ha cambiado nada.</b></p>
     ${nota}
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       ${tarjeta(I.subprocesos,'Subprocesos','en el Inventario','#6b5b95')}
@@ -10663,6 +10908,7 @@ function acPaso3(){
       <span><b>He revisado el impacto</b> y entiendo a qué afecta este cambio.</span></label>`;
 }
 async function acCalcularImpacto(){
+  if(AC.tipo==='crear'){ AC.impacto={ subprocesos:0, fichas:[], fichasArch:0, indicadores:[], indConMetas:0, subind:[], riesgos:[], oficinas:[] }; acPintar(); return; }
   const cod=acCodigo(AC.proceso), re=_acCodRe(cod);
   const I={ subprocesos:0, fichas:[], fichasArch:0, indicadores:[], indConMetas:0, subind:[], riesgos:[], oficinas:[] };
   const ofis=new Set();
@@ -10717,6 +10963,7 @@ function acRadio(grupo, valor, actual, texto, ayuda){
 function acPaso4(){
   const I=AC.impacto, t=AC.tipo, D=AC.dec;
   const bloque=(tit,n,cont)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:4px">${tit} <span class="hint">(${n})</span></div>${cont}</div>`;
+  if(t==='crear') return `<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ <b>No hay decisiones que tomar.</b> Es un proceso nuevo: nada depende todavía de él.</div>`;
   if(t==='renombrar') return `<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ <b>No hay decisiones que tomar.</b> Las fichas, los indicadores y los riesgos muestran el nombre del proceso en vivo: verán el nombre nuevo en cuanto lo cambies en el Inventario, en el último paso.</div>`;
   let h=`<p style="margin:0 0 12px;color:var(--slate)">Decide qué pasa con cada grupo afectado. La opción recomendada ya está marcada. <b>Ningún historial de metas se borra.</b></p>`;
   if(I.fichas.length){
@@ -10775,7 +11022,7 @@ function acPlan(){
   const destMover = t==='mover' ? acCodigo(AC.detalle.destino) : '';
   const reasignar=(texto, dest)=>{ const p=String(texto).split(' — '); const ind=p.length>1?p.slice(1).join(' — '):texto; return vig[dest]+' — '+ind; };
   const campos=(v, lista, fn)=>{ const c={}; lista.forEach(k=>{ const x=v[k]; if(typeof x==='string' && x.trim() && x!==k){ const n=fn(k,x); if(n!==x) c[k]=n; } }); return c; };
-  if(t==='renombrar') return ops;
+  if(t==='renombrar' || t==='crear') return ops;
   I.fichas.forEach(f=>{
     if(f.archivada) return;
     if(D.fichas==='archivar') ops.push({tabla:'Ficha '+f.nivel, ent:f.ent, id:f.id, v:f.v, campos:{'Estado del registro':'Archivado'}, que:'archivar'});
@@ -10814,17 +11061,18 @@ function acPaso5(){
     const R=AC.resultado||{ok:0,errores:[]};
     return `<div style="background:${R.errores.length?'#fff6e5':'#e3f3ea'};border:1px solid ${R.errores.length?'#f0d9a8':'#a8d5bd'};border-radius:10px;padding:14px 16px">
       <b style="font-size:16px">${R.errores.length?'⚠️ Cambio aplicado con observaciones':'✅ Cambio aplicado'}</b>
-      <div style="margin-top:6px">${R.ok} registro(s) actualizados${R.errores.length?' · <b>'+R.errores.length+' no se pudieron actualizar</b>':''}. Bitácora: <b>${_acEsc(AC.codigoCambio)}</b>. Se descargó el respaldo.</div>
+      <div style="margin-top:6px">${AC.creadosInv?AC.creadosInv+' proceso(s) creados en el Inventario · ':''}${R.ok} registro(s) actualizados${R.errores.length?' · <b>'+R.errores.length+' no se pudieron actualizar</b>':''}. Bitácora: <b>${_acEsc(AC.codigoCambio)}</b>. Se descargó el respaldo.</div>
       ${R.errores.length?`<div style="max-height:150px;overflow:auto;font-size:12.5px;margin-top:8px">${R.errores.map(e=>'· '+_acEsc(e)).join('<br>')}</div>
         <label style="display:flex;gap:8px;margin-top:10px;cursor:pointer"><input type="checkbox" ${AC.aceptoErrores?'checked':''} onchange="AC.aceptoErrores=this.checked;acValidar()"> Lo revisaré después; continuar para cerrar el cambio.</label>`:''}
       </div><p class="hint" style="margin-top:10px">Ya no se puede volver atrás. Falta el último paso: el Inventario y el aviso a las oficinas.</p>`;
   }
   const ops=acPlan(), por={};
   ops.forEach(o=>{ const k=o.tabla+' · '+o.que; por[k]=(por[k]||0)+1; });
-  return `<p style="margin:0 0 10px;color:var(--slate)">Resumen de lo que se va a hacer. <b>Este es el único paso que modifica la base.</b></p>
+  return acVistaPrevia() + `<p style="margin:0 0 10px;color:var(--slate)">Resumen de lo que se va a hacer. <b>Este es el único paso que modifica la base.</b></p>
     <div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:14px">
       <div><b>Cambio:</b> ${AC_TIPOS[AC.tipo].t} · ${_acEsc(AC.proceso)}${AC.detalle.destino?' → '+_acEsc(AC.detalle.destino):''}${AC.tipo==='renombrar'?' → '+_acEsc(cod+' '+AC.detalle.nombre):''}</div>
       <div><b>Motivo:</b> ${_acEsc(AC.motivo)}</div>
+      ${acListaACrear().length?`<div style="margin-top:8px"><b>Primero se crearán en el Inventario:</b> ${acListaACrear().length} proceso(s), empezando por <code>${_acEsc(acListaACrear()[0].cod)}</code>. Si algo falla, se deshace y no se toca nada más.</div>`:''}
       <div style="margin-top:8px"><b>Operaciones:</b> ${ops.length?Object.keys(por).map(k=>`<div>· ${_acEsc(k)}: <b>${por[k]}</b></div>`).join(''):'ninguna sobre fichas, indicadores ni riesgos.'}</div>
     </div>
     <div style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13.5px">
@@ -10845,10 +11093,40 @@ function acResumenTexto(){
   const I=AC.impacto;
   return `Subprocesos: ${I.subprocesos} · Fichas: ${I.fichas.length} · Indicadores: ${I.indicadores.length} (${I.indConMetas} con metas) · Riesgos: ${I.riesgos.length}\nOficinas: ${I.oficinas.join('; ')}`;
 }
+async function acCrearDestino(prog){
+  const lista=acListaACrear(); const creados=[]; const FID_RUTA='cIWOeqW6vkuildQSkfW4WT'; const pd=_nivelDef('proc');
+  try{
+    for(let i=0;i<lista.length;i++){
+      const x=lista[i]; prog.innerHTML=`⏳ Creando en el Inventario ${i+1} de ${lista.length}: ${_acEsc(x.cod)}…`;
+      if(x.key!=='proc'){ const id=await _npInsertar(_nivelDef(x.key), {}, x.cod, x.nombre); creados.push(id); }
+      const campos={}; campos[FID_RUTA]=acRutaDe(x.cod);
+      if(pd && pd.estadoField) campos[pd.estadoField]='Activo';
+      if(x.key==='proc' && pd && pd.nombreField) campos[pd.nombreField]=x.cod+' '+x.nombre;
+      const res=await API.saveForm(null, campos, CONFIG.ENTITIES.PROCEDIMIENTO);
+      const rid=res && (res.id||(res.record&&res.record.id)||(res.dtype&&res.dtype.id)||(res.data&&res.data.id)); if(rid) creados.push(rid);
+      await new Promise(r=>setTimeout(r,400));
+    }
+  }catch(e){
+    prog.innerHTML='⏳ Hubo un error; deshaciendo lo creado…';
+    await _revertirCreados(creados);
+    throw new Error('No se pudo crear el destino en el Inventario ('+e.message+'). Se deshizo lo creado; no se modificó nada más.');
+  }
+  return lista.length;
+}
+
 async function acAplicar(){
   const btn=document.getElementById('ac_aplicar'), prog=document.getElementById('ac_progreso');
   if(btn.disabled || AC.aplicando) return;
   AC.aplicando=true; btn.disabled=true;
+  // 0) Si el destino es nuevo, se crea primero; si falla, se deshace y no se toca nada más
+  let creadosInv=0;
+  if(acListaACrear().length){
+    try{ creadosInv=await acCrearDestino(prog); }
+    catch(e){ prog.innerHTML='<span style="color:#c0392b">✕ '+_acEsc(e.message)+'</span>'; AC.aplicando=false; btn.disabled=false; return; }
+    try{ STATE.inventario=[]; await loadInventario(); }catch(_){}
+    _PROC_VIGENTES=null;
+  }
+  AC.creadosInv=creadosInv;
   const ops=acPlan(), d=new Date(), p2=n=>String(n).padStart(2,'0');
   AC.codigoCambio='CC-'+d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'-'+p2(d.getHours())+p2(d.getMinutes());
   try{
@@ -10858,7 +11136,7 @@ async function acAplicar(){
     c[B.codigo]=AC.codigoCambio; c[B.fecha]=d.toISOString().slice(0,10); c[B.tipo]=AC_TIPOS[AC.tipo].t;
     c[B.proceso]=AC.proceso; c[B.motivo]=AC.motivo; c[B.impacto]=acResumenTexto(); c[B.estado]='En aplicación';
     c[B.responsable]=(SESION&&(SESION.nombre||SESION.usuario))||'';
-    c[B.detalle]= AC.tipo==='renombrar' ? 'Nuevo nombre: '+acCodigo(AC.proceso)+' '+AC.detalle.nombre : (AC.detalle.destino?'Destino: '+AC.detalle.destino:'') + (AC.detalle.partes?'Partes: '+acPartes().map(x=>x.nombre).join('; '):'');
+    c[B.detalle]= AC.tipo==='crear' ? 'Proceso creado: '+AC.proceso+(acListaACrear().length>1?' (con '+(acListaACrear().length-1)+' proceso(s) padre)':'') : AC.tipo==='renombrar' ? 'Nuevo nombre: '+acCodigo(AC.proceso)+' '+AC.detalle.nombre : (AC.detalle.destino?'Destino: '+AC.detalle.destino+(acListaACrear().length?' (creado por el asistente)':''):'') + (AC.detalle.partes?'Partes: '+acPartes().map(x=>x.nombre).join('; '):'');
     c[B.decisiones]=`Fichas: ${AC.dec.fichas||'-'} · Indicadores: ${AC.dec.ind||'-'} · Riesgos: ${AC.dec.rie||'-'}`;
     const rb=await API.saveForm(null, c, B.ent);
     AC.bitacoraId = (rb && (rb.id || (rb.record&&rb.record.id))) || null;
@@ -10876,7 +11154,7 @@ async function acAplicar(){
   }
   AC.resultado={ok, errores}; AC.aplicado=true; AC.aplicando=false; AC.hecho=Math.max(AC.hecho,4);
   try{ const B=AC_BITACORA, c={}; c[B.estado]= errores.length?'Aplicado con errores':'Aplicado';
-    c[B.resultado]=ok+' registro(s) actualizados.'+(errores.length?'\nErrores:\n'+errores.join('\n'):'');
+    c[B.resultado]=(AC.creadosInv?AC.creadosInv+' proceso(s) creados en el Inventario. ':'')+ok+' registro(s) actualizados.'+(errores.length?'\nErrores:\n'+errores.join('\n'):'');
     if(AC.bitacoraId) await API.saveForm(AC.bitacoraId, c, B.ent); }catch(_){}
   STATE.matriz=[]; _PROC_VIGENTES=null;
   acPintar();
@@ -10886,6 +11164,7 @@ window.acAplicar=acAplicar;
 /* ===================== ⑥ Cerrar el cambio ===================== */
 function acTareaInventario(){
   const cod=acCodigo(AC.proceso);
+  if(AC.tipo==='crear') return { titulo:'Comprueba el proceso nuevo en el Inventario', texto:`El asistente ya creó <b>${_acEsc(AC.proceso)}</b>. Pulsa «Ya lo hice: comprobar» para confirmar que aparece. Después, la oficina dueña deberá crear su <b>ficha de proceso</b>.` };
   if(AC.tipo==='renombrar') return { titulo:'Renombra el proceso en el Inventario', texto:`Cambia el nombre de <b>${_acEsc(AC.proceso)}</b> a <b>${_acEsc(cod+' '+AC.detalle.nombre)}</b> con el ✏️ del Inventario.` };
   return { titulo:'Retira del Inventario el proceso antiguo', texto:`Elimina del Inventario <b>${_acEsc(AC.proceso)}</b> y sus subprocesos (todo lo que empieza por <code>${cod}</code>), con la papelera 🗑️. Hazlo de abajo hacia arriba.`
     + (AC.tipo==='retirar' && AC.dec.ind==='mantener' && AC.impacto.indicadores.length ? '<br><span class="hint">Los indicadores que dejaste para revisar quedarán marcados en morado. Es lo esperado.</span>':'') };
@@ -10894,7 +11173,8 @@ async function acVerificarInventario(){
   const el=document.getElementById('ac_inv_estado'); el.innerHTML='⏳ Comprobando el Inventario…';
   try{ STATE.inventario=[]; await loadInventario(); }catch(_){}
   _PROC_VIGENTES=null; const vig=acVig(), cod=acCodigo(AC.proceso);
-  if(AC.tipo==='renombrar') AC.invOk = !!vig[cod] && _acNorm(vig[cod])===_acNorm(cod+' '+AC.detalle.nombre);
+  if(AC.tipo==='crear') AC.invOk = !!_construirProcesosVigentes()[cod];
+  else if(AC.tipo==='renombrar') AC.invOk = !!vig[cod] && _acNorm(vig[cod])===_acNorm(cod+' '+AC.detalle.nombre);
   else AC.invOk = !vig[cod] && !Object.keys(vig).some(c=>acEsDescendiente(c,cod));
   acPintar();
   if(!AC.invOk) toast(AC.tipo==='renombrar'?'Todavía no aparece el nombre nuevo en el Inventario.':'El proceso antiguo todavía figura en el Inventario.', true);
@@ -10968,7 +11248,8 @@ function acInvalidarDesde(paso){ if(AC.aplicado) return; if(AC.hecho>=paso-1) AC
 function acValidar(){
   const sig=document.getElementById('ac_sig'), est=document.getElementById('ac_estado'); if(!sig||!AC) return;
   let ok=false, msg='';
-  if(AC.paso===0){ ok=!!(AC.proceso && AC.tipo); msg= ok?'Listo para continuar.':'Elige un proceso y un tipo de cambio.'; }
+  if(AC.paso===0 && AC.tipo==='crear'){ ok=true; msg='Listo para continuar.'; }
+  else if(AC.paso===0){ ok=!!(AC.proceso && AC.tipo); msg= ok?'Listo para continuar.': !AC.proceso?'Falta elegir el proceso: haz clic sobre él en la lista (o escribe su código exacto).':'Falta elegir el tipo de cambio.'; }
   if(AC.paso===1){ const err=acConflictos(); ok=!err.length; msg= ok?'Detalle completo y sin conflictos.':err[0];
     const c=document.getElementById('ac_conflicto');
     if(c) c.innerHTML = err.filter(e=>/Crea primero|igual/.test(e)).map(e=>`<div style="color:#c0392b;font-size:13px">⚠️ ${_acEsc(e)}</div>`).join(''); }
@@ -10994,6 +11275,63 @@ function acAtras(){ if(AC.paso>0 && !AC.aplicado){ AC.paso--; acPintar(); } }
 window.acSiguiente=acSiguiente; window.acAtras=acAtras;
 
 document.addEventListener('DOMContentLoaded',()=>{ setInterval(()=>{ const w=document.getElementById('ac_boton_wrap'); if(w) w.style.display=(typeof esAdmin==='function' && SESION && esAdmin())?'flex':'none'; },1500); });
+
+/* ===================== PROTECCIÓN DEL INVENTARIO =====================
+   El lápiz ✏️ y la papelera 🗑️ del Inventario solo actúan directamente si NADA
+   depende del proceso (sirven para limpiar o corregir una errata). Si tiene fichas,
+   indicadores o riesgos, se bloquean y se ofrece el Asistente de cambios, que lo
+   hace sin dejar nada huérfano. Excepción: el cierre del propio asistente. */
+const _AC_DEP = { t:0, fichas:[], riesgos:[] };
+async function _acDependientes(cod){
+  const re=_acCodRe(cod); let fichas=0, inds=0, riesgos=0;
+  try{ await loadMatriz(); }catch(_){}
+  (STATE.matriz||[]).forEach(m=>{
+    const t=String(leerCampo(m,MAT.indicador_txt.id,'Indicador')||''), r=String(leerCampo(m,MAT.proceso_ruta.id,'Proceso (ruta)')||'');
+    if(re.test(t)||re.test(r)) inds++;
+  });
+  if(Date.now()-_AC_DEP.t>60000){
+    const fs=[];
+    for(const n of ['N0','N1','N2','N3']){ const e=CONFIG.ENTITIES['FICHA_'+n]; if(!e) continue;
+      try{ ((await API.records(e)).records||[]).forEach(r=>fs.push(r.values||{})); }catch(_){} }
+    let rs=[]; try{ rs=((await API.records(AC_RIESGOS_ENT)).records||[]).map(r=>r.values||{}); }catch(_){}
+    _AC_DEP.fichas=fs; _AC_DEP.riesgos=rs; _AC_DEP.t=Date.now();
+  }
+  _AC_DEP.fichas.forEach(v=>{ if(String(v['Estado del registro']||'')!=='Archivado' && re.test(String(v['Proceso']||''))) fichas++; });
+  _AC_DEP.riesgos.forEach(v=>{ if(String(v['Estado del registro']||'')!=='Archivado' && re.test(String(v['Proceso']||''))) riesgos++; });
+  return { fichas, inds, riesgos, total:fichas+inds+riesgos };
+}
+async function _acGuardia(rid, accion){
+  let row=null;
+  try{ const inv=await loadInventario(); row=(inv||[]).find(x=>x.id===rid); }catch(_){}
+  if(!row) return true;
+  let nombre=''; try{ nombre=(_invNivelElemento(row)||{}).nombre||''; }catch(_){}
+  const cod=acCodigo(nombre); if(!cod) return true;
+  // Cierre del asistente: retirar o renombrar el proceso del cambio en curso
+  if(AC && AC.aplicado){ const ac=acCodigo(AC.proceso); if(cod===ac || acEsDescendiente(cod,ac)) return true; }
+  toast('Comprobando qué depende de '+cod+'…');
+  const d=await _acDependientes(cod);
+  if(!d.total) return true;
+  const partes=[d.fichas?d.fichas+' ficha(s)':'', d.inds?d.inds+' indicador(es)':'', d.riesgos?d.riesgos+' riesgo(s)':''].filter(Boolean).join(', ');
+  const msg='«'+nombre+'» tiene '+partes+' que dependen de él.\n\n'
+    +(accion==='eliminar'?'Si lo eliminas desde aquí, quedarían huérfanos.':'Si lo cambias desde aquí, podrían quedar desconectados.')
+    +'\n\nUsa el Asistente de cambios: te muestra el impacto y lo hace sin dejar nada huérfano.\n\n¿Abrir el Asistente de cambios con este proceso?';
+  if(confirm(msg)){
+    const vig=_construirProcesosVigentes();
+    abrirAsistenteCambios(accion==='eliminar'?'retirar':'', vig[cod]||nombre);
+  }
+  return false;
+}
+window.addEventListener('load', function(){
+  const proteger=(nombre, accion)=>{
+    const orig=window[nombre]; if(typeof orig!=='function') return;
+    const envuelta=async function(rid){ if(!(await _acGuardia(rid, accion))) return; return orig.apply(this, arguments); };
+    window[nombre]=envuelta;
+    try{ eval(nombre+'=envuelta'); }catch(_){}
+  };
+  proteger('editarInventario','editar');
+  proteger('eliminarInventario','eliminar');
+  proteger('eliminarProcesoSinProc','eliminar');
+});
 
 async function asisEnviar(){
   if(ASIS_OCUPADO) return;
