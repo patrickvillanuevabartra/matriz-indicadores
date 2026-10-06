@@ -9942,6 +9942,10 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
   .ac-tipo:hover{border-color:#9fcfb5}
   .ac-tipo.sel{border-color:var(--brand);background:#eef7f2}
   .ac-tipo input{display:none}
+  /* El aplicativo estira todos los campos al 100 %: en el asistente, los botones de
+     selección y las casillas vuelven a su tamaño y quedan pegados a su texto. */
+  #ac_modal input[type=radio], #ac_modal input[type=checkbox]{width:auto!important;min-width:0;flex:none;margin:0 7px 0 0;vertical-align:middle;display:inline-block}
+  #ac_modal label{text-align:left}
   .ac-tipo .ic{font-size:20px;line-height:1}
   .ac-tipo b{font-size:14px} .ac-tipo small{display:block;font-size:11.5px;color:var(--mist);line-height:1.35;margin-top:2px}
   #asis-mic{background:none;border:1px solid var(--line);border-radius:9px;cursor:pointer;
@@ -10604,7 +10608,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v112</span>
+      <span class="ac-ver">v113</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
