@@ -9917,6 +9917,33 @@ window.pasaFiltrosMat=pasaFiltrosMat; window.pasaFiltrosList=pasaFiltrosList;
   #asis-clip{background:none;border:1px solid var(--line);border-radius:9px;cursor:pointer;
     font-size:17px;padding:0 10px;color:var(--slate);align-self:flex-end;height:38px}
   #asis-clip:hover{background:#eef4f1}
+
+  /* ===== Asistente de cambios: diseño compacto y legible con el zoom del aplicativo ===== */
+  .ac-caja{background:var(--card);border-radius:16px;max-width:980px;width:100%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(10,30,20,.28);font-size:14px}
+  .ac-cab{padding:14px 20px 10px;display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid var(--line)}
+  .ac-cab h2{margin:0;font-size:17px;display:flex;align-items:center;gap:8px}
+  .ac-cab .ac-sub{font-size:12.5px;color:var(--mist);font-weight:500;margin-top:2px}
+  .ac-pasos{display:flex;align-items:flex-start;padding:12px 20px 8px;gap:0}
+  .ac-paso{flex:1;display:flex;flex-direction:column;align-items:center;position:relative;text-align:center;min-width:0}
+  .ac-paso:not(:last-child)::after{content:'';position:absolute;top:14px;left:calc(50% + 16px);right:calc(-50% + 16px);height:2px;background:#dfe5e2}
+  .ac-paso.ok:not(:last-child)::after{background:#8fcaa9}
+  .ac-bola{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;background:#eef1f0;color:#98a39e;border:2px solid #dfe5e2;z-index:1}
+  .ac-paso.ok .ac-bola{background:#e3f3ea;color:var(--brand);border-color:#8fcaa9}
+  .ac-paso.act .ac-bola{background:var(--brand);color:#fff;border-color:var(--brand);box-shadow:0 0 0 4px rgba(15,143,94,.15)}
+  .ac-etq{font-size:11.5px;margin-top:5px;color:#98a39e;font-weight:600;line-height:1.2;padding:0 2px}
+  .ac-paso.ok .ac-etq{color:var(--brand)} .ac-paso.act .ac-etq{color:var(--ink)}
+  .ac-cuerpo{flex:1;min-height:0;overflow:auto;padding:14px 20px}
+  .ac-pie{display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding:10px 20px;background:#fbfcfb}
+  .ac-estado{flex:1;font-size:13px;display:flex;align-items:center;gap:6px}
+  .ac-ver{font-size:10.5px;color:var(--mist);margin-right:6px}
+  .ac-tipos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  @media (max-width:760px){ .ac-tipos{grid-template-columns:repeat(2,1fr)} }
+  .ac-tipo{border:1.5px solid var(--line);border-radius:11px;padding:9px 11px;cursor:pointer;display:flex;gap:9px;align-items:flex-start;transition:border-color .15s,background .15s}
+  .ac-tipo:hover{border-color:#9fcfb5}
+  .ac-tipo.sel{border-color:var(--brand);background:#eef7f2}
+  .ac-tipo input{display:none}
+  .ac-tipo .ic{font-size:20px;line-height:1}
+  .ac-tipo b{font-size:14px} .ac-tipo small{display:block;font-size:11.5px;color:var(--mist);line-height:1.35;margin-top:2px}
   #asis-mic{background:none;border:1px solid var(--line);border-radius:9px;cursor:pointer;
     font-size:16px;padding:0 10px;color:var(--slate);align-self:flex-end;height:38px}
   #asis-mic:hover{background:#eef4f1}
@@ -10551,6 +10578,13 @@ function acReemplazarCodigos(txt, viejo, nuevo){
 async function abrirAsistenteCambios(tipoIni, procesoIni){
   if(!esAdmin()){ toast('Solo el administrador puede usar el asistente de cambios.', true); return; }
   if(AC && document.getElementById('ac_modal')){ acMostrar(); return; }
+  // Un doble clic abría dos ventanas: la segunda quedaba vacía encima de la primera
+  if(window._AC_ABRIENDO) return;
+  window._AC_ABRIENDO=true;
+  try{ await _acAbrirInterno(tipoIni, procesoIni); } finally { window._AC_ABRIENDO=false; }
+}
+async function _acAbrirInterno(tipoIni, procesoIni){
+  ['ac_modal','ac_flotante'].forEach(id=>{ const e=document.getElementById(id); if(e) e.remove(); });
   try{ STATE.inventario=[]; await loadInventario(); }catch(_){}
   _PROC_VIGENTES=null;
   const vig=acVig();
@@ -10559,17 +10593,18 @@ async function abrirAsistenteCambios(tipoIni, procesoIni){
          aplicado:false, resultado:null, bitacoraId:null, codigoCambio:'', confirmacion:'',
          invOk:false, avisoOk:false, sinAviso:false, procesos:Object.keys(vig).sort().map(c=>vig[c]) };
   document.body.insertAdjacentHTML('beforeend', `
-  <div id="ac_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
-   <div style="background:var(--card);border-radius:14px;max-width:1000px;width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden">
-    <div style="padding:16px 22px 0;display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <h2 style="margin:0;font-size:20px">🔀 Asistente de cambios al mapa de procesos</h2>
-      <span><button class="btn btn-sm" onclick="acMinimizar()" title="Ir al aplicativo; el asistente te espera">▁ Minimizar</button>
-      <button class="icon-btn" onclick="cerrarAsistenteCambios()">✕</button></span>
+  <div id="ac_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">
+   <div class="ac-caja">
+    <div class="ac-cab">
+      <div><h2>🔀 Asistente de cambios al mapa de procesos</h2><div class="ac-sub" id="ac_sub"></div></div>
+      <span style="display:flex;gap:6px"><button class="btn btn-sm" onclick="acMinimizar()" title="Ir al aplicativo; el asistente te espera">▁ Minimizar</button>
+      <button class="icon-btn" onclick="cerrarAsistenteCambios()" title="Cerrar">✕</button></span>
     </div>
-    <div id="ac_barra" style="padding:12px 22px 10px;border-bottom:1px solid var(--line)"></div>
-    <div id="ac_cuerpo" style="flex:1;min-height:0;overflow:auto;padding:16px 22px"></div>
-    <div style="display:flex;gap:10px;align-items:center;border-top:1px solid var(--line);padding:12px 22px">
-      <div id="ac_estado" class="hint" style="flex:1;font-size:13px"></div>
+    <div class="ac-pasos" id="ac_barra"></div>
+    <div class="ac-cuerpo" id="ac_cuerpo"></div>
+    <div class="ac-pie">
+      <div class="ac-estado" id="ac_estado"></div>
+      <span class="ac-ver">v112</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
@@ -10630,7 +10665,7 @@ const AC_GUIA = [
 ];
 function acGuia(paso){
   const g=AC_GUIA[paso]; if(!g) return '';
-  return `<details open style="background:#f2f7fc;border:1px solid #c9dcf0;border-radius:11px;padding:10px 14px;margin-bottom:14px;font-size:13.5px;line-height:1.55">
+  return `<details ${AC.guiaCerrada&&AC.guiaCerrada[paso]?'':'open'} ontoggle="AC.guiaCerrada=AC.guiaCerrada||{};AC.guiaCerrada[${paso}]=!this.open" style="background:#f2f7fc;border:1px solid #c9dcf0;border-radius:11px;padding:9px 13px;margin-bottom:12px;font-size:13px;line-height:1.5">
     <summary style="cursor:pointer;font-weight:700;color:#2b4c7e">💡 Paso ${paso+1} de 6 · ¿Qué hago aquí?</summary>
     <div style="margin-top:6px">${g.que}</div>
     <ol style="margin:6px 0 0 18px;padding:0">${g.pasos.map(x=>`<li style="margin:2px 0">${x}</li>`).join('')}</ol>
@@ -10656,11 +10691,12 @@ window.acPreguntarAsistente=acPreguntarAsistente;
 
 function acPintar(){
   if(!AC) return;
-  document.getElementById('ac_barra').innerHTML = '<div style="display:flex;gap:6px;flex-wrap:wrap">'+AC_PASOS.map((n,i)=>{
-    const act=i===AC.paso, ok=i<=AC.hecho;
-    const bg= act?'var(--brand)': ok?'#e3f3ea':'#f1f3f2', fg= act?'#fff': ok?'var(--brand)':'#9aa5a0';
-    return `<div style="flex:1;min-width:105px;background:${bg};color:${fg};border-radius:8px;padding:7px 8px;font-size:12.5px;font-weight:600;text-align:center">${ok&&!act?'✓':(i+1)+'.'} ${n}</div>`;
-  }).join('')+'</div>';
+  document.getElementById('ac_barra').innerHTML = AC_PASOS.map((n,i)=>{
+    const act=i===AC.paso, ok=i<=AC.hecho && !act;
+    return `<div class="ac-paso ${act?'act':''} ${ok?'ok':''}"><div class="ac-bola">${ok?'✓':i+1}</div><div class="ac-etq">${n}</div></div>`;
+  }).join('');
+  const sub=document.getElementById('ac_sub');
+  if(sub) sub.textContent = 'Paso '+(AC.paso+1)+' de 6 · '+AC_PASOS[AC.paso] + (AC.tipo?' · '+AC_TIPOS[AC.tipo].t:'') + (AC.proceso?' · '+acCodigo(AC.proceso):'');
   document.getElementById('ac_cuerpo').innerHTML = acGuia(AC.paso) + [acPaso1,acPaso2,acPaso3,acPaso4,acPaso5,acPaso6][AC.paso]();
   const atras=document.getElementById('ac_atras');
   atras.style.visibility = (AC.paso>0 && !AC.aplicado) ? 'visible':'hidden';
@@ -10671,7 +10707,7 @@ function acPintar(){
 /* ===================== ① Qué cambiar ===================== */
 function acPaso1(){
   if(AC.tipo==='crear') return `<p style="margin:0 0 12px;color:var(--slate)">Vas a <b>crear un proceso nuevo</b>. En el paso siguiente indicarás su código y su nombre; no hace falta elegir nada de la lista.</p>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">${acTiposHTML()}</div>`;
+    ${acTiposHTML()}`;
   return `<p style="margin:0 0 12px;color:var(--slate)">Elige el proceso y el tipo de cambio. <b>Hasta el paso 4 no se modifica nada</b>: puedes explorar con tranquilidad.</p>
   <label style="font-weight:600;display:block;margin-bottom:4px">Proceso <span class="hint" style="font-weight:400">— escribe para buscar y <b>haz clic</b> en el proceso para elegirlo</span></label>
   ${AC.proceso?`<div style="display:flex;align-items:center;gap:8px;background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:8px 11px;margin-bottom:6px;font-size:14px">✅ <b>Elegido:</b> ${_acEsc(AC.proceso)}</div>`:''}
@@ -10679,15 +10715,15 @@ function acPaso1(){
     style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font:inherit;margin-bottom:6px">
   <div id="ac_lista" style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:9px;margin-bottom:16px">${acListaHTML(AC.proceso)}</div>
   <label style="font-weight:600;display:block;margin-bottom:6px">Tipo de cambio</label>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px">
-  ${acTiposHTML()}
-  </div>`;
+  ${acTiposHTML()}`;
 }
 function acTiposHTML(){
-  return `${Object.keys(AC_TIPOS).map(k=>`<label style="border:1px solid ${AC.tipo===k?'var(--brand)':'var(--line)'};background:${AC.tipo===k?'#eef7f2':'transparent'};border-radius:9px;padding:7px 10px;cursor:pointer;display:block;font-size:14px">
-      <input type="radio" name="ac_tipo" value="${k}" ${AC.tipo===k?'checked':''} onchange="acCambiarTipo(this.value)"> <b>${AC_TIPOS[k].t}</b>
-      <div class="hint" style="font-size:11.5px;margin-top:2px;line-height:1.35">${AC_TIPOS[k].d}</div></label>`).join('')}`;
+  const IC={renombrar:'✏️',mover:'🚚',dividir:'✂️',fusionar:'🔗',retirar:'🗑️',crear:'➕'};
+  return '<div class="ac-tipos">'+Object.keys(AC_TIPOS).map(k=>`<label class="ac-tipo ${AC.tipo===k?'sel':''}">
+      <input type="radio" name="ac_tipo" value="${k}" ${AC.tipo===k?'checked':''} onchange="acCambiarTipo(this.value)">
+      <span class="ic">${IC[k]}</span><span><b>${AC_TIPOS[k].t}</b><small>${AC_TIPOS[k].d}</small></span></label>`).join('')+'</div>';
 }
+
 function acCambiarTipo(t){
   if(t==='crear' || AC.tipo==='crear') AC.proceso='';
   AC.tipo=t; AC.detalle={}; AC.nuevos={}; acInvalidarDesde(1); acPintar();
@@ -11262,7 +11298,8 @@ function acValidar(){
     msg = AC.aplicado ? (ok?'Cambio aplicado. Continúa para cerrarlo.':'Revisa las observaciones para continuar.') : 'Escribe el código para confirmar y pulsa «Aplicar el cambio».';
   }
   if(AC.paso===5){ ok = AC.invOk && (AC.avisoOk || AC.sinAviso); msg = ok?'Todo listo: pulsa Finalizar.': !AC.invOk?'Falta completar y comprobar la tarea en el Inventario.':'Falta enviar el aviso a las oficinas.'; }
-  sig.disabled=!ok; est.textContent=msg;
+  sig.disabled=!ok;
+  est.innerHTML = (ok?'<span style="color:var(--brand)">✅</span> ':'<span style="color:#d08a00">●</span> ')+_acEsc(msg);
 }
 function acSiguiente(){
   if(document.getElementById('ac_sig').disabled) return;
