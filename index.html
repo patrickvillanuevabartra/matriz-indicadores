@@ -6906,7 +6906,7 @@ async function csReemplazarTexto(viejo, nuevo, alProgreso){
       const mapa = Object.assign({}, h.mapa||{}, await rnCamposDe(h.ent)||{});
       const campos = {};
       for(const kk in h.campos){
-        const fid = _rnEsIdCampo(kk) ? kk : mapa[kk];
+        const fid = _rnEsIdCampo(kk) ? kk : (mapa[kk]||mapa[String(kk).trim()]);
         if(!fid) throw new Error('columna no identificada: '+kk);
         campos[fid]=h.campos[kk];
       }
@@ -10608,7 +10608,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v113</span>
+      <span class="ac-ver">v115</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
@@ -10662,10 +10662,10 @@ const AC_GUIA = [
    ejemplo:'Para Tutoría escribirías <code>M01.05.04</code>. Si algo falla al crear el destino, el asistente deshace lo creado y no toca nada más.',
    nota:'Guarda el archivo de respaldo (<code>respaldo-CC-….json</code>) en una carpeta compartida de la Coordinación.' },
  { que:'<b>Cierra el cambio</b>: dos tareas y listo.',
-   pasos:['<b>Inventario:</b> pulsa «Ir al Inventario», haz lo que se indica y vuelve con el botón «Volver al asistente». Luego pulsa «Ya lo hice: comprobar».',
+   pasos:['<b>Inventario:</b> pulsa «🗑️ Retirar automáticamente». El asistente comprueba que no quede nada colgando del proceso antiguo y lo retira en el orden correcto. (Si es un renombrado, se hace con el ✏️ del Inventario y luego «Ya lo hice: comprobar».)',
           '<b>Oficinas:</b> envía primero una prueba a tu correo; si se ve bien, envía los avisos.',
           'Cuando ambas tareas estén en verde, pulsa <b>Finalizar</b>.'],
-   ejemplo:'Para retirar el <code>M01.05.04</code> antiguo, bórralo con la papelera de abajo hacia arriba: primero los procedimientos, luego los subprocesos y al final el proceso.' }
+   ejemplo:'Al mover Tutoría, «Retirar automáticamente» borra el <code>M01.05.04</code> antiguo: primero sus nueve procedimientos, luego sus tres subprocesos y al final el proceso.' }
 ];
 function acGuia(paso){
   const g=AC_GUIA[paso]; if(!g) return '';
@@ -11103,6 +11103,8 @@ function acPaso5(){
       <b style="font-size:16px">${R.errores.length?'⚠️ Cambio aplicado con observaciones':'✅ Cambio aplicado'}</b>
       <div style="margin-top:6px">${AC.creadosInv?AC.creadosInv+' proceso(s) creados en el Inventario · ':''}${R.ok} registro(s) actualizados${R.errores.length?' · <b>'+R.errores.length+' no se pudieron actualizar</b>':''}. Bitácora: <b>${_acEsc(AC.codigoCambio)}</b>. Se descargó el respaldo.</div>
       ${R.errores.length?`<div style="max-height:150px;overflow:auto;font-size:12.5px;margin-top:8px">${R.errores.map(e=>'· '+_acEsc(e)).join('<br>')}</div>
+        <div style="margin-top:10px"><button class="btn btn-sm btn-primary" id="ac_reintentar" onclick="acReintentar()">🔁 Reintentar los que fallaron</button> <span id="ac_reint_estado" class="hint"></span></div>
+        <div class="hint" style="margin-top:6px"><b>Antes de retirar el proceso antiguo, conviene reintentar:</b> los registros que fallaron siguen apuntando a él.</div>
         <label style="display:flex;gap:8px;margin-top:10px;cursor:pointer"><input type="checkbox" ${AC.aceptoErrores?'checked':''} onchange="AC.aceptoErrores=this.checked;acValidar()"> Lo revisaré después; continuar para cerrar el cambio.</label>`:''}
       </div><p class="hint" style="margin-top:10px">Ya no se puede volver atrás. Falta el último paso: el Inventario y el aviso a las oficinas.</p>`;
   }
@@ -11154,6 +11156,30 @@ async function acCrearDestino(prog){
   return lista.length;
 }
 
+async function acReintentar(){
+  const R=AC.resultado; if(!R || !(R.fallidos||[]).length) return;
+  const b=document.getElementById('ac_reintentar'), est=document.getElementById('ac_reint_estado');
+  if(b) b.disabled=true;
+  const ops=acPlan().filter(o=>R.fallidos.includes(o.id));
+  const errores=[], fallidos=[]; let ok=0;
+  for(let i=0;i<ops.length;i++){
+    const o=ops[i]; if(est) est.textContent='Reintentando '+(i+1)+' de '+ops.length+'…';
+    try{
+      const mapa=_mapaCamposDeRegistro(o.v), campos={};
+      for(const k in o.campos){ const fid=mapa[k]||mapa[String(k).trim()]; if(!fid) throw new Error('columna «'+k+'» no identificada'); campos[fid]=o.campos[k]; }
+      await API.saveForm(o.id, campos, o.ent); ok++;
+    }catch(e){ errores.push(o.tabla+' · '+o.id+': '+e.message); fallidos.push(o.id); }
+    await new Promise(r=>setTimeout(r,400));
+  }
+  AC.resultado={ ok:R.ok+ok, errores, fallidos };
+  try{ const B=AC_BITACORA, c={}; c[B.estado]= errores.length?'Aplicado con errores':'Aplicado';
+    c[B.resultado]=(AC.creadosInv?AC.creadosInv+' proceso(s) creados en el Inventario. ':'')+AC.resultado.ok+' registro(s) actualizados'+(errores.length?'.\nErrores:\n'+errores.join('\n'):' (algunos en un segundo intento).');
+    if(AC.bitacoraId) await API.saveForm(AC.bitacoraId, c, B.ent); }catch(_){}
+  toast(errores.length? errores.length+' registro(s) siguen fallando.' : '✅ Todos los registros quedaron actualizados.');
+  acPintar();
+}
+window.acReintentar=acReintentar;
+
 async function acAplicar(){
   const btn=document.getElementById('ac_aplicar'), prog=document.getElementById('ac_progreso');
   if(btn.disabled || AC.aplicando) return;
@@ -11181,18 +11207,18 @@ async function acAplicar(){
     const rb=await API.saveForm(null, c, B.ent);
     AC.bitacoraId = (rb && (rb.id || (rb.record&&rb.record.id))) || null;
   }catch(e){ prog.innerHTML='<span style="color:#c0392b">No se pudo abrir la bitácora: '+_acEsc(e.message)+'. No se aplicó nada.</span>'; AC.aplicando=false; btn.disabled=false; return; }
-  let ok=0; const errores=[];
+  let ok=0; const errores=[], fallidos=[];
   for(let i=0;i<ops.length;i++){
     const o=ops[i];
     prog.innerHTML=`⏳ Aplicando ${i+1} de ${ops.length}… no cierres esta ventana.`;
     try{
       const mapa=_mapaCamposDeRegistro(o.v), campos={};
-      for(const k in o.campos){ const fid=mapa[k]; if(!fid) throw new Error('columna «'+k+'» no identificada'); campos[fid]=o.campos[k]; }
+      for(const k in o.campos){ const fid=mapa[k]||mapa[String(k).trim()]; if(!fid) throw new Error('columna «'+k+'» no identificada'); campos[fid]=o.campos[k]; }
       await API.saveForm(o.id, campos, o.ent); ok++;
-    }catch(e){ errores.push(o.tabla+' · '+o.id+': '+e.message); }
+    }catch(e){ errores.push(o.tabla+' · '+o.id+': '+e.message); fallidos.push(o.id); }
     await new Promise(r=>setTimeout(r, (i+1)%20===0?3000:400));
   }
-  AC.resultado={ok, errores}; AC.aplicado=true; AC.aplicando=false; AC.hecho=Math.max(AC.hecho,4);
+  AC.resultado={ok, errores, fallidos}; AC.aplicado=true; AC.aplicando=false; AC.hecho=Math.max(AC.hecho,4);
   try{ const B=AC_BITACORA, c={}; c[B.estado]= errores.length?'Aplicado con errores':'Aplicado';
     c[B.resultado]=(AC.creadosInv?AC.creadosInv+' proceso(s) creados en el Inventario. ':'')+ok+' registro(s) actualizados.'+(errores.length?'\nErrores:\n'+errores.join('\n'):'');
     if(AC.bitacoraId) await API.saveForm(AC.bitacoraId, c, B.ent); }catch(_){}
@@ -11206,7 +11232,7 @@ function acTareaInventario(){
   const cod=acCodigo(AC.proceso);
   if(AC.tipo==='crear') return { titulo:'Comprueba el proceso nuevo en el Inventario', texto:`El asistente ya creó <b>${_acEsc(AC.proceso)}</b>. Pulsa «Ya lo hice: comprobar» para confirmar que aparece. Después, la oficina dueña deberá crear su <b>ficha de proceso</b>.` };
   if(AC.tipo==='renombrar') return { titulo:'Renombra el proceso en el Inventario', texto:`Cambia el nombre de <b>${_acEsc(AC.proceso)}</b> a <b>${_acEsc(cod+' '+AC.detalle.nombre)}</b> con el ✏️ del Inventario.` };
-  return { titulo:'Retira del Inventario el proceso antiguo', texto:`Elimina del Inventario <b>${_acEsc(AC.proceso)}</b> y sus subprocesos (todo lo que empieza por <code>${cod}</code>), con la papelera 🗑️. Hazlo de abajo hacia arriba.`
+  return { auto:true, titulo:'Retira del Inventario el proceso antiguo', texto:`El asistente retirará <b>${_acEsc(AC.proceso)}</b> y todo lo que contiene (lo que empieza por <code>${cod}</code>), de abajo hacia arriba. Antes comprobará que ya no quede nada que dependa de él: si queda algo, no borrará nada y te dirá qué es.`
     + (AC.tipo==='retirar' && AC.dec.ind==='mantener' && AC.impacto.indicadores.length ? '<br><span class="hint">Los indicadores que dejaste para revisar quedarán marcados en morado. Es lo esperado.</span>':'') };
 }
 async function acVerificarInventario(){
@@ -11220,6 +11246,61 @@ async function acVerificarInventario(){
   if(!AC.invOk) toast(AC.tipo==='renombrar'?'Todavía no aparece el nombre nuevo en el Inventario.':'El proceso antiguo todavía figura en el Inventario.', true);
 }
 window.acVerificarInventario=acVerificarInventario;
+/* Retira del Inventario el proceso antiguo y todo lo que cuelga de él, de abajo
+   hacia arriba, con la misma lógica que la papelera del Inventario: primero las filas
+   del Inventario y después los registros de las tablas de nivel. Antes de borrar
+   comprueba que ya no quede nada colgando; si queda, no borra y dice qué es. */
+async function acRetirarAntiguo(){
+  const viejo=acCodigo(AC.proceso), est=document.getElementById('ac_inv_estado'), btn=document.getElementById('ac_retirar');
+  const msg=t=>{ if(est) est.innerHTML=t; };
+  const esperar=ms=>new Promise(r=>setTimeout(r,ms));
+  if(btn) btn.disabled=true;
+  try{
+    msg('⏳ Comprobando que ya no quede nada que dependa de '+_acEsc(viejo)+'…');
+    _AC_DEP.t=0;   // lectura fresca, sin caché
+    const d=await _acDependientes(viejo);
+    if(d.total){
+      const partes=[d.fichas?d.fichas+' ficha(s)':'', d.inds?d.inds+' indicador(es)':'', d.riesgos?d.riesgos+' riesgo(s)':''].filter(Boolean).join(', ');
+      if(AC.tipo!=='retirar'){
+        msg('<span style="color:#c0392b">✕ Todavía dependen de '+_acEsc(viejo)+': '+partes+'. <b>No se borró nada.</b> Vuelve al paso anterior y pulsa «🔁 Reintentar los que fallaron».</span>');
+        if(btn) btn.disabled=false; return;
+      }
+      if(!confirm('Quedan '+partes+' que decidiste dejar para revisar.\n\nAl retirar el proceso, quedarán marcados como «Proceso inexistente» hasta que los reasignes.\n\n¿Continuar?')){ msg(''); if(btn) btn.disabled=false; return; }
+    }
+    STATE.inventario=[]; const inv=await loadInventario(true);
+    const C=INV_COLS, enRama=c=>!!c && (c===viejo || acEsDescendiente(c,viejo));
+    const prof=c=>String(c).split('.').length;
+    // Filas del Inventario cuyo elemento es el proceso antiguo o algo dentro de él
+    const filas=(inv||[]).map(r=>({ r, c:acCodigo(((_invNivelElemento(r))||{}).nombre||'') })).filter(x=>enRama(x.c))
+      .sort((a,b)=>prof(b.c)-prof(a.c));
+    // Registros de las tablas de nivel que pertenecen a esa rama
+    const niveles=new Map();
+    (inv||[]).forEach(r=>{ const v=r.values||{};
+      [C.n0,C.n1,C.n2,C.n3].forEach(col=>{ const t=String(v[col]||'').trim(); const c=acCodigo(t); if(enRama(c)) niveles.set(c,{col, nombre:t}); }); });
+    const lv=[...niveles.entries()].sort((a,b)=>prof(b[0])-prof(a[0]));
+    if(!filas.length && !lv.length){ msg('No quedaba nada de '+_acEsc(viejo)+' en el Inventario.'); await acVerificarInventario(); return; }
+    if(!confirm('Se retirarán del Inventario '+filas.length+' fila(s) y '+lv.length+' registro(s) de niveles de '+viejo+' y todo lo que contiene.\n\nYa no queda nada que dependa de ellos. Esta acción no se puede deshacer.\n\n¿Continuar?')){ msg(''); if(btn) btn.disabled=false; return; }
+    const errores=[]; let n=0;
+    for(const x of filas){
+      msg('⏳ Retirando del Inventario '+(++n)+' de '+filas.length+': '+_acEsc(x.c)+'…');
+      try{ await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+x.r.id+'.json','DELETE',{}); }catch(e){ errores.push(x.c+': '+e.message); }
+      await esperar(n%20===0?3000:400);
+    }
+    let m=0;
+    for(const [c,x] of lv){
+      msg('⏳ Limpiando la tabla de niveles '+(++m)+' de '+lv.length+': '+_acEsc(c)+'…');
+      try{ await _borrarEnTablaNivel(x.col, x.nombre); }catch(e){ errores.push(c+': '+e.message); }
+      await esperar(400);
+    }
+    try{ await invalidarCachesProcesos(); }catch(_){}
+    AC.retiro = filas.length+' fila(s) del Inventario y '+lv.length+' registro(s) de niveles retirados'+(errores.length?' ('+errores.length+' con error)':'');
+    try{ if(AC.bitacoraId){ const B=AC_BITACORA, c={}; c[B.resultado]=(AC.resultado?AC.resultado.ok+' registro(s) actualizados. ':'')+'Proceso antiguo retirado: '+AC.retiro+'.'; await API.saveForm(AC.bitacoraId, c, B.ent); } }catch(_){}
+    if(errores.length) toast(errores.length+' elemento(s) no se pudieron retirar; revisa el Inventario.', true);
+    await acVerificarInventario();
+  }catch(e){ msg('<span style="color:#c0392b">✕ '+_acEsc(e.message)+'</span>'); if(btn) btn.disabled=false; }
+}
+window.acRetirarAntiguo=acRetirarAntiguo;
+
 function acIrInventario(){ acMinimizar(); try{ const b=document.getElementById('navInventario'); if(b) b.click(); }catch(_){} toast('Haz el cambio en el Inventario y vuelve con el botón «Volver al asistente».'); }
 window.acIrInventario=acIrInventario;
 
@@ -11259,7 +11340,11 @@ function acPaso6(){
    <div style="border:1px solid ${AC.invOk?'#a8d5bd':'var(--line)'};background:${AC.invOk?'#f2faf5':'transparent'};border-radius:10px;padding:12px 14px;margin-bottom:12px">
      <div style="font-weight:700">${AC.invOk?'✅':'1.'} ${T.titulo}</div>
      <div style="margin:6px 0 10px;font-size:13.5px">${T.texto}</div>
-     ${AC.invOk?'<div style="color:var(--brand);font-weight:600">Comprobado en el Inventario.</div>':`<button class="btn btn-sm" onclick="acIrInventario()">Ir al Inventario</button>
+     ${AC.invOk?`<div style="color:var(--brand);font-weight:600">✅ Comprobado en el Inventario${AC.retiro?' · '+_acEsc(AC.retiro):''}.</div>`
+       : T.auto ? `<button class="btn btn-sm btn-primary" id="ac_retirar" onclick="acRetirarAntiguo()">🗑️ Retirar automáticamente</button>
+           <div id="ac_inv_estado" style="margin-top:8px;font-size:13px"></div>
+           <div class="hint" style="margin-top:6px;font-size:12px">¿Prefieres hacerlo a mano? <a href="#" onclick="acIrInventario();return false">Ir al Inventario</a> y luego <a href="#" onclick="acVerificarInventario();return false">comprobar</a>.</div>`
+       : `<button class="btn btn-sm" onclick="acIrInventario()">Ir al Inventario</button>
      <button class="btn btn-sm btn-primary" onclick="acVerificarInventario()">Ya lo hice: comprobar</button> <span id="ac_inv_estado" class="hint"></span>`}
    </div>
    <div style="border:1px solid ${AC.avisoOk||AC.sinAviso?'#a8d5bd':'var(--line)'};background:${AC.avisoOk||AC.sinAviso?'#f2faf5':'transparent'};border-radius:10px;padding:12px 14px">
@@ -11603,7 +11688,7 @@ async function rnReemplazar(){
       const mapa = Object.assign({}, h.mapa||{}, await rnCamposDe(h.ent)||{});
       const campos = {};
       for(const k in h.campos){
-        const fid = _rnEsIdCampo(k) ? k : mapa[k];
+        const fid = _rnEsIdCampo(k) ? k : (mapa[k]||mapa[String(k).trim()]);
         if(!fid) throw new Error('no se pudo identificar la columna «'+k+'»');
         campos[fid]=h.campos[k];
       }
