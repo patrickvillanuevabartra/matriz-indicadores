@@ -6204,7 +6204,7 @@ window._mismaPersona=_mismaPersona;
    fichas sigan funcionando. */
 function _nombreVivo(texto){
   const t=String(texto||'').trim();
-  const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.+)$/);
+  const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})*)\s+(.+)$/);
   if(!m) return t;
   const vig=(typeof _construirProcesosVigentes==='function') ? _construirProcesosVigentes() : null;
   return (vig && vig[m[1]]) ? vig[m[1]] : t;   // si el código ya no existe, se deja como estaba
@@ -7173,7 +7173,7 @@ async function abrirControlSync(){
         const v=r.values||{};
         ['Proceso nivel 0','Proceso nivel 1','Proceso nivel 2','Proceso nivel 3','Procedimiento'].forEach(k=>{
           const t=String(v[k]||'').trim();
-          const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.*)$/);
+          const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})*)\s+(.*)$/);
           if(m) vigente[m[1]] = soloProceso(t);
         });
       });
@@ -7191,7 +7191,7 @@ async function abrirControlSync(){
         const v=r.values||{};
         Object.keys(v).forEach(k=>{
           const t=String(v[k]||'').trim();
-          const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.+)$/);
+          const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})*)\s+(.+)$/);
           if(!m) return;
           const cod=m[1];
           const proc=soloProceso(t);
@@ -7436,7 +7436,7 @@ function _construirProcesosVigentes(){
     const v=r.values||{};
     ['Proceso nivel 0','Proceso nivel 1','Proceso nivel 2','Proceso nivel 3','Procedimiento'].forEach(k=>{
       const t=String(v[k]||'').trim();
-      const mm=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.*)$/);
+      const mm=t.match(/^([A-Z]\d{2}(?:\.\d{2})*)\s+(.*)$/);
       if(mm) m[mm[1]] = t;
     });
   });
@@ -7448,7 +7448,7 @@ function _alertaProceso(textoInd){
   if(!vig || !Object.keys(vig).length) return null;   // inventario no cargado: no alarmar
   const norm = s => String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
   const t=String(textoInd||'').trim();
-  const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})+)\s+(.+)$/);
+  const m=t.match(/^([A-Z]\d{2}(?:\.\d{2})*)\s+(.+)$/);
   if(!m) return null;
   const cod=m[1];
   // Nombre del proceso = lo anterior al guion largo que separa el indicador
@@ -10559,9 +10559,24 @@ function acTipoDeLetra(letra){
   }
   return '';
 }
+// Nombres conocidos de cada código, leídos de TODAS las rutas del Inventario. Así se
+// encuentra un nivel que existe solo como padre (p. ej. M02, sin procedimientos propios).
+function _acSegmentosConocidos(){
+  const m={};
+  (STATE.inventario||[]).forEach(r=>{
+    String((r.values||{})['Ruta completa']||'').split(/\s*›\s*/).forEach(x=>{ const t=x.trim(), c=acCodigo(t); if(c && !m[c]) m[c]=t; });
+  });
+  return m;
+}
+// ¿Contiene la ruta todos los niveles del código? (M02.02.01 → M02, M02.02 y M02.02.01)
+function _acRutaCompleta(cod, ruta){
+  const seg=cod.split('.'), cods=String(ruta).split(/\s*›\s*/).map(x=>acCodigo(x.trim()));
+  for(let i=1;i<=seg.length;i++){ if(!cods.includes(seg.slice(0,i).join('.'))) return false; }
+  return true;
+}
 function acRutaDe(cod){
-  const vig=acVig(), seg=cod.split('.'), partes=[];
-  for(let i=1;i<=seg.length;i++){ const c=seg.slice(0,i).join('.'); if(vig[c]) partes.push(vig[c]); }
+  const vig=acVig(), conocidos=_acSegmentosConocidos(), seg=cod.split('.'), partes=[];
+  for(let i=1;i<=seg.length;i++){ const c=seg.slice(0,i).join('.'); const t=vig[c]||conocidos[c]; if(t) partes.push(t); }
   const tipo=acTipoDeLetra(cod.charAt(0));
   return (tipo?[tipo]:[]).concat(partes).join(' › ');
 }
@@ -10608,7 +10623,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v115</span>
+      <span class="ac-ver">v117</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
@@ -11136,7 +11151,10 @@ function acResumenTexto(){
   return `Subprocesos: ${I.subprocesos} · Fichas: ${I.fichas.length} · Indicadores: ${I.indicadores.length} (${I.indConMetas} con metas) · Riesgos: ${I.riesgos.length}\nOficinas: ${I.oficinas.join('; ')}`;
 }
 async function acCrearDestino(prog){
-  const lista=acListaACrear(); const creados=[]; const FID_RUTA='cIWOeqW6vkuildQSkfW4WT'; const pd=_nivelDef('proc');
+  const lista=acListaACrear(); const creados=[];
+  // Comprobación previa: si a alguna ruta le faltara un nivel, no se crea nada
+  const rotas=lista.filter(x=>!_acRutaCompleta(x.cod, acRutaDe(x.cod)));
+  if(rotas.length) throw new Error('No se encontró en el Inventario algún nivel superior de '+rotas[0].cod+' (ruta incompleta: «'+acRutaDe(rotas[0].cod)+'»). No se creó ni modificó nada. Revisa que sus procesos padre existan.'); const FID_RUTA='cIWOeqW6vkuildQSkfW4WT'; const pd=_nivelDef('proc');
   try{
     for(let i=0;i<lista.length;i++){
       const x=lista[i]; prog.innerHTML=`⏳ Creando en el Inventario ${i+1} de ${lista.length}: ${_acEsc(x.cod)}…`;
@@ -11194,6 +11212,9 @@ async function acAplicar(){
   }
   AC.creadosInv=creadosInv;
   const ops=acPlan(), d=new Date(), p2=n=>String(n).padStart(2,'0');
+  { const rutaCampos=['Proceso (ruta)','Proceso','Ruta completa'];
+    const rota=ops.find(o=>rutaCampos.some(k=>{ const t=o.campos[k]; if(!t) return false; const c=acCodigo(String(t).split(/\s*›\s*/).pop()); return c && !_acRutaCompleta(c,t); }));
+    if(rota){ prog.innerHTML='<span style="color:#c0392b">✕ Una ruta nueva quedaría incompleta ('+_acEsc(rota.tabla)+'). No se aplicó el traslado. Avisa a la Subcomisión de Sistematización.</span>'; AC.aplicando=false; btn.disabled=false; return; } }
   AC.codigoCambio='CC-'+d.getFullYear()+p2(d.getMonth()+1)+p2(d.getDate())+'-'+p2(d.getHours())+p2(d.getMinutes());
   try{
     acDescargarRespaldo(ops);
