@@ -10499,6 +10499,220 @@ function repfNota(i){
   const b=document.getElementById('repf_notabtn_'+i); if(b) b.textContent=f.nota?'✎ Nota ✓':'✎ Nota';
 }
 window.repfVer=repfVer; window.repfCambiarKudo=repfCambiarKudo; window.repfNota=repfNota;
+/* ==================================================================
+   DESCARGAS A EXCEL (libro con varias hojas, formato XML de Excel 2003)
+   1) Reporte de fichas registradas: global + por oficina + por ficha + por campo
+   2) Directorio de oficinas: quién tiene correo para reportes y quién tiene cuenta
+   ================================================================== */
+function _xEsc(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// hojas: [{nombre, anchos:[px], filas:[[celda]]}]; celda = valor | {v, s:estilo, n:true(número), m:combinar N columnas}
+function _xLibro(hojas){
+  const estilos = `<Styles>
+   <Style ss:ID="Default"><Font ss:FontName="Calibri" ss:Size="11"/><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+   <Style ss:ID="tit"><Font ss:FontName="Calibri" ss:Size="15" ss:Bold="1" ss:Color="#0F6B47"/></Style>
+   <Style ss:ID="sub"><Font ss:FontName="Calibri" ss:Size="10" ss:Color="#5B6B63"/></Style>
+   <Style ss:ID="sec"><Font ss:FontName="Calibri" ss:Size="12" ss:Bold="1" ss:Color="#0F6B47"/></Style>
+   <Style ss:ID="th"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#0F8F5E" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center" ss:Vertical="Center" ss:WrapText="1"/>
+     <Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Color="#FFFFFF"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Color="#FFFFFF"/></Borders></Style>
+   <Style ss:ID="td"><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Color="#DDE5E0"/></Borders><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+   <Style ss:ID="num"><Alignment ss:Horizontal="Center" ss:Vertical="Top"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Color="#DDE5E0"/></Borders></Style>
+   <Style ss:ID="grp"><Font ss:FontName="Calibri" ss:Bold="1"/><Interior ss:Color="#E8F3EC" ss:Pattern="Solid"/><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+   <Style ss:ID="grpn"><Font ss:FontName="Calibri" ss:Bold="1"/><Interior ss:Color="#E8F3EC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+   <Style ss:ID="ok"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#1F7A3F"/><Interior ss:Color="#DDF2E3" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+   <Style ss:ID="no"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#B03A2E"/><Interior ss:Color="#FBE3E0" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+   <Style ss:ID="mid"><Font ss:FontName="Calibri" ss:Bold="1" ss:Color="#8A6100"/><Interior ss:Color="#FFF1CC" ss:Pattern="Solid"/><Alignment ss:Horizontal="Center"/></Style>
+   <Style ss:ID="okt"><Font ss:FontName="Calibri" ss:Color="#1F7A3F"/><Interior ss:Color="#DDF2E3" ss:Pattern="Solid"/><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+   <Style ss:ID="not"><Font ss:FontName="Calibri" ss:Color="#B03A2E"/><Interior ss:Color="#FBE3E0" ss:Pattern="Solid"/><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+   <Style ss:ID="midt"><Font ss:FontName="Calibri" ss:Color="#8A6100"/><Interior ss:Color="#FFF1CC" ss:Pattern="Solid"/><Alignment ss:Vertical="Top" ss:WrapText="1"/></Style>
+   <Style ss:ID="kpi"><Font ss:FontName="Calibri" ss:Size="13" ss:Bold="1"/><Alignment ss:Horizontal="Center"/></Style>
+  </Styles>`;
+  const hojasXml = hojas.map(h=>{
+    const nombre=_xEsc(String(h.nombre).replace(/[\\\/\?\*\[\]:]/g,' ').slice(0,31));
+    const cols=(h.anchos||[]).map(w=>`<Column ss:Width="${w}"/>`).join('');
+    const filas=h.filas.map(f=>{
+      if(!f || !f.length) return '<Row/>';
+      return '<Row>'+f.map(c=>{
+        const o=(c!==null && typeof c==='object') ? c : {v:c};
+        const esNum = o.n || (typeof o.v==='number' && isFinite(o.v));
+        const st=o.s?` ss:StyleID="${o.s}"`:'', mg=o.m?` ss:MergeAcross="${o.m}"`:'';
+        return `<Cell${st}${mg}><Data ss:Type="${esNum?'Number':'String'}">${_xEsc(o.v)}</Data></Cell>`;
+      }).join('')+'</Row>';
+    }).join('');
+    const fijar = h.fijar ? `<WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>${h.fijar}</SplitHorizontal><TopRowBottomPane>${h.fijar}</TopRowBottomPane><ActivePane>2</ActivePane></WorksheetOptions>` : '';
+    return `<Worksheet ss:Name="${nombre}"><Table>${cols}${filas}</Table>${fijar}</Worksheet>`;
+  }).join('');
+  return '<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?>'
+    +'<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">'
+    +estilos+hojasXml+'</Workbook>';
+}
+function _xDescargar(xml, base){
+  const fecha=new Date().toISOString().slice(0,10);
+  const blob=new Blob([xml],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=base+'_'+fecha+'.xls';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Descargado. Si Excel avisa que el formato y la extensión no coinciden, pulsa «Sí»: el contenido es correcto.');
+}
+function _xPctStyle(p){ return p>=80?'ok':p>=50?'mid':'no'; }
+function _xFechaLarga(){ try{ return new Date().toLocaleDateString('es-PE',{day:'numeric',month:'long',year:'numeric'}); }catch(_){ return new Date().toISOString().slice(0,10); } }
+const _XNORM = s=>String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+
+// Directorio de oficinas: universo de oficinas + responsable/correo + cuentas del aplicativo
+async function _xDirectorioOficinas(filasFichas){
+  MAPA_RESP_PROCESO=null;
+  const [ofis, mapaResp, usuarios] = await Promise.all([
+    cargarOficinasOpts().catch(()=>[]),
+    cargarMapaRespProceso().catch(()=>({})),
+    API.records(CONFIG.ENTITIES.USUARIOS).then(d=>d.records||[]).catch(()=>[])
+  ]);
+  const L = x => (x && !esBasura(x)) ? String(x).trim() : '';
+  const cuentas = {};   // oficina normalizada -> [{usuario, nombre, activo}]
+  usuarios.forEach(r=>{
+    const v=r.values||{}; const rol=L(v['Rol']); if(rol!=='Oficina') return;
+    const nombre = (typeof _leerNombreUsuario==='function') ? _leerNombreUsuario(v) : '';
+    _parseOficinas(L(v['Oficina asignada'])).filter(o=>!_esMarcaVerTodo(o)).forEach(o=>{
+      (cuentas[_XNORM(o)]=cuentas[_XNORM(o)]||[]).push({ usuario:L(v['Usuario']), nombre, activo: L(v['Activo'])!=='No' });
+    });
+  });
+  const fichasPor = {}; (filasFichas||[]).forEach(f=>{ fichasPor[_XNORM(f.oficina)]=f; });
+  const universo = new Map();
+  (ofis||[]).forEach(o=>{ const n=(o&&o.label)||o; if(n) universo.set(_XNORM(n), String(n).trim()); });
+  (filasFichas||[]).forEach(f=>{ if(!universo.has(_XNORM(f.oficina))) universo.set(_XNORM(f.oficina), f.oficina); });
+  return [...universo.entries()].map(([k,nombre])=>{
+    const rp = mapaResp[k] || null;
+    const cs = (cuentas[k]||[]), activas = cs.filter(c=>c.activo);
+    const correoOk = !!(rp && /@/.test(rp.correo||''));
+    const falta=[];
+    if(!rp) falta.push('Registrar la oficina en la tabla «Responsable de proceso» (o corregir el nombre: debe escribirse igual que en Oficina/Dependencia)');
+    else {
+      if(!rp.responsable) falta.push('Completar el nombre del responsable de proceso');
+      if(!correoOk) falta.push('Completar el correo del responsable en «Responsable de proceso»');
+    }
+    if(!activas.length) falta.push(cs.length ? 'Reactivar su cuenta en Administración → Usuarios' : 'Crear su cuenta (rol Oficina) en Administración → Usuarios');
+    const ff = fichasPor[k];
+    return { oficina:nombre, enTabla:!!rp, responsable:(rp&&rp.responsable)||'', correo:(rp&&rp.correo)||'', celular:(rp&&rp.celular)||'',
+             correoOk, cuentas:cs, activas:activas.length, nFichas: ff?ff.fichas.length:0, pctFichas: ff?ff.pct:null, falta };
+  }).sort((a,b)=> (b.falta.length-a.falta.length) || a.oficina.localeCompare(b.oficina,'es'));
+}
+
+function _xHojaDirectorio(dir){
+  const conCorreo=dir.filter(d=>d.correoOk).length, conCuenta=dir.filter(d=>d.activas).length, completas=dir.filter(d=>!d.falta.length).length;
+  const filas=[
+    [{v:'Directorio de oficinas: correo para reportes y cuenta en el aplicativo',s:'tit',m:8}],
+    [{v:'Matriz de Indicadores · SGOE ISO 21001 · Facultad de Ingeniería URP · al '+_xFechaLarga(),s:'sub',m:8}],
+    [],
+    [{v:'Son dos cosas distintas:',s:'sec',m:8}],
+    [{v:'• CORREO PARA REPORTES: los correos de avance y de fichas se envían al correo del responsable que figura en la tabla «Responsable de proceso» de QuintaDB. Si falta, el correo no sale.',m:8}],
+    [{v:'• CUENTA EN EL APLICATIVO: es el usuario y contraseña para ingresar (Administración → Usuarios). No interviene en el envío de correos.',m:8}],
+    [],
+    [{v:'Oficinas',s:'th'},{v:'Con correo para reportes',s:'th'},{v:'Con cuenta activa',s:'th'},{v:'Con todo en regla',s:'th'}],
+    [{v:dir.length,s:'kpi'},{v:conCorreo+' de '+dir.length,s:'kpi'},{v:conCuenta+' de '+dir.length,s:'kpi'},{v:completas+' de '+dir.length,s:'kpi'}],
+    [],
+    ['N°','Oficina / Dependencia','¿Recibe reportes por correo?','Responsable de proceso','Correo del responsable','Celular','¿Tiene cuenta en el aplicativo?','Usuario(s)','Fichas vigentes','Qué falta hacer'].map(v=>({v,s:'th'}))
+  ];
+  dir.forEach((d,i)=>{
+    const recibe = d.correoOk ? {v:'Sí',s:'ok'} : {v: d.enTabla ? 'No · falta el correo' : 'No · no figura en la tabla', s:'no'};
+    const cuenta = d.activas ? {v:'Sí ('+d.activas+')',s:'ok'} : {v: d.cuentas.length ? 'Desactivada' : 'No tiene', s: d.cuentas.length ? 'mid':'no'};
+    filas.push([{v:i+1,s:'num'},{v:d.oficina,s:'td'},recibe,{v:d.responsable||'—',s:'td'},{v:d.correo||'—',s:'td'},{v:d.celular||'—',s:'td'},cuenta,
+      {v:d.cuentas.map(c=>c.usuario+(c.activo?'':' (inactiva)')).join('; ')||'—',s:'td'},{v:d.nFichas,s:'num'},
+      {v:d.falta.length? d.falta.join(' · ') : '✓ Nada, está en regla', s: d.falta.length?'not':'okt'}]);
+  });
+  return { nombre:'Directorio de oficinas', anchos:[32,230,130,170,190,90,120,170,60,380], filas, fijar:11 };
+}
+
+async function descargarDirectorioOficinas(){
+  toast('Preparando el directorio de oficinas…');
+  try{
+    const filasF = window._REPF_FILAS || await _repfCalcular();
+    const dir = await _xDirectorioOficinas(filasF);
+    const sinCorreo = dir.filter(d=>!d.correoOk), sinCuenta = dir.filter(d=>!d.activas);
+    const h2 = { nombre:'Pendientes', anchos:[230,330,330], filas:[
+      [{v:'Lista de pendientes para completar el directorio',s:'tit',m:2}], [{v:'al '+_xFechaLarga(),s:'sub',m:2}], [],
+      [{v:'A) Oficinas que NO reciben correos de reporte ('+sinCorreo.length+')',s:'sec',m:2}],
+      ['Oficina','Motivo','Cómo se corrige'].map(v=>({v,s:'th'})),
+      ...sinCorreo.map(d=>[{v:d.oficina,s:'td'},{v:d.enTabla?'Falta el correo del responsable':'No figura en la tabla «Responsable de proceso»',s:'not'},
+        {v:d.enTabla?'En QuintaDB, tabla Responsable de proceso: completar «Correo electrónico responsable proceso».':'En QuintaDB, tabla Responsable de proceso: agregar la fila con «Unidad responsable» escrita igual que en Oficina/Dependencia, el responsable y su correo.',s:'td'}]),
+      [],
+      [{v:'B) Oficinas SIN cuenta activa en el aplicativo ('+sinCuenta.length+')',s:'sec',m:2}],
+      ['Oficina','Situación','Cómo se corrige'].map(v=>({v,s:'th'})),
+      ...sinCuenta.map(d=>[{v:d.oficina,s:'td'},{v:d.cuentas.length?'Tiene cuenta, pero desactivada':'No tiene cuenta',s:d.cuentas.length?'midt':'not'},
+        {v:d.cuentas.length?'Administración → Usuarios → reactivar (🔓).':'Administración → Usuarios → «+ Crear usuario», rol Oficina, marcar esta oficina.',s:'td'}])
+    ]};
+    _xDescargar(_xLibro([_xHojaDirectorio(dir), h2]), 'Directorio_oficinas_correo_y_cuentas');
+  }catch(e){ toast('No se pudo preparar el directorio: '+e.message, true); }
+}
+window.descargarDirectorioOficinas=descargarDirectorioOficinas;
+
+async function descargarReporteFichasExcel(){
+  toast('Preparando el reporte de fichas…');
+  try{
+    const F = window._REPF_FILAS || await _repfCalcular();
+    const C = REPF_CAMPOS.length;
+    let dir=[]; try{ dir=await _xDirectorioOficinas(F); }catch(_){}
+    const dirMap={}; dir.forEach(d=>dirMap[_XNORM(d.oficina)]=d);
+    const totF=F.reduce((a,x)=>a+x.fichas.length,0), comp=F.reduce((a,x)=>a+x.completas,0);
+    const llen=F.reduce((a,x)=>a+x.fichas.reduce((b,y)=>b+y.checks.filter(Boolean).length,0),0);
+    const pctCampos = totF? Math.round(llen/(totF*C)*100) : 0;
+    const etapaFicha = p=>REPF_NIVELES[_repfNivel(p, p===100?1:0, 1)];
+
+    // Hoja 1: Resumen global
+    const porEtapa = REPF_NIVELES.map((n,i)=>F.filter(f=>f.nivel===i).length);
+    const h1=[
+      [{v:'Reporte de fichas de proceso registradas',s:'tit',m:7}],
+      [{v:'Matriz de Indicadores · SGOE ISO 21001 · Facultad de Ingeniería URP · al '+_xFechaLarga(),s:'sub',m:7}],
+      [],
+      [{v:'1. Resultado global',s:'sec',m:7}],
+      ['Fichas vigentes','Oficinas dueñas','Fichas completas','% fichas completas','% campos llenos'].map(v=>({v,s:'th'})),
+      [{v:totF,s:'kpi'},{v:F.length,s:'kpi'},{v:comp,s:'kpi'},{v:(totF?Math.round(comp/totF*100):0)+' %',s:_xPctStyle(totF?Math.round(comp/totF*100):0)},{v:pctCampos+' %',s:_xPctStyle(pctCampos)}],
+      [],
+      [{v:'Oficinas por etapa',s:'sec',m:7}],
+      REPF_NIVELES.map(v=>({v,s:'th'})),
+      porEtapa.map(n=>({v:n,s:'kpi'})),
+      [],
+      [{v:'2. Resultado por oficina (de menor a mayor avance)',s:'sec',m:7}],
+      ['N°','Oficina dueña','Fichas','Completas','% fichas completas','% campos llenos','Etapa','Responsable de proceso','Correo para reportes'].map(v=>({v,s:'th'}))
+    ];
+    [...F].sort((a,b)=>a.pct-b.pct || a.oficina.localeCompare(b.oficina,'es')).forEach((f,i)=>{
+      const pc=f.fichas.length?Math.round(f.completas/f.fichas.length*100):0, d=dirMap[_XNORM(f.oficina)]||{};
+      h1.push([{v:i+1,s:'num'},{v:f.oficina,s:'td'},{v:f.fichas.length,s:'num'},{v:f.completas,s:'num'},{v:pc+' %',s:_xPctStyle(pc)},{v:f.pct+' %',s:_xPctStyle(f.pct)},
+        {v:REPF_NIVELES[f.nivel],s:'td'},{v:d.responsable||'—',s:'td'},{v:d.correoOk?d.correo:'⚠ sin correo',s:d.correoOk?'td':'not'}]);
+    });
+
+    // Hoja 2: Detalle por oficina y ficha (agrupado, con subtotal de cada oficina)
+    const cab=['Oficina / Ficha','Nivel',...REPF_CAMPOS.map(c=>c.l),'Campos llenos','% avance','Etapa','Falta completar'];
+    const h2=[[{v:'Detalle por oficina y por ficha',s:'tit',m:cab.length-1}],
+      [{v:'✓ = campo con contenido · ✗ = campo vacío. Solo se revisa que haya contenido, no su calidad. Cada oficina tiene una fila resumen (verde claro) seguida de sus fichas.',s:'sub',m:cab.length-1}],[],
+      cab.map(v=>({v,s:'th'}))];
+    F.forEach(f=>{
+      const llenosOf=f.fichas.reduce((b,y)=>b+y.checks.filter(Boolean).length,0);
+      const porCampo=REPF_CAMPOS.map((_,i)=>f.fichas.filter(y=>y.checks[i]).length);
+      h2.push([{v:f.oficina+'  ('+f.fichas.length+' ficha'+(f.fichas.length===1?'':'s')+')',s:'grp'},{v:'',s:'grp'},
+        ...porCampo.map(n=>({v:n+'/'+f.fichas.length,s:'grpn'})),{v:llenosOf+'/'+(f.fichas.length*C),s:'grpn'},{v:f.pct+' %',s:_xPctStyle(f.pct)},{v:REPF_NIVELES[f.nivel],s:'grp'},{v:f.completas+' de '+f.fichas.length+' completas',s:'grp'}]);
+      f.fichas.forEach(x=>{
+        const n=x.checks.filter(Boolean).length, p=Math.round(n/C*100);
+        const falta=REPF_CAMPOS.filter((_,i)=>!x.checks[i]).map(c=>c.l);
+        h2.push([{v:'    '+x.proceso,s:'td'},{v:x.nivel,s:'num'},...x.checks.map(c=>({v:c?'✓':'✗',s:c?'ok':'no'})),
+          {v:n+'/'+C,s:'num'},{v:p+' %',s:_xPctStyle(p)},{v:etapaFicha(p),s:'td'},{v:falta.length?falta.join(', '):'—',s:falta.length?'td':'okt'}]);
+      });
+    });
+
+    // Hoja 3: ¿Qué campos faltan más? (toda la Facultad)
+    const h3=[[{v:'¿Qué campos se completan menos? (toda la Facultad)',s:'tit',m:3}],
+      [{v:'Útil para decidir en qué capacitar o apoyar.',s:'sub',m:3}],[],
+      ['Campo','Fichas con el campo lleno','Fichas con el campo vacío','% lleno'].map(v=>({v,s:'th'}))];
+    REPF_CAMPOS.map((c,i)=>{ const n=F.reduce((a,f)=>a+f.fichas.filter(y=>y.checks[i]).length,0); return {l:c.l,n,p:totF?Math.round(n/totF*100):0}; })
+      .sort((a,b)=>a.p-b.p).forEach(r=>h3.push([{v:r.l,s:'td'},{v:r.n,s:'num'},{v:totF-r.n,s:'num'},{v:r.p+' %',s:_xPctStyle(r.p)}]));
+
+    const hojas=[
+      { nombre:'Resumen global', anchos:[32,260,60,70,90,90,90,170,200], filas:h1 },
+      { nombre:'Detalle por oficina', anchos:[300,40,...REPF_CAMPOS.map(()=>52),70,62,90,300], filas:h2, fijar:4 },
+      { nombre:'Campos más débiles', anchos:[180,140,140,70], filas:h3 }
+    ];
+    if(dir.length) hojas.push(_xHojaDirectorio(dir));
+    _xDescargar(_xLibro(hojas), 'Reporte_fichas_registradas');
+  }catch(e){ toast('No se pudo preparar el reporte: '+e.message, true); }
+}
+window.descargarReporteFichasExcel=descargarReporteFichasExcel;
+
 async function repTab(t){
   window._REP_TAB=t;
   ['ind','fic'].forEach(x=>{ const d=document.getElementById('rep_tab_'+x), b=document.getElementById('rep_tabbtn_'+x);
@@ -10511,14 +10725,18 @@ async function repTab(t){
     const reg=_repRegistro();
     const tot=filas.reduce((a,x)=>a+x.fichas.length,0), comp=filas.reduce((a,x)=>a+x.completas,0);
     c.innerHTML = `<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
+      <button class="btn" onclick="descargarReporteFichasExcel()" title="Libro de Excel: resumen global, detalle por oficina y por ficha, campos más débiles y directorio">📥 Descargar reporte de fichas (Excel)</button>
+      <button class="btn" onclick="descargarDirectorioOficinas()" title="Qué oficinas no tienen correo para reportes o no tienen cuenta en el aplicativo">📇 Oficinas sin correo o sin cuenta (Excel)</button></div>
+    ${_repSelBarra('repf_chk', filas.length)}
     <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--paper);text-align:left">
-        <th style="padding:8px"><input type="checkbox" checked onchange="document.querySelectorAll('.repf_chk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:8px"><input type="checkbox" id="repf_chk_th" checked title="Seleccionar / quitar todas" onchange="_repSelTodos('repf_chk',this.checked)"></th>
         <th style="padding:8px">Oficina dueña</th><th style="padding:8px;text-align:right">Fichas completas</th>
         <th style="padding:8px;text-align:right">Campos llenos</th><th style="padding:8px">Etapa</th>
         <th style="padding:8px">Kudo</th><th style="padding:8px"></th><th style="padding:8px">Resultado</th></tr></thead><tbody>
       ${filas.map((f,i)=>`<tr style="border-bottom:1px solid var(--line)">
-        <td style="padding:7px 8px"><input type="checkbox" class="repf_chk" data-i="${i}" checked></td>
+        <td style="padding:7px 8px"><input type="checkbox" class="repf_chk" data-i="${i}" checked onchange="_repSelSync('repf_chk')"></td>
         <td style="padding:7px 8px">${_acEsc(f.oficina)} <button class="btn btn-sm" style="margin-left:6px" onclick="repfVer(${i})">☑ Check list</button></td>
         <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.completas,f.fichas.length)} <span class="hint">· ${f.completas}/${f.fichas.length}</span></td>
         <td style="padding:7px 8px;text-align:right;white-space:nowrap">${f.pct>=80?'🟢':f.pct>=50?'🟡':'🔴'} ${f.pct} %</td>
@@ -10529,6 +10747,7 @@ async function repTab(t){
         <tr id="repf_det_${i}" style="display:none"><td></td><td colspan="7" style="padding:6px 8px 14px">${_repfChecklist(f)}</td></tr>`).join('')}
       </tbody></table></div>`;
   }
+  _repSelSync(t==='fic'?'repf_chk':'rep_chk');
 }
 window.repTab=repTab;
 async function enviarReporteFichas(modo){
@@ -10592,16 +10811,18 @@ async function abrirReporteAvance(){
       <p style="margin:0"><b>Progreso:</b> si una oficina sube de nivel respecto del último envío real, recibe además una felicitación por su avance. Las pruebas no cuentan como envío.</p>
     </details>
     ${sinConfig?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:11px 13px;margin-bottom:12px;color:#8a5a00"><b>Falta configurar el envío.</b></div>`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px"><button class="btn" onclick="descargarDirectorioOficinas()" title="Qué oficinas no tienen correo para reportes o no tienen cuenta en el aplicativo">📇 Oficinas sin correo o sin cuenta (Excel)</button></div>
+    ${_repSelBarra('rep_chk', filas.length)}
     <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--paper);text-align:left">
-        <th style="padding:8px"><input type="checkbox" checked onchange="document.querySelectorAll('.rep_chk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:8px"><input type="checkbox" id="rep_chk_th" checked title="Seleccionar / quitar todas" onchange="_repSelTodos('rep_chk',this.checked)"></th>
         <th style="padding:8px">Oficina</th>
         <th style="padding:8px;text-align:right">Con meta</th><th style="padding:8px;text-align:right">Con seguimiento</th>
         <th style="padding:8px;text-align:right">Avance</th><th style="padding:8px">Etapa de avance</th>
         <th style="padding:8px">Kudo</th><th style="padding:8px"></th><th style="padding:8px">Resultado</th>
       </tr></thead><tbody>
       ${filas.map((f,i)=>`<tr style="border-bottom:1px solid var(--line)">
-        <td style="padding:7px 8px"><input type="checkbox" class="rep_chk" data-i="${i}" checked></td>
+        <td style="padding:7px 8px"><input type="checkbox" class="rep_chk" data-i="${i}" checked onchange="_repSelSync('rep_chk')"></td>
         <td style="padding:7px 8px">${f.oficina.replace(/</g,'&lt;')} <span class="hint">· ${f.cifras.total}</span></td>
         <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.cifras.conMeta,f.cifras.total)} <span class="hint">· ${f.cifras.conMeta}/${f.cifras.total}</span></td>
         <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.cifras.conSeguimiento,f.cifras.total)} <span class="hint">· ${f.cifras.conSeguimiento}/${f.cifras.total}</span></td>
@@ -10625,19 +10846,43 @@ async function abrirReporteAvance(){
     <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid var(--line);margin:12px -22px 0;padding:12px 22px;background:var(--card);border-radius:0 0 14px 14px">
       <div id="rep_resumen" style="flex:1;min-width:260px;font-size:13px;line-height:1.45"></div>
       <button class="btn" id="rep_btn_prueba" ${sinConfig?'disabled':''} onclick="window._REP_TAB==='fic'?enviarReporteFichas('prueba'):enviarReporteAvance('prueba')">Enviarme una prueba</button>
-      <button class="btn btn-primary" id="rep_btn_real" ${sinConfig?'disabled':''} onclick="window._REP_TAB==='fic'?enviarReporteFichas('real'):enviarReporteAvance('real')">Enviar a los responsables seleccionados</button>
+      <button class="btn btn-primary" id="rep_btn_real" ${sinConfig?'disabled data-sincfg="1"':''} onclick="window._REP_TAB==='fic'?enviarReporteFichas('real'):enviarReporteAvance('real')">Enviar a los responsables seleccionados</button>
     </div>
    </div></div>`;
   document.body.insertAdjacentHTML('beforeend', html);
+  setTimeout(()=>_repSelSync('rep_chk'),0);
   if(typeof _ajustarModalZoom==='function') _ajustarModalZoom('rep_modal');
 }
 window.abrirReporteAvance=abrirReporteAvance;
 
 /* Muestra el estado del envío junto a los botones y los bloquea mientras se envía,
    para que no se pulse dos veces. */
+/* Selección de oficinas: casilla "Seleccionar todas" + contador visible */
+function _repSelBarra(cls, n){
+  return `<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 8px;padding:9px 13px;background:#eef7f2;border:1px solid var(--line);border-radius:10px;font-size:13.5px">
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:700;margin:0">
+      <input type="checkbox" id="${cls}_todos" checked onchange="_repSelTodos('${cls}',this.checked)" style="width:18px;height:18px;cursor:pointer;margin:0"> Seleccionar todas</label>
+    <span id="${cls}_cuenta" style="font-weight:600;color:var(--brand)">${n} de ${n} seleccionadas</span>
+    <span class="hint" style="margin-left:auto">Desmarca «Seleccionar todas» y luego marca solo las oficinas que quieras.</span></div>`;
+}
+function _repSelTodos(cls, v){ document.querySelectorAll('.'+cls).forEach(c=>c.checked=!!v); _repSelSync(cls); }
+function _repSelSync(cls){
+  cls = cls || (window._REP_TAB==='fic' ? 'repf_chk' : 'rep_chk');
+  const cks=[...document.querySelectorAll('.'+cls)], n=cks.length, m=cks.filter(c=>c.checked).length;
+  [cls+'_todos', cls+'_th'].forEach(id=>{ const t=document.getElementById(id); if(t){ t.checked = n>0 && m===n; t.indeterminate = m>0 && m<n; } });
+  const ct=document.getElementById(cls+'_cuenta');
+  if(ct){ ct.textContent = m+' de '+n+' seleccionada'+(n===1?'':'s'); ct.style.color = m ? 'var(--brand)' : '#c0392b'; }
+  const activo = (window._REP_TAB==='fic' ? 'repf_chk' : 'rep_chk');
+  if(cls===activo){
+    const b=document.getElementById('rep_btn_real');
+    if(b){ b.textContent = m ? ('Enviar a '+m+' responsable'+(m===1?'':'s')) : 'Marca al menos una oficina'; if(!b.hasAttribute('data-sincfg')) b.disabled = !m; }
+  }
+}
+window._repSelTodos=_repSelTodos; window._repSelSync=_repSelSync;
 function _repEstado(html, enviando){
   const r=document.getElementById('rep_resumen'); if(r) r.innerHTML=html||'';
   ['rep_btn_prueba','rep_btn_real'].forEach(id=>{ const b=document.getElementById(id); if(b) b.disabled=!!enviando; });
+  if(!enviando) _repSelSync();
 }
 async function enviarReporteAvance(modo){
   if(!esAdmin()) return;
@@ -10665,7 +10910,7 @@ async function enviarReporteAvance(modo){
     let html = modo==='prueba'
       ? `<span style="color:var(--brand)">✅ <b>${ok} prueba(s) enviada(s) a tu correo.</b></span> Revisa tu bandeja de entrada, y también la carpeta de spam. Cada una llega con el asunto «[PRUEBA · para …]».`
       : `<span style="color:var(--brand)">✅ <b>${ok} reporte(s) enviado(s) a los responsables.</b></span>${subieron?` 🚀 ${subieron} oficina(s) subieron de nivel.`:''} <span class="hint">Enviados hoy: ${d.enviados_hoy||0} de 120.</span>`;
-    if(mal) html += `<br><span style="color:#c0392b">⚠️ <b>${mal} no se enviaron.</b> El motivo figura en la columna «Resultado»; casi siempre es que la oficina no tiene correo en la tabla de responsables de proceso.</span>`;
+    if(mal) html += `<br><span style="color:#c0392b">⚠️ <b>${mal} no se enviaron.</b> El motivo figura en la columna «Resultado»; casi siempre es que la oficina no tiene correo en la tabla «Responsable de proceso» (no tiene que ver con su cuenta del aplicativo). Descarga «📇 Oficinas sin correo o sin cuenta» para ver la lista.</span>`;
     _repEstado(html, false);
     toast(modo==='prueba' ? ok+' prueba(s) enviada(s) a tu correo.' : ok+' reporte(s) enviado(s).');
   }catch(e){ toast('No se pudo contactar con el servicio de envío: '+e.message, true);
@@ -10853,7 +11098,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v123</span>
+      <span class="ac-ver">v125</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
