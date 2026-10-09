@@ -1133,6 +1133,10 @@
             <input id="us_oficina_buscar" placeholder="Filtrar oficinas…" oninput="filtrarOficinasUsuario()" style="margin-bottom:6px">
             <div id="us_oficinas_lista" style="max-height:180px;overflow-y:auto;border:1px solid var(--line);border-radius:9px;padding:8px 10px;display:flex;flex-direction:column;gap:6px"></div>
           </div>
+          <label style="display:flex;gap:9px;align-items:flex-start;margin-top:10px;padding:10px 12px;background:#f2f7fc;border:1px solid #c9dcf0;border-radius:9px;cursor:pointer;font-weight:400">
+            <input type="checkbox" id="us_vertodo" style="width:auto;margin-top:3px">
+            <span><b>👁 Además, puede consultar toda la Facultad</b><br><span class="hint">Como un Usuario libre, ve los indicadores y fichas de todas las oficinas, pero <b>solo edita en las oficinas marcadas arriba</b>. Útil para quien es responsable de una oficina y además supervisa o coordina.</span></span>
+          </label>
         </div>
         <div class="field full"><label>Activo</label><select id="us_activo"><option>Sí</option><option>No</option></select></div>
       </div>
@@ -1729,10 +1733,12 @@ async function _revalidarSesion(){
     let rol=L(v['Rol'])||'Usuario libre'; if(!['Administrador','Gestor','Oficina','Usuario libre'].includes(rol)) rol='Usuario libre';
     const m=new Map();
     activos.forEach(r=>_parseOficinas(L((r.values||{})['Oficina asignada'])).forEach(o=>{ const t=String(o||'').replace(/\s+/g,' ').trim(); if(t && !m.has(t.toLowerCase())) m.set(t.toLowerCase(), t); }));
-    const oficinas=[...m.values()];
-    const cambio = rol!==SESION.rol || oficinas.join('|')!==(SESION.oficinas||[]).join('|');
+    const todas=[...m.values()];
+    const verTodo = rol==='Oficina' && todas.some(o=>_esMarcaVerTodo(o));
+    const oficinas=todas.filter(o=>!_esMarcaVerTodo(o));
+    const cambio = rol!==SESION.rol || oficinas.join('|')!==(SESION.oficinas||[]).join('|') || verTodo!==!!SESION.verTodo;
     if(cambio){
-      SESION.rol=rol; SESION.oficinas=oficinas; SESION.oficina=oficinas[0]||''; SESION.recordId=activos[0].id;
+      SESION.rol=rol; SESION.oficinas=oficinas; SESION.oficina=oficinas[0]||''; SESION.verTodo=verTodo; SESION.recordId=activos[0].id;
       _guardarSesion();
       toast('Tus permisos fueron actualizados por el administrador. Recargando…');
       setTimeout(()=>location.reload(), 1800);
@@ -1798,9 +1804,11 @@ async function _hacerLoginInterno(){
         const k=norm(o).toLowerCase(); if(k && !setOfi.has(k)) setOfi.set(k, norm(o));
       });
     });
-    const oficinas = [...setOfi.values()];
+    const todas = [...setOfi.values()];
+    const verTodo = rol==='Oficina' && todas.some(_esMarcaVerTodo);
+    const oficinas = todas.filter(o=>!_esMarcaVerTodo(o));
     const nombre = _leerNombreUsuario(v);
-    SESION = { rol, usuario:_limpioU(v['Usuario']), nombre, oficina:oficinas[0]||'', oficinas, recordId: encontrado.id };
+    SESION = { rol, usuario:_limpioU(v['Usuario']), nombre, oficina:oficinas[0]||'', oficinas, verTodo, recordId: encontrado.id };
     try{ SESION.ph = await _hashTxt(p); }catch(_){}
     _guardarSesion();
     // Se recuerda solo el nombre de usuario. La contraseña NO: de eso se encarga el navegador.
@@ -2027,7 +2035,7 @@ function mostrarBarraSesion(){
   // Mostrar nombre (si existe) y, para rol Oficina, sus oficinas.
   const nombre = SESION.nombre || SESION.usuario;
   const listaOfi = (SESION.oficinas && SESION.oficinas.length) ? SESION.oficinas.join(' · ') : (SESION.oficina||'');
-  const sub = (SESION.rol==='Oficina') ? (listaOfi||'Oficina') : SESION.rol;
+  const sub = (SESION.rol==='Oficina') ? ((listaOfi||'Oficina')+(SESION.verTodo?' · 👁 consulta toda la Facultad':'')) : SESION.rol;
   const tooltip = `${SESION.usuario} · ${SESION.rol}${listaOfi?(' · '+listaOfi):''}`;
   cont.innerHTML = `<span title="${tooltip.replace(/"/g,'&quot;')}" style="line-height:1.2">👤 <strong>${nombre.replace(/</g,'&lt;')}</strong>`
     + `<br><span style="opacity:.8;font-size:11px">${sub.replace(/</g,'&lt;')}</span></span>`
@@ -2043,7 +2051,7 @@ window.cerrarSesion = cerrarSesion;
 // Un usuario puede estar en varias oficinas (SESION.oficinas); basta que coincida con una.
 function _registroVisibleOficina(oficinaTexto){
   if(!SESION) return false;
-  if(puedeVerTodo()) return true;
+  if(puedeConsultarTodo()) return true;
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const objetivo = norm(oficinaTexto);
   if(!objetivo) return false;
@@ -2070,6 +2078,24 @@ function _parseOficinas(txt){
     .filter(Boolean);
 }
 window._parseOficinas=_parseOficinas;
+/* Rol Oficina + consulta de toda la Facultad. Se guarda como una marca dentro de
+   «Oficina asignada» (no hace falta crear columnas): el usuario EDITA solo en sus
+   oficinas y CONSULTA (solo lectura) las demás. */
+const VER_TODO_MARCA='[Consulta: toda la Facultad]';
+function _esMarcaVerTodo(o){ return String(o||'').replace(/\s+/g,' ').trim().toLowerCase()===VER_TODO_MARCA.toLowerCase(); }
+window._esMarcaVerTodo=_esMarcaVerTodo;
+// Ve toda la Facultad: Admin, Gestor, Usuario libre, y Oficina con consulta ampliada
+function puedeConsultarTodo(){ return puedeVerTodo() || !!(SESION && SESION.rol==='Oficina' && SESION.verTodo); }
+window.puedeConsultarTodo=puedeConsultarTodo;
+// ¿El texto de oficina es una de SUS oficinas? (estricto: ignora la consulta ampliada)
+function _esDeMisOficinas(oficinaTexto){
+  if(!SESION) return false;
+  const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const o=norm(oficinaTexto); if(!o) return false;
+  const mias = (SESION.oficinas && SESION.oficinas.length) ? SESION.oficinas : (SESION.oficina?[SESION.oficina]:[]);
+  return mias.some(x=>norm(x)===o);
+}
+window._esDeMisOficinas=_esDeMisOficinas;
 
 /* ============================================================
    GESTIÓN DE USUARIOS (pestaña Administración, solo admin)
@@ -2120,7 +2146,8 @@ function renderUsuariosTabla(){
     const nombreCelda = nombreReal ? String(nombreReal).replace(/</g,'&lt;') : '<span style="color:var(--mist)">—</span>';
     const usuario=_limpioU(v['Usuario']), pass=_limpioU(v['Contraseña']), rol=_limpioU(v['Rol'])||'Usuario libre';
     const oficinaTxt=_limpioU(v['Oficina asignada'])||'—';
-    const oficinaVista=(rol==='Oficina')? _parseOficinas(oficinaTxt).join(' · ') : '<span style="color:var(--mist)">(ve todo)</span>';
+    const _ofs=_parseOficinas(oficinaTxt), _vt=_ofs.some(_esMarcaVerTodo);
+    const oficinaVista=(rol==='Oficina')? _ofs.filter(o=>!_esMarcaVerTodo(o)).join(' · ')+(_vt?' <span title="Edita solo en sus oficinas; consulta las demás" style="display:inline-block;margin-left:4px;font-size:11px;font-weight:700;color:#2b4c7e;background:#e8f0fb;border-radius:8px;padding:1px 7px">👁 + consulta todo</span>':'') : '<span style="color:var(--mist)">(ve todo)</span>';
     const activo=_limpioU(v['Activo']);
     const activoBadge = activo==='Sí' ? '<span style="color:#0f8f5e;font-weight:600">● Sí</span>' : '<span style="color:#c0392b;font-weight:600">● No</span>';
     const passEsc = (pass||'').replace(/"/g,'&quot;').replace(/'/g,"\\'");
@@ -2205,6 +2232,7 @@ async function abrirFormUsuario(){
   document.getElementById('us_rol').value='';
   document.getElementById('us_activo').value='Sí';
   const bq=document.getElementById('us_oficina_buscar'); if(bq) bq.value='';
+  const vt0=document.getElementById('us_vertodo'); if(vt0) vt0.checked=false;
   await poblarOficinasUsuario([]);
   toggleOficinaUsuario();
   const bg=document.getElementById('us_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar usuario'; }
@@ -2223,7 +2251,9 @@ async function editarUsuario(id){
   document.getElementById('us_rol').value = _limpioU(v['Rol'])||'';
   document.getElementById('us_activo').value = _limpioU(v['Activo'])==='No'?'No':'Sí';
   const bq=document.getElementById('us_oficina_buscar'); if(bq) bq.value='';
-  const marcadas = _parseOficinas(_limpioU(v['Oficina asignada']));
+  const _todas = _parseOficinas(_limpioU(v['Oficina asignada']));
+  const vt1=document.getElementById('us_vertodo'); if(vt1) vt1.checked=_todas.some(_esMarcaVerTodo);
+  const marcadas = _todas.filter(o=>!_esMarcaVerTodo(o));
   await poblarOficinasUsuario(marcadas);
   toggleOficinaUsuario();
   const bg=document.getElementById('us_guardar'); if(bg){ bg.disabled=false; bg.textContent='Guardar usuario'; }
@@ -2236,8 +2266,9 @@ async function guardarUsuario(){
   const g = id => document.getElementById(id).value.trim();
   const nombre=g('us_nombre'), usuario=g('us_usuario'), pass=g('us_password'), rol=g('us_rol'), activo=g('us_activo');
   // Oficinas múltiples: se toman los checkboxes marcados y se guardan separadas por ';'
-  let oficinasArr = (rol==='Oficina') ? _oficinasMarcadas() : [];
+  let oficinasArr = (rol==='Oficina') ? _oficinasMarcadas().filter(o=>!_esMarcaVerTodo(o)) : [];
   let oficina = oficinasArr.join('; ');
+  if(rol==='Oficina' && oficina && (document.getElementById('us_vertodo')||{}).checked) oficina += '; '+VER_TODO_MARCA;
   if(!usuario || !pass){ toast('Usuario y contraseña son obligatorios.', true); return; }
   if(!rol){ toast('Selecciona un rol.', true); return; }
   if(rol==='Oficina' && !oficinasArr.length){ toast('El rol Oficina requiere al menos una oficina asignada.', true); return; }
@@ -2254,7 +2285,7 @@ async function guardarUsuario(){
       return _limpioU((r.values||{})['Usuario']).toLowerCase()===nu;
     });
     if(choque){
-      toast('Ya existe un usuario con el nombre "'+usuario+'". Si necesita varias oficinas, edítalo y marca todas sus oficinas en un solo registro.', true);
+      toast('Ya existe un usuario con el nombre "'+usuario+'". Edítalo: ahí puedes marcar varias oficinas y, si además debe ver toda la Facultad, activar «Además, puede consultar toda la Facultad».', true);
       btn.disabled=false; btn.textContent='Guardar usuario';
       return;
     }
@@ -5468,6 +5499,10 @@ function _invalidarIndsEnMatriz(){ _INDS_EN_MATRIZ=null; _MATRIZ_POR_ELEM=null; 
 function _esMiFicha(r, nivel){
   if(!SESION) return false;
   if(SESION.rol==='Administrador' || SESION.rol==='Gestor') return true;
+  if(SESION.rol==='Oficina' && SESION.verTodo){
+    const Fv=(nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
+    if(!_esDeMisOficinas(leerDueno(r,Fv)||'')) return false;
+  }
   if(!_respTecActivo() || !_RESP_POR_FICHA) return true;   // sin datos aún: no bloquear
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const F = (nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS);
@@ -6159,6 +6194,12 @@ window._invalidarSoyRespTec=_invalidarSoyRespTec;
 function _esMiIndicador(r){
   if(!SESION) return false;
   if(SESION.rol==='Administrador' || SESION.rol==='Gestor') return true;
+  // Oficina con consulta ampliada: ve todo, pero solo edita los de SUS oficinas
+  if(SESION.rol==='Oficina' && SESION.verTodo){
+    const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
+    const ofiDue=MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
+    if(!_esDeMisOficinas(ofiMed) && !_esDeMisOficinas(ofiDue)) return false;
+  }
   if(!_respTecActivo()) return true;
   const norm = s => String(s||'').replace(/\s+/g,' ').trim().toLowerCase();
   const yo=[norm(SESION.usuario), norm(SESION.nombre)].filter(Boolean);
@@ -6394,7 +6435,7 @@ async function renderTablero(){
     const recsTodos=await loadMatriz();
     // Filtro por OFICINA: el rol "Oficina" ve el tablero solo con SUS indicadores (los de su
     // oficina de medición o dueña). Admin, Gestor y Usuario libre ven toda la facultad.
-    const recs = puedeVerTodo() ? recsTodos : recsTodos.filter(m=>{
+    const recs = puedeConsultarTodo() ? recsTodos : recsTodos.filter(m=>{
       const ofiMed=leerCampo(m, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
       const ofiDue=MAT.oficina_resp_ind?leerCampo(m, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
       return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
@@ -7515,7 +7556,7 @@ async function renderMatriz(){
     try{ if(!(STATE.inventario||[]).length) await loadInventario(); _PROC_VIGENTES=null; }catch(_){}
     // Para el resumen: contar solo los indicadores VISIBLES según la oficina del usuario
     // (el rol Oficina ve un subconjunto). El buscador de texto no afecta al total del resumen.
-    const recsVisibles = puedeVerTodo() ? recs : recs.filter(r=>{
+    const recsVisibles = puedeConsultarTodo() ? recs : recs.filter(r=>{
       const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
       const ofiDue=MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
       return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
@@ -7532,7 +7573,7 @@ async function renderMatriz(){
       if(!ind) return false;
       // Filtro por OFICINA: el rol "Oficina" solo ve los indicadores cuya oficina de medición
       // o cuya oficina dueña coincide con la suya. Admin, Gestor y Usuario libre ven todo.
-      if(!puedeVerTodo()){
+      if(!puedeConsultarTodo()){
         const ofiMed=leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición');
         const ofiDue=MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'';
         if(!_registroVisibleOficina(ofiMed) && !_registroVisibleOficina(ofiDue)) return false;
@@ -7683,7 +7724,7 @@ async function renderMatriz(){
             <div style="display:inline-flex;gap:2px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             ${_mio
               ? `<button class="btn btn-accent btn-sm" title="Gestionar metas" onclick="abrirMetas('${r.id}')">Metas</button>`
-              : `<button class="btn btn-accent btn-sm" disabled title="${attr(_respTecLista(r).length ? 'Este indicador está a cargo de: '+_respTecLista(r).join(', ')+'. Puedes consultarlo, pero no editarlo ni informarlo.' : 'Este indicador no está a tu cargo. Tú eres responsable técnico de otros indicadores; puedes consultarlo, pero no editarlo ni informarlo.')}" style="opacity:.45;cursor:not-allowed">Metas</button>`}
+              : `<button class="btn btn-accent btn-sm" disabled title="${attr((SESION&&SESION.rol==='Oficina'&&SESION.verTodo&&!_esDeMisOficinas(leerCampo(r, MAT.oficina_medicion.id, 'Oficina o área responsable de la medición'))&&!_esDeMisOficinas(MAT.oficina_resp_ind?leerCampo(r, MAT.oficina_resp_ind.id, 'Oficina o área responsable del indicador'):'')) ? 'Este indicador es de otra oficina: puedes consultarlo, pero no editarlo ni informarlo.' : _respTecLista(r).length ? 'Este indicador está a cargo de: '+_respTecLista(r).join(', ')+'. Puedes consultarlo, pero no editarlo ni informarlo.' : 'Este indicador no está a tu cargo. Tú eres responsable técnico de otros indicadores; puedes consultarlo, pero no editarlo ni informarlo.')}" style="opacity:.45;cursor:not-allowed">Metas</button>`}
             <button class="icon-btn" title="Ver detalle" onclick="verDetalleMatriz('${r.id}')">👁</button>
             ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por WhatsApp" onclick="notificarWhatsApp('${r.id}')">📱</button>`:''}
             ${puedeVerTodo()?`<button class="icon-btn" title="Notificar por correo" onclick="notificarCorreo('${r.id}')">✉️</button>`:''}
@@ -10244,7 +10285,7 @@ async function asisDatos(){
     if(!(STATE.matriz||[]).length && typeof loadMatriz==='function') await loadMatriz();
     const recs=(STATE.matriz||[]);
     const visibles=recs.filter(r=>{
-      if(puedeVerTodo()) return true;
+      if(puedeConsultarTodo()) return true;
       const ofiMed=leerCampo(r, MAT.oficina_medicion.id,'Oficina o área responsable de la medición');
       const ofiDue=MAT.oficina_resp_ind?leerCampo(r,MAT.oficina_resp_ind.id,'Oficina o área responsable del indicador'):'';
       return _registroVisibleOficina(ofiMed) || _registroVisibleOficina(ofiDue);
@@ -10272,7 +10313,7 @@ async function asisDatos(){
         estado: tieneSeg?'meta y seguimiento':(tieneMeta?'solo meta':'sin meta ni seguimiento')
       };
     });
-    return { ambito: puedeVerTodo()?'toda la Facultad':(SESION&&SESION.oficina)||'', total: visibles.length, indicadores: filas };
+    return { ambito: puedeConsultarTodo()?'toda la Facultad':(SESION&&SESION.oficina)||'', total: visibles.length, indicadores: filas };
   }catch(e){ console.warn('[asistente] no se pudieron preparar los datos:', e.message); return null; }
 }
 window.asisDatos=asisDatos;
@@ -10790,7 +10831,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v121</span>
+      <span class="ac-ver">v122</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
