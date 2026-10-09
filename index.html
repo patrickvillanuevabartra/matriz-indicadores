@@ -2285,8 +2285,30 @@ async function guardarUsuario(){
       return _limpioU((r.values||{})['Usuario']).toLowerCase()===nu;
     });
     if(choque){
-      toast('Ya existe un usuario con el nombre "'+usuario+'". Edítalo: ahí puedes marcar varias oficinas y, si además debe ver toda la Facultad, activar «Además, puede consultar toda la Facultad».', true);
       btn.disabled=false; btn.textContent='Guardar usuario';
+      // En vez de solo avisar, se ABRE el registro existente para editarlo.
+      const rolExist=_limpioU((choque.values||{})['Rol'])||'';
+      const quiereVerTodo = (rol==='Usuario libre') || (rol==='Oficina' && (document.getElementById('us_vertodo')||{}).checked);
+      const nuevasOfi = (rol==='Oficina') ? oficinasArr.slice() : [];
+      await editarUsuario(choque.id);
+      if(rolExist==='Oficina'){
+        // Sumar las oficinas que se habían marcado en el formulario nuevo
+        if(nuevasOfi.length){
+          const ya=new Set(_oficinasMarcadas().map(o=>o.toLowerCase()));
+          document.querySelectorAll('#us_oficinas_lista input[type=checkbox]').forEach(c=>{ if(nuevasOfi.some(o=>o.toLowerCase()===String(c.value).toLowerCase())) c.checked=true; });
+        }
+        const vt=document.getElementById('us_vertodo');
+        if(vt && quiereVerTodo){
+          vt.checked=true;
+          const caja=vt.closest('label')||vt;
+          try{ caja.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){}
+          caja.style.transition='box-shadow .3s'; caja.style.boxShadow='0 0 0 3px #f5b041';
+          setTimeout(()=>{ caja.style.boxShadow=''; }, 4000);
+        }
+        toast('"'+usuario+'" ya existe (rol Oficina). Te abrí su registro'+(quiereVerTodo?' con «👁 Además, puede consultar toda la Facultad» ya marcado':'')+'. Solo pulsa «Guardar usuario».');
+      } else {
+        toast('"'+usuario+'" ya existe (rol: '+(rolExist||'sin rol')+'). Te abrí su registro para que lo modifiques; no se crea un duplicado. Si debe editar una oficina y ver toda la Facultad, elige rol «Oficina», marca sus oficinas y la casilla 👁.');
+      }
       return;
     }
   }catch(_){ /* si falla la verificación, continúa (no bloquea por un error de red) */ }
@@ -10831,7 +10853,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v122</span>
+      <span class="ac-ver">v123</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
