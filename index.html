@@ -10623,7 +10623,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v118</span>
+      <span class="ac-ver">v119</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
@@ -10669,7 +10669,8 @@ const AC_GUIA = [
  { que:'Decide qué pasa con las <b>fichas</b>, los <b>indicadores</b> y los <b>riesgos</b> afectados.',
    pasos:['La opción recomendada ya viene marcada. Si no tienes un motivo para cambiarla, déjala.',
           'Ningún historial de metas se borra con estas decisiones.'],
-   ejemplo:'Al retirar un proceso, si no sabes todavía a dónde llevar sus indicadores, elige «Dejar para revisar después»: quedarán marcados en morado y podrás decidir con calma.' },
+   ejemplo:'Al retirar un proceso, si no sabes todavía a dónde llevar sus indicadores, elige «Dejar para revisar después»: quedarán marcados en morado y podrás decidir con calma.',
+   nota:'Debajo de las decisiones verás <b>«👁️ Así quedarán las fichas, los indicadores y los riesgos»</b>: cada ficha, indicador y riesgo con su antes y su después. Se actualiza al cambiar una decisión.' },
  { que:'<b>Confirma y aplica</b> el cambio. <b>Es el único paso que modifica la base.</b>',
    pasos:['Revisa por última vez la vista previa y el resumen.',
           'Escribe el código del proceso para confirmar y pulsa «Aplicar el cambio».',
@@ -11025,7 +11026,7 @@ function acPaso4(){
   const I=AC.impacto, t=AC.tipo, D=AC.dec;
   const bloque=(tit,n,cont)=>`<div style="border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:12px"><div style="font-weight:700;margin-bottom:4px">${tit} <span class="hint">(${n})</span></div>${cont}</div>`;
   if(t==='crear') return `<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ <b>No hay decisiones que tomar.</b> Es un proceso nuevo: nada depende todavía de él.</div>`;
-  if(t==='renombrar') return `<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ <b>No hay decisiones que tomar.</b> Las fichas, los indicadores y los riesgos muestran el nombre del proceso en vivo: verán el nombre nuevo en cuanto lo cambies en el Inventario, en el último paso.</div>`;
+  if(t==='renombrar') return `<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ <b>No hay decisiones que tomar.</b> Las fichas, los indicadores y los riesgos muestran el nombre del proceso en vivo: verán el nombre nuevo en cuanto lo cambies en el Inventario, en el último paso.</div><div id="ac_consec">${acVistaConsecuencias(true)}</div>`;
   let h=`<p style="margin:0 0 12px;color:var(--slate)">Decide qué pasa con cada grupo afectado. La opción recomendada ya está marcada. <b>Ningún historial de metas se borra.</b></p>`;
   if(I.fichas.length){
     const ops = t==='mover'
@@ -11041,19 +11042,20 @@ function acPaso4(){
       return bloque(tit, arr.length, `<div class="hint" style="margin-bottom:6px">Elige a qué proceso resultante pasa cada uno. <b>Es obligatorio</b> decidir cada uno.</div>`+arr.map(x=>`
         <div style="display:flex;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid var(--line);flex-wrap:wrap">
           <div style="flex:1;min-width:240px;font-size:13px">${_acEsc(x[etiq]).slice(0,120)}</div>
-          <select onchange="AC.dec.${parteKey}['${x.id}']=this.value;acValidar()" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px">
+          <select onchange="AC.dec.${parteKey}['${x.id}']=this.value;acValidar();acRefrescarConsec()" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;font-size:13px">
             <option value="">— Elige —</option>${ps.map(p=>`<option value="${_acEsc(p.c)}" ${D[parteKey][x.id]===p.c?'selected':''}>${_acEsc(p.nombre)}</option>`).join('')}
             <option value="__mantener" ${D[parteKey][x.id]==='__mantener'?'selected':''}>Mantener sin cambios</option></select></div>`).join(''));
     }
     const reco = t==='fusionar';
     let ops = acRadio(clave,'reasignar',D[clave], reco?'<b>Reasignar</b> al proceso que permanece (recomendado)':'<b>Reasignar</b> a otro proceso', 'Conservan sus metas y seguimientos; solo cambia el proceso al que pertenecen.')
             + acRadio(clave,'mantener',D[clave], reco?'Dejar sin cambios':'<b>Dejar para revisar después</b> (recomendado)', 'Quedarán marcados en morado como «Proceso inexistente» cuando retires el proceso.');
-    if(t==='retirar' && D[clave]==='reasignar') ops+=`<div style="margin:6px 0 0 22px"><select onchange="AC.dec.${destKey}=this.value;acValidar()" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit">${acOpcionesProceso(D[destKey])}</select></div>`;
+    if(t==='retirar' && D[clave]==='reasignar') ops+=`<div style="margin:6px 0 0 22px"><select onchange="AC.dec.${destKey}=this.value;acValidar();acRefrescarConsec()" style="width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit">${acOpcionesProceso(D[destKey])}</select></div>`;
     return bloque(tit, arr.length, ops);
   };
   h+=grupo('ind','📊 Indicadores de la Matriz', I.indicadores.concat([]), 'indDestino','parteInd','texto');
   h+=grupo('rie','⚠️ Riesgos y oportunidades', I.riesgos.map(r=>Object.assign({etq:(r.codigo?r.codigo+' · ':'')+r.desc},r)), 'rieDestino','parteRie','etq');
   if(!I.fichas.length && !I.indicadores.length && !I.riesgos.length) h+='<div style="background:#e3f3ea;border:1px solid #a8d5bd;border-radius:9px;padding:12px 14px">✅ Nada depende de este proceso: no hay decisiones que tomar.</div>';
+  h+='<div id="ac_consec">'+acVistaConsecuencias(true)+'</div>';
   return h;
 }
 function acDecisionesDefecto(){
@@ -11116,6 +11118,58 @@ function acPlan(){
   });
   return ops;
 }
+/* ===== Vista previa de las CONSECUENCIAS: fichas, indicadores y riesgos =====
+   Se arma con acPlan(), el mismo cálculo que usará el paso 5 para escribir: lo que se
+   ve aquí es exactamente lo que se aplicará. Solo lectura. */
+function _acCorta(r){ const p=String(r||'').split(/\s*›\s*/).filter(Boolean); return p.slice(-2).join(' › '); }
+function acVistaConsecuencias(abierto){
+  if(!AC || !AC.impacto || AC.tipo==='crear') return '';
+  const I=AC.impacto, t=AC.tipo, viejo=acCodigo(AC.proceso);
+  let ops=[]; try{ ops=acPlan(); }catch(_){}
+  const porId={}; ops.forEach(o=>{ porId[o.id]=o; });
+  const fichas=(I.fichas||[]).filter(f=>!f.archivada);
+  if(!fichas.length && !(I.indicadores||[]).length && !(I.riesgos||[]).length) return '';
+  const fila=(titulo, antes, despues, extra)=>`<div style="padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.45">
+      <div style="font-weight:600;margin-bottom:2px">${titulo}</div>
+      ${antes!=null?`<div><span class="hint">Antes:</span> <span style="color:#7a8580">${_acEsc(antes)}</span></div>`:''}
+      <div><span class="hint">Después:</span> ${despues}</div>${extra?`<div style="margin-top:2px">${extra}</div>`:''}</div>`;
+  const lim=(arr,fn)=>arr.slice(0,30).map(fn).join('')+(arr.length>30?`<div class="hint" style="padding:6px 0">… y ${arr.length-30} más.</div>`:'');
+  const verde=x=>`<b style="color:var(--brand)">${_acEsc(x)}</b>`;
+  const sinCambio = t==='renombrar'
+    ? '<span style="color:var(--brand)">Sin cambios en lo guardado: mostrará el nombre nuevo automáticamente.</span>'
+    : '<span style="color:#b26a00">Sin cambios. Cuando se retire el proceso, quedará marcado 🚫 «Proceso inexistente» para revisarlo.</span>';
+  const hF = lim(fichas, f=>{
+    const o=porId[f.id], tit='📄 '+_acEsc(f.dueno||('Ficha '+f.nivel))+' <span class="hint">· ficha de '+f.nivel+'</span>';
+    if(!o) return fila(tit, _acCorta(f.ruta), sinCambio);
+    if(o.que==='archivar') return fila(tit, 'Vigente · '+_acCorta(f.ruta), '<b style="color:#8a5a00">📦 Obsoleta (archivada)</b> — se conserva como antecedente', t==='dividir'?'<span class="hint">Cada proceso resultante necesitará su propia ficha nueva.</span>':'');
+    const n=Object.keys(o.campos).filter(k=>k!=='Proceso').length;
+    return fila(tit, _acCorta(f.ruta), verde(_acCorta(o.campos['Proceso']||f.ruta))+' · sigue vigente', n?'<span class="hint">Además, '+n+' campo(s) del SIPOC actualizan sus códigos.</span>':'');
+  });
+  const hI = lim(I.indicadores||[], x=>{
+    const o=porId[x.id], tit='📊 '+_acEsc(x.oficina||'(sin oficina)');
+    const metas = x.conMetas ? ' <span style="color:var(--brand);font-weight:600">✓ conserva sus metas y seguimientos</span>' : '';
+    if(!o){
+      if(t==='renombrar'){ const p=x.texto.split(' — '); if(acCodigo(p[0])===viejo){ const n=viejo+' '+AC.detalle.nombre+(p.length>1?' — '+p.slice(1).join(' — '):''); return fila(tit, x.texto, verde(n)+' <span class="hint">(se muestra en vivo)</span>', metas); } }
+      return fila(tit, x.texto, sinCambio, metas);
+    }
+    const ruta=o.campos['Proceso (ruta)'];
+    return fila(tit, x.texto, verde(o.campos['Indicador']||x.texto), (ruta?'<span class="hint">Proceso: '+_acEsc(_acCorta(ruta))+'</span>':'')+metas+(o.que==='reasignar'?'<div class="hint">La oficina deberá añadirlo a la ficha de su nuevo proceso.</div>':''));
+  });
+  const hR = lim(I.riesgos||[], x=>{
+    const o=porId[x.id], tit='⚠️ '+_acEsc((x.codigo?x.codigo+' · ':'')+String(x.desc||'').slice(0,80));
+    if(!o) return fila(tit, _acCorta((x.v||{})['Proceso']), sinCambio);
+    return fila(tit, _acCorta((x.v||{})['Proceso']), verde(_acCorta(o.campos['Proceso'])), '<span class="hint">Conserva su evaluación, medidas y reportes.</span>');
+  });
+  const sec=(tit,n,h)=> n?`<div style="margin-top:12px"><div style="font-weight:700;font-size:13.5px;margin-bottom:2px">${tit} <span class="hint">(${n})</span></div>${h}</div>`:'';
+  return `<details ${abierto?'open':''} style="border:1.5px solid var(--brand);border-radius:12px;padding:10px 14px;margin:14px 0;background:#fcfefd">
+    <summary style="cursor:pointer;font-weight:700;font-size:15px">👁️ Así quedarán las fichas, los indicadores y los riesgos</summary>
+    <div class="hint" style="margin-top:6px;font-size:12.5px">Es exactamente lo que se aplicará según tus decisiones.${AC.paso===3?' Si cambias una decisión, esta vista se actualiza al momento.':''}</div>
+    ${sec('Fichas registradas', fichas.length, hF)}${sec('Matriz de indicadores', (I.indicadores||[]).length, hI)}${sec('Riesgos y oportunidades', (I.riesgos||[]).length, hR)}
+  </details>`;
+}
+function acRefrescarConsec(){ const el=document.getElementById('ac_consec'); if(el) el.innerHTML=acVistaConsecuencias(true); }
+window.acRefrescarConsec=acRefrescarConsec;
+
 function acPaso5(){
   const cod=acCodigo(AC.proceso);
   if(AC.aplicado){
@@ -11138,6 +11192,7 @@ function acPaso5(){
       ${acListaACrear().length?`<div style="margin-top:8px"><b>Primero se crearán en el Inventario:</b> ${acListaACrear().length} proceso(s), empezando por <code>${_acEsc(acListaACrear()[0].cod)}</code>. Si algo falla, se deshace y no se toca nada más.</div>`:''}
       <div style="margin-top:8px"><b>Operaciones:</b> ${ops.length?Object.keys(por).map(k=>`<div>· ${_acEsc(k)}: <b>${por[k]}</b></div>`).join(''):'ninguna sobre fichas, indicadores ni riesgos.'}</div>
     </div>
+    ${acVistaConsecuencias(false)}
     <div style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13.5px">
       Al aplicar: <b>1)</b> se descarga un respaldo de todo lo que se modificará, <b>2)</b> se abre la bitácora del cambio, <b>3)</b> se actualizan los registros uno a uno.
       <label style="font-weight:600;display:block;margin:12px 0 4px">Para confirmar, escribe el código del proceso: <code>${cod}</code></label>
