@@ -10342,6 +10342,7 @@ function _repOpcionesKudo(sel){
 }
 function repCambiarRegistro(){
   (window._REP_FILAS||[]).forEach((f,i)=>{ const s=document.getElementById('rep_kudo_'+i); if(s) s.innerHTML=_repOpcionesKudo(f.kudo); });
+  (window._REPF_FILAS||[]).forEach((f,i)=>{ const s=document.getElementById('repf_kudo_'+i); if(s) s.innerHTML=_repOpcionesKudo(f.kudo); });
 }
 function repCambiarKudo(i,v){ window._REP_FILAS[i].kudo=v; }
 function repNota(i){
@@ -10353,20 +10354,171 @@ function repNota(i){
 }
 window.repCambiarRegistro=repCambiarRegistro; window.repCambiarKudo=repCambiarKudo; window.repNota=repNota;
 
+/* ===================== REPORTE DE CUMPLIMIENTO DE FICHAS =====================
+   Pestaña «Fichas registradas» del reporte de avance. Para cada ficha vigente revisa si
+   cada campo está LLENO o VACÍO (sin juzgar la calidad del contenido) y arma un
+   check list por oficina dueña. Se envía por correo con el mismo motor y los mismos
+   kudos (formal o cercano). El orden de REPF_CAMPOS debe coincidir con el del script. */
+const REPF_CAMPOS = [
+  {k:'objetivo', l:'Objetivo', col:'Objetivo del proceso'},
+  {k:'alcance',  l:'Alcance', col:'Alcance'},
+  {k:'base',     l:'Base legal', col:'Base legal'},
+  {k:'prov',     l:'Proveedores', col:'Proveedores/Cliente', sipoc:1},
+  {k:'entr',     l:'Entradas', col:'Entrada/Insumo', sipoc:1},
+  {k:'prod',     l:'Productos', col:'Producto', sipoc:1},
+  {k:'recep',    l:'Receptores', col:'Receptor final del producto', sipoc:1},
+  {k:'ind',      l:'Indicadores', col:null},
+  {k:'ctrl',     l:'Controles', col:'Controles'},
+  {k:'dint',     l:'Doc. internos', col:'Documentos internos'},
+  {k:'dext',     l:'Doc. externos', col:'Documentos externos'},
+  {k:'rrhh',     l:'Recursos humanos', col:'Recursos Humanos'},
+  {k:'sis',      l:'Sistemas informáticos', col:'Sistemas Informáticos'},
+  {k:'reg',      l:'Registros', col:'Registros'},
+  {k:'inst',     l:'Infraestructura', col:'Instalaciones'},
+  {k:'equi',     l:'Equipos', col:'Equipos'}
+];
+const REPF_NIVELES=['Por empezar','Iniciada','En avance','Buen ritmo','Casi completa','Completa'];
+// Valor de un campo por nombre, tolerando espacios sobrantes en el nombre de la columna
+function _repfValor(v, col){
+  if(!col) return '';
+  let x=v[col]; if(x===undefined){ const k=Object.keys(v).find(k=>k.trim()===col); if(k) x=v[k]; }
+  x=String(x==null?'':x); if(x.trim()===col || esBasura(x)) return '';
+  return x;
+}
+// ¿Tiene contenido real? Se quitan las etiquetas de componente ([…] y 【…】) que pone el aplicativo.
+function _repfLleno(txt){
+  const t=String(txt||'').replace(/【[^】]*】/g,' ').replace(/^\s*\[[^\]]*\]/gm,' ').replace(/[\s\-–—.·:;,_]+/g,'');
+  return t.length>=2;
+}
+function _repfNivel(pct, completas, total){
+  if(total && completas===total) return 5;
+  if(pct>=85) return 4; if(pct>=70) return 3; if(pct>=50) return 2; if(pct>=25) return 1; return 0;
+}
+async function _repfCalcular(){
+  try{ await Promise.all([construirMapaIndicadores()]); }catch(_){}
+  const grupos={};
+  for(const nivel of ['N0','N1','N2','N3']){
+    let recs=[]; try{ recs=await loadFichas(nivel); }catch(_){}
+    const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
+    recs.forEach(r=>{
+      if(_fichaArchivada(r,nivel)) return;
+      const v=r.values||{};
+      const dueno=(leerDueno(r,F)||'').trim(); if(!dueno) return;
+      const nInd=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]).length, nNa=Object.keys(_leerNoAplica(r,nivel)||{}).length;
+      const checks=REPF_CAMPOS.map(c=> c.k==='ind' ? (nInd+nNa)>0 : _repfLleno(_repfValor(v,c.col)) );
+      const proceso=String(rutaFicha(r,nivel)||'').split(/\s*›\s*/).pop();
+      (grupos[dueno]=grupos[dueno]||[]).push({ nivel, proceso, checks });
+    });
+  }
+  return Object.keys(grupos).sort().map(ofi=>{
+    const fs=grupos[ofi], tot=fs.length*REPF_CAMPOS.length;
+    const llenos=fs.reduce((a,x)=>a+x.checks.filter(Boolean).length,0);
+    const completas=fs.filter(x=>x.checks.every(Boolean)).length;
+    const pct=tot?Math.round(llenos/tot*100):0, nivel=_repfNivel(pct,completas,fs.length);
+    return { oficina:ofi, fichas:fs, pct, completas, nivel, kudo:'n'+nivel, nota:'' };
+  });
+}
+function _repfChecklist(f){
+  const ok='<span style="color:#1f9d55;font-weight:700">✓</span>', no='<span style="color:#c0392b;font-weight:700">✗</span>';
+  return `<div style="overflow:auto"><table style="border-collapse:collapse;font-size:11.5px;min-width:100%">
+    <thead><tr style="background:var(--paper)"><th style="padding:5px 6px;text-align:left">Ficha</th>${REPF_CAMPOS.map(c=>`<th style="padding:5px 4px;writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;white-space:nowrap">${c.l}</th>`).join('')}<th style="padding:5px 6px">%</th></tr></thead>
+    <tbody>${f.fichas.map(x=>{ const n=x.checks.filter(Boolean).length; return `<tr style="border-top:1px solid var(--line)">
+      <td style="padding:5px 6px;min-width:220px"><span class="badge-n ${x.nivel.toLowerCase()}">${x.nivel}</span> ${_acEsc(x.proceso)}</td>
+      ${x.checks.map(c=>`<td style="text-align:center;padding:4px">${c?ok:no}</td>`).join('')}
+      <td style="padding:5px 6px;text-align:right;white-space:nowrap"><b>${Math.round(n/REPF_CAMPOS.length*100)} %</b></td></tr>`; }).join('')}</tbody></table></div>`;
+}
+function repfVer(i){ const r=document.getElementById('repf_det_'+i); if(r) r.style.display = r.style.display==='none'?'':'none'; }
+function repfCambiarKudo(i,v){ window._REPF_FILAS[i].kudo=v; }
+function repfNota(i){
+  const f=window._REPF_FILAS[i];
+  const t=prompt('Nota personal para '+f.oficina+' (opcional, máximo 400 caracteres).', f.nota||'');
+  if(t===null) return; f.nota=String(t).slice(0,400).trim();
+  const b=document.getElementById('repf_notabtn_'+i); if(b) b.textContent=f.nota?'✎ Nota ✓':'✎ Nota';
+}
+window.repfVer=repfVer; window.repfCambiarKudo=repfCambiarKudo; window.repfNota=repfNota;
+async function repTab(t){
+  window._REP_TAB=t;
+  ['ind','fic'].forEach(x=>{ const d=document.getElementById('rep_tab_'+x), b=document.getElementById('rep_tabbtn_'+x);
+    if(d) d.style.display = x===t?'':'none';
+    if(b){ b.style.background = x===t?'var(--brand)':'transparent'; b.style.color = x===t?'#fff':'var(--ink)'; } });
+  _repEstado('', false);
+  if(t==='fic' && !window._REPF_FILAS){
+    const c=document.getElementById('repf_cuerpo'); if(c) c.innerHTML='<p>⏳ Revisando las fichas registradas…</p>';
+    const filas=await _repfCalcular(); window._REPF_FILAS=filas;
+    const reg=_repRegistro();
+    const tot=filas.reduce((a,x)=>a+x.fichas.length,0), comp=filas.reduce((a,x)=>a+x.completas,0);
+    c.innerHTML = `<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
+    <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--paper);text-align:left">
+        <th style="padding:8px"><input type="checkbox" checked onchange="document.querySelectorAll('.repf_chk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:8px">Oficina dueña</th><th style="padding:8px;text-align:right">Fichas completas</th>
+        <th style="padding:8px;text-align:right">Campos llenos</th><th style="padding:8px">Etapa</th>
+        <th style="padding:8px">Kudo</th><th style="padding:8px"></th><th style="padding:8px">Resultado</th></tr></thead><tbody>
+      ${filas.map((f,i)=>`<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:7px 8px"><input type="checkbox" class="repf_chk" data-i="${i}" checked></td>
+        <td style="padding:7px 8px">${_acEsc(f.oficina)} <button class="btn btn-sm" style="margin-left:6px" onclick="repfVer(${i})">☑ Check list</button></td>
+        <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.completas,f.fichas.length)} <span class="hint">· ${f.completas}/${f.fichas.length}</span></td>
+        <td style="padding:7px 8px;text-align:right;white-space:nowrap">${f.pct>=80?'🟢':f.pct>=50?'🟡':'🔴'} ${f.pct} %</td>
+        <td style="padding:7px 8px;white-space:nowrap">${REPF_NIVELES[f.nivel]} <span style="letter-spacing:1px;color:var(--brand)">${'●'.repeat(f.nivel+1)}</span><span style="letter-spacing:1px;color:#cfd5d2">${'●'.repeat(5-f.nivel)}</span></td>
+        <td style="padding:7px 8px"><select id="repf_kudo_${i}" onchange="repfCambiarKudo(${i},this.value)" style="font-size:12px;padding:3px 5px;border-radius:6px;border:1px solid var(--line)">${_repOpcionesKudo(f.kudo)}</select></td>
+        <td style="padding:7px 8px"><button class="btn btn-sm" id="repf_notabtn_${i}" onclick="repfNota(${i})">✎ Nota</button></td>
+        <td style="padding:7px 8px" id="repf_res_${i}"></td></tr>
+        <tr id="repf_det_${i}" style="display:none"><td></td><td colspan="7" style="padding:6px 8px 14px">${_repfChecklist(f)}</td></tr>`).join('')}
+      </tbody></table></div>`;
+  }
+}
+window.repTab=repTab;
+async function enviarReporteFichas(modo){
+  const sel=[...document.querySelectorAll('.repf_chk')].filter(c=>c.checked).map(c=>Number(c.getAttribute('data-i')));
+  if(!sel.length){ toast('Marca al menos una oficina.', true); return; }
+  if(modo==='real' && !confirm('Se enviará el check list de fichas a los responsables de '+sel.length+' oficina(s).\n\n¿Ya revisaste la prueba? ¿Continuar?')) return;
+  const F=window._REPF_FILAS;
+  const envios=sel.map(i=>({ oficina:F[i].oficina, kudo:F[i].kudo, nota:F[i].nota,
+    fichas:F[i].fichas.slice(0,40).map(x=>({ proceso:x.proceso, nivel:x.nivel, checks:x.checks })) }));
+  sel.forEach(i=>{ const c=document.getElementById('repf_res_'+i); if(c) c.textContent='Enviando…'; });
+  _repEstado('<span style="color:var(--slate)">⏳ Enviando '+sel.length+' correo(s)… No cierres esta ventana.</span>', true);
+  try{
+    const r=await fetch(REPORTE_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify({ clave:REPORTE_CLAVE, app:'fichas', modo, registro:_repRegistro(), envios }) });
+    const d=await r.json();
+    if(!d.ok){ _repEstado('<span style="color:#c0392b">✕ <b>No se envió nada.</b> '+_acEsc(d.error||'Error desconocido')+'</span>', false); sel.forEach(i=>{ const c=document.getElementById('repf_res_'+i); if(c) c.textContent=''; }); return; }
+    const res=d.resultados||[];
+    res.forEach(x=>{ const i=F.findIndex(f=>f.oficina===x.oficina); const c=document.getElementById('repf_res_'+i);
+      if(c) c.innerHTML = x.ok ? `<span style="color:var(--brand)">✓ ${x.prueba?'prueba enviada':'enviado'}${x.subio?' · 🚀 subió de etapa':''}</span>` : `<span style="color:#c0392b">✕ ${_acEsc(x.motivo||'')}</span>`; });
+    const ok=res.filter(x=>x.ok).length, mal=res.length-ok;
+    let html = modo==='prueba' ? `<span style="color:var(--brand)">✅ <b>${ok} prueba(s) enviada(s) a tu correo.</b></span> Revisa también la carpeta de spam.`
+      : `<span style="color:var(--brand)">✅ <b>${ok} check list(s) enviado(s) a los responsables.</b></span> <span class="hint">Enviados hoy: ${d.enviados_hoy||0} de 120.</span>`;
+    if(mal) html += `<br><span style="color:#c0392b">⚠️ <b>${mal} no se enviaron.</b> El motivo figura en la columna «Resultado».</span>`;
+    _repEstado(html, false);
+  }catch(e){ _repEstado('<span style="color:#c0392b">✕ <b>No se pudo contactar con el servicio de envío.</b></span>', false); }
+}
+window.enviarReporteFichas=enviarReporteFichas;
+
 async function abrirReporteAvance(){
   if(!esAdmin()){ toast('Solo el administrador puede enviar reportes.', true); return; }
   try{ await loadMatriz(); }catch(_){}
   const filas=_repCifrasPorOficina();
-  window._REP_FILAS=filas;
+  window._REP_FILAS=filas; window._REPF_FILAS=null; window._REP_TAB='ind';
   const sinConfig = !REPORTE_URL || !REPORTE_CLAVE;
   const html = `
   <div id="rep_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
    <div style="background:var(--card);border-radius:14px;max-width:1100px;width:100%;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;padding:18px 22px 0">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-      <h2 style="margin:0;font-size:20px">📧 Reporte de avance a los responsables de proceso</h2>
+      <h2 style="margin:0;font-size:20px">📧 Reportes a los responsables de proceso</h2>
       <button class="icon-btn" onclick="document.getElementById('rep_modal').remove()">✕</button>
     </div>
+    <div style="display:flex;gap:6px;margin:6px 0 4px;border-bottom:2px solid var(--line)">
+      <button id="rep_tabbtn_ind" onclick="repTab('ind')" style="border:0;border-radius:9px 9px 0 0;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;background:var(--brand);color:#fff">📊 Indicadores · avance</button>
+      <button id="rep_tabbtn_fic" onclick="repTab('fic')" style="border:0;border-radius:9px 9px 0 0;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;background:transparent;color:var(--ink)">📄 Fichas registradas · cumplimiento</button>
+    </div>
     <div style="flex:1;min-height:0;overflow:auto;padding-right:4px">
+    <div style="display:flex;gap:18px;align-items:center;margin:10px 0 4px;font-size:14px;flex-wrap:wrap">
+      <b>Tono de los kudos:</b>
+      <label><input type="radio" name="rep_registro" value="formal" checked onchange="repCambiarRegistro()"> Formal</label>
+      <label><input type="radio" name="rep_registro" value="cercano" onchange="repCambiarRegistro()"> Cercano (peruano)</label>
+      <span class="hint">Vale para las dos pestañas. El formal es el recomendado para Decanato y comités.</span>
+    </div>
+    <div id="rep_tab_ind">
     <details style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0 12px;font-size:13px;line-height:1.55;color:var(--slate)">
       <summary style="cursor:pointer;font-weight:600;color:var(--brand)">💡 Cómo funciona este reporte y su escala de reconocimiento</summary>
       <p style="margin:8px 0"><b>Las cifras</b> son las mismas del Tablero: % de indicadores con meta, % con seguimiento y avance promedio (último % informado de cada indicador; los que no tienen seguimiento cuentan como 0 %).</p>
@@ -10376,12 +10528,6 @@ async function abrirReporteAvance(){
         <b>3 Buen ritmo</b> · 50 % o más con seguimiento — <b>4 Destacado</b> · 80 % con seguimiento y todas las metas — <b>5 Excelencia</b> · todo al 100 % y avance de 90 % o más.</p>
       <p style="margin:0"><b>Progreso:</b> si una oficina sube de nivel respecto del último envío real, recibe además una felicitación por su avance. Las pruebas no cuentan como envío.</p>
     </details>
-    <div style="display:flex;gap:18px;align-items:center;margin:0 0 12px;font-size:14px;flex-wrap:wrap">
-      <b>Tono de los kudos:</b>
-      <label><input type="radio" name="rep_registro" value="formal" checked onchange="repCambiarRegistro()"> Formal</label>
-      <label><input type="radio" name="rep_registro" value="cercano" onchange="repCambiarRegistro()"> Cercano (peruano)</label>
-      <span class="hint">El formal es el recomendado para Decanato y comités.</span>
-    </div>
     ${sinConfig?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:11px 13px;margin-bottom:12px;color:#8a5a00"><b>Falta configurar el envío.</b></div>`:''}
     <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--paper);text-align:left">
@@ -10403,10 +10549,20 @@ async function abrirReporteAvance(){
         <td style="padding:7px 8px" id="rep_res_${i}"></td></tr>`).join('')}
       </tbody></table></div>
     </div>
+    <div id="rep_tab_fic" style="display:none">
+      <details style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0 12px;font-size:13px;line-height:1.55;color:var(--slate)">
+        <summary style="cursor:pointer;font-weight:600;color:var(--brand)">💡 Cómo funciona el check list de fichas</summary>
+        <p style="margin:8px 0">Para cada ficha <b>vigente</b> (no archivada) se revisa si cada campo está <b>lleno ✓</b> o <b>vacío ✗</b>. Solo se mira que haya contenido, no su calidad. Las etiquetas de componente que pone el aplicativo no cuentan como contenido.</p>
+        <p style="margin:0 0 8px"><b>Campos revisados (${REPF_CAMPOS.length}):</b> ${REPF_CAMPOS.map(c=>c.l).join(' · ')}. «Indicadores» cuenta como lleno si la ficha tiene indicadores o componentes declarados «no aplica» con su justificación.</p>
+        <p style="margin:0"><b>Etapa:</b> 0 Por empezar · menos de 25 % de campos llenos — 1 Iniciada · 25 % — 2 En avance · 50 % — 3 Buen ritmo · 70 % — 4 Casi completa · 85 % — 5 Completa · todas sus fichas al 100 %. Se agrupa por la <b>oficina dueña</b> de cada ficha.</p>
+      </details>
+      <div id="repf_cuerpo"></div>
+    </div>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap;border-top:1px solid var(--line);margin:12px -22px 0;padding:12px 22px;background:var(--card);border-radius:0 0 14px 14px">
       <div id="rep_resumen" style="flex:1;min-width:260px;font-size:13px;line-height:1.45"></div>
-      <button class="btn" id="rep_btn_prueba" ${sinConfig?'disabled':''} onclick="enviarReporteAvance('prueba')">Enviarme una prueba</button>
-      <button class="btn btn-primary" id="rep_btn_real" ${sinConfig?'disabled':''} onclick="enviarReporteAvance('real')">Enviar a los responsables seleccionados</button>
+      <button class="btn" id="rep_btn_prueba" ${sinConfig?'disabled':''} onclick="window._REP_TAB==='fic'?enviarReporteFichas('prueba'):enviarReporteAvance('prueba')">Enviarme una prueba</button>
+      <button class="btn btn-primary" id="rep_btn_real" ${sinConfig?'disabled':''} onclick="window._REP_TAB==='fic'?enviarReporteFichas('real'):enviarReporteAvance('real')">Enviar a los responsables seleccionados</button>
     </div>
    </div></div>`;
   document.body.insertAdjacentHTML('beforeend', html);
@@ -10634,7 +10790,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v120</span>
+      <span class="ac-ver">v121</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
