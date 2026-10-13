@@ -1330,16 +1330,16 @@
                 <div id="pm_meta_grid" class="grid"></div>
               </div>
             </div>
-            <div class="field full"><label>Plan de Acción (enlaces a SharePoint/Drive) <span style="color:#c0392b">*</span> <span class="hint" style="font-weight:400">— puedes agregar varias; cada una con su etiqueta</span></label>
+            <div class="field full"><label>Plan de Acción (enlaces a SharePoint/Drive) <span class="hint" style="font-weight:400">— opcional: puedes agregar varias, cada una con su etiqueta</span></label>
               <div class="ev-wrap" id="pm_plan_wrap" data-target="pm_plan"></div>
               <input type="hidden" id="pm_plan">
             </div>
-            <div class="field full"><label>Observación</label><textarea id="pm_obs"></textarea></div>
+            <div class="field full"><label>Observación/comentario</label><textarea id="pm_obs"></textarea></div>
           </div>
           <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
         </div>
         <div class="tabla-wrap"><table>
-          <thead><tr><th>Fecha</th><th>Periodo</th><th>Referencia</th><th>Meta</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
+          <thead><tr><th>Fecha</th><th>Periodo</th><th>Referencia</th><th>Meta</th><th>Observación/comentario</th><th style="text-align:right">Acciones</th></tr></thead>
           <tbody id="mt_prog_tabla"><tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr></tbody>
         </table></div>
       </div>
@@ -9089,9 +9089,7 @@ async function guardarProgMeta(){
     if(f){ f.scrollIntoView({behavior:'smooth',block:'center'}); f.focus(); f.style.borderColor='#c0392b'; }
     return;
   }
-  if(!String(plan||'').trim()){ toast('Agrega al menos un enlace del plan de acción.', true);
-    const w=document.getElementById('pm_plan_wrap'); if(w){ w.scrollIntoView({behavior:'smooth',block:'center'});
-      const i=w.querySelector('.ev-url'); if(i){ i.focus(); i.style.borderColor='#c0392b'; } } return; }
+  // El Plan de Acción es OPCIONAL (desde v126): se guarda si hay enlaces, pero no se exige.
   // ANTI-DUPLICADOS: un indicador no puede tener DOS metas programadas para el MISMO periodo
   // (quedaría con dos objetivos distintos y el % de avance sería ambiguo). Al editar, no se
   // compara consigo misma.
@@ -11098,7 +11096,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v125</span>
+      <span class="ac-ver">v126</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
