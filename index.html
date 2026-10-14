@@ -10447,12 +10447,16 @@ const _REP_ESPERA='<div style="padding:26px;text-align:center;color:var(--slate)
 function _repCifrasPorOficina(){
   const grupos={};
   const R=window._REP_RANGO;
+  const DI={ total:(STATE.matriz||[]).length, fuera:0, metas:0, segs:0 };
   (STATE.matriz||[]).forEach(m=>{
-    if(R && !_repDentro(m.created_at,false)) return;   // el indicador aún no existía al corte
+    if(R && !_repDentro(m.created_at,false)){ DI.fuera++; return; }   // el indicador aún no existía al corte
+    DI.metas += R ? (m._progMetasList||[]).filter(x=>_repDentro(x.creado,false)).length : (m._progMetas||0);
+    DI.segs  += R ? (m._segCreados||[]).filter(c=>_repDentro(c,true)).length : (m._periodos||0);
     const ofi=(leerCampo(m, MAT.oficina_medicion.id,'Oficina o área responsable de la medición')||'').trim();
     if(!ofi) return;
     (grupos[ofi]=grupos[ofi]||[]).push(m);
   });
+  window._REP_DIAG_IND = DI;
   return Object.keys(grupos).sort().map(ofi=>{
     const rs=grupos[ofi], total=rs.length;
     let conMeta=0, conSeg=0, suma=0, cien=0, enCurso=0, sinAvance=0;
@@ -10474,7 +10478,9 @@ function _repCifrasPorOficina(){
 }
 function _repIndTabla(filas){
   if(!filas.length) return '<p class="hint" style="padding:14px">No hay indicadores registrados en ese rango.</p>';
-  return `
+  const DI=window._REP_DIAG_IND||{};
+  const diag = window._REP_RANGO ? `<div style="background:#eef7f2;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:var(--slate)">🔎 Entran <b>${(DI.total||0)-(DI.fuera||0)}</b> de ${DI.total||0} indicadores${DI.fuera?` (<b>${DI.fuera}</b> se crearon después de la fecha «Hasta»)`:''} · <b>${DI.metas||0}</b> metas registradas hasta el corte · <b>${DI.segs||0}</b> seguimientos registrados dentro del rango · <b>${filas.length}</b> oficinas.</div>` : '';
+  return diag + `
     ${_repSelBarra('rep_chk', filas.length)}
     <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--paper);text-align:left">
@@ -11201,7 +11207,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v129</span>
+      <span class="ac-ver">v130</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
