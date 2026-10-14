@@ -6390,6 +6390,7 @@ async function loadMatriz(forzar){
       m._progMetas = mias.length;
       // Detalle de cada meta programada: periodo, valor meta y valor de referencia
       m._progMetasList = mias.map(p=>({
+        creado: p.created_at||'',
         periodo: PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):'',
         meta: leerCampo(p,PM.valor_meta.id,'Valor meta'),
         ref: leerCampo(p,PM.valor_ref.id,'Valor de referencia')
@@ -6413,8 +6414,9 @@ async function loadMatriz(forzar){
         const per=SM.periodo?(leerCampo(s,SM.periodo.id,'Periodo')||'(sin periodo)'):'(sin periodo)';
         const f=leerCampo(s, SM.fecha_eval.id, 'Fecha evaluación');
         const fechaVal=(f && !/fecha/i.test(f))?f:'';
-        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal };
+        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal, creado:s.created_at||'' };
       }).filter(x=>x.pct!==null);
+      m._segCreados = mios.map(s=>s.created_at||'');
       // Ordenar por fecha ascendente
       porPeriodo.sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
       m._avancePeriodos = porPeriodo;
@@ -10370,9 +10372,79 @@ function _repNivel(c){
   return 0;
 }
 
+/* ---------- RANGO DE FECHAS de los reportes ----------
+   Fecha que se usa: la de REGISTRO en el sistema (QuintaDB guarda cuándo se creó y cuándo se
+   modificó por última vez cada registro). «Hasta» = fecha de corte; «Desde» = inicio del periodo. */
+window._REP_RANGO = null;   // {desde:'YYYY-MM-DD'|'', hasta:'YYYY-MM-DD', exacto:bool}
+function _repDia(iso){
+  if(!iso) return '';
+  try{ return new Date(iso).toLocaleDateString('en-CA',{timeZone:'America/Lima'}); }catch(_){ return String(iso).slice(0,10); }
+}
+function _repDentro(iso, conDesde){
+  const R=window._REP_RANGO; if(!R) return true;
+  const d=_repDia(iso); if(!d) return true;          // sin fecha: no se descarta
+  if(R.hasta && d>R.hasta) return false;
+  if(conDesde && R.desde && d<R.desde) return false;
+  return true;
+}
+function _repFechaTxt(ymd){
+  if(!ymd) return '';
+  const [y,m,d]=ymd.split('-').map(Number);
+  const M=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return d+' de '+M[m-1]+' de '+y;
+}
+function _repRangoTxt(){
+  const R=window._REP_RANGO; if(!R) return '';
+  const hoy=_repDia(new Date().toISOString());
+  if(!R.desde && (!R.hasta || R.hasta>=hoy)) return '';               // = a la fecha
+  if(!R.desde) return 'con corte al '+_repFechaTxt(R.hasta);
+  return 'del '+_repFechaTxt(R.desde)+' al '+_repFechaTxt(R.hasta||hoy);
+}
+function _repRangoBarra(){
+  const hoy=_repDia(new Date().toISOString()), anio=hoy.slice(0,4);
+  return `<div style="border:1.5px solid var(--brand);border-radius:12px;padding:12px 14px;margin:10px 0 8px;background:#f3faf6">
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div style="font-weight:700;font-size:14px;align-self:center">📅 Rango de fechas</div>
+      <label style="font-size:13px;margin:0">Desde<br><input type="date" id="rep_desde" max="${hoy}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px"></label>
+      <label style="font-size:13px;margin:0">Hasta<br><input type="date" id="rep_hasta" value="${hoy}" max="${hoy}" style="padding:6px 8px;border:1px solid var(--line);border-radius:8px"></label>
+      <button class="btn btn-primary" onclick="repBuscar()" style="padding:9px 18px">🔍 Buscar</button>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-self:center">
+        <span class="hint" style="align-self:center">Atajos:</span>
+        <button class="btn btn-sm" onclick="repAtajo('','${anio}-07-31')">Hasta 31 jul ${anio}</button>
+        <button class="btn btn-sm" onclick="repAtajo('${anio}-01-01','${hoy}')">Este año</button>
+        <button class="btn btn-sm" onclick="repAtajo('','${hoy}')">Todo, a hoy</button>
+      </div>
+    </div>
+    <label id="rep_exacto_wrap" style="display:none;margin:9px 0 0;font-size:12.5px;cursor:pointer;font-weight:400">
+      <input type="checkbox" id="rep_exacto" style="vertical-align:middle"> Fichas: contar <b>solo</b> las que no se modificaron después de la fecha «Hasta» (dato exacto al corte)</label>
+    <div class="hint" style="margin-top:7px;font-size:12px;line-height:1.5">Se usa la <b>fecha de registro en el sistema</b>. <b>Indicadores:</b> cuenta los indicadores existentes al «Hasta», sus metas registradas hasta esa fecha y solo los seguimientos registrados dentro del rango. <b>Fichas:</b> cuenta las fichas registradas dentro del rango; el sistema no guarda cómo estaba cada campo en el pasado, por eso las fichas editadas después del «Hasta» se marcan con ⚠.</div>
+    <div id="rep_rango_estado" style="margin-top:6px;font-size:13px;font-weight:600;color:var(--brand)"></div>
+  </div>`;
+}
+function repAtajo(d,h){ const a=document.getElementById('rep_desde'), b=document.getElementById('rep_hasta'); if(a) a.value=d; if(b) b.value=h; repBuscar(); }
+async function repBuscar(){
+  const desde=(document.getElementById('rep_desde')||{}).value||'', hasta=(document.getElementById('rep_hasta')||{}).value||_repDia(new Date().toISOString());
+  if(desde && hasta && desde>hasta){ toast('La fecha «Desde» no puede ser posterior a «Hasta».', true); return; }
+  window._REP_RANGO={ desde, hasta, exacto: !!(document.getElementById('rep_exacto')||{}).checked };
+  const est=document.getElementById('rep_rango_estado');
+  const txt=_repRangoTxt();
+  if(est) est.textContent='⏳ Buscando…';
+  const w=document.getElementById('rep_exacto_wrap'); if(w) w.style.display = (hasta && hasta<_repDia(new Date().toISOString())) ? '' : 'none';
+  if((STATE.matriz||[]).length && !(STATE.matriz||[]).some(m=>m.created_at)) toast('Aviso: el servidor no devolvió las fechas de registro; el rango no se puede aplicar y se muestra todo.', true);
+  window._REP_FILAS=_repCifrasPorOficina(); window._REPF_FILAS=null;
+  const ci=document.getElementById('rep_ind_cuerpo'); if(ci) ci.innerHTML=_repIndTabla(window._REP_FILAS);
+  const cf=document.getElementById('repf_cuerpo'); if(cf) cf.innerHTML='';
+  if(window._REP_TAB==='fic') await repTab('fic'); else _repSelSync('rep_chk');
+  if(est) est.textContent='✓ Mostrando: '+(txt?txt.charAt(0).toUpperCase()+txt.slice(1):'estado a la fecha (todo lo registrado hasta hoy)')+'.';
+}
+window.repBuscar=repBuscar; window.repAtajo=repAtajo;
+const _REP_ESPERA='<div style="padding:26px;text-align:center;color:var(--slate);border:1px dashed var(--line);border-radius:12px;margin:10px 0">Elige el <b>rango de fechas</b> y pulsa <b>🔍 Buscar</b> para ver el reporte.</div>';
+
 function _repCifrasPorOficina(){
   const grupos={};
+  const R=window._REP_RANGO;
   (STATE.matriz||[]).forEach(m=>{
+    if(R && !_repDentro(m.created_at,false)) return;   // el indicador aún no existía al corte
     const ofi=(leerCampo(m, MAT.oficina_medicion.id,'Oficina o área responsable de la medición')||'').trim();
     if(!ofi) return;
     (grupos[ofi]=grupos[ofi]||[]).push(m);
@@ -10381,10 +10453,11 @@ function _repCifrasPorOficina(){
     const rs=grupos[ofi], total=rs.length;
     let conMeta=0, conSeg=0, suma=0, cien=0, enCurso=0, sinAvance=0;
     rs.forEach(m=>{
-      const tieneMeta=(m._progMetas||0)>0, tieneSeg=(m._periodos||0)>0;
+      const tieneMeta = R ? (m._progMetasList||[]).some(x=>_repDentro(x.creado,false)) : (m._progMetas||0)>0;
+      const tieneSeg  = R ? (m._segCreados||[]).some(c=>_repDentro(c,true)) : (m._periodos||0)>0;
       if(tieneMeta||tieneSeg) conMeta++;
       if(tieneSeg) conSeg++;
-      const per=(m._avancePeriodos||[]).filter(p=>p.pct!==null&&p.pct!==undefined);
+      const per=(m._avancePeriodos||[]).filter(p=>p.pct!==null&&p.pct!==undefined && (!R || _repDentro(p.creado,true)));
       const pct=per.length? Number(per[per.length-1].pct)||0 : 0;
       suma+=pct;
       if(per.length){ if(pct>=100) cien++; else if(pct>0) enCurso++; else sinAvance++; }
@@ -10394,6 +10467,30 @@ function _repCifrasPorOficina(){
     const nivel=_repNivel(cifras);
     return { oficina:ofi, cifras, nivel, kudo:'n'+nivel, nota:'' };
   });
+}
+function _repIndTabla(filas){
+  if(!filas.length) return '<p class="hint" style="padding:14px">No hay indicadores registrados en ese rango.</p>';
+  return `
+    ${_repSelBarra('rep_chk', filas.length)}
+    <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--paper);text-align:left">
+        <th style="padding:8px"><input type="checkbox" id="rep_chk_th" checked title="Seleccionar / quitar todas" onchange="_repSelTodos('rep_chk',this.checked)"></th>
+        <th style="padding:8px">Oficina</th>
+        <th style="padding:8px;text-align:right">Con meta</th><th style="padding:8px;text-align:right">Con seguimiento</th>
+        <th style="padding:8px;text-align:right">Avance</th><th style="padding:8px">Etapa de avance</th>
+        <th style="padding:8px">Kudo</th><th style="padding:8px"></th><th style="padding:8px">Resultado</th>
+      </tr></thead><tbody>
+      ${filas.map((f,i)=>`<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:7px 8px"><input type="checkbox" class="rep_chk" data-i="${i}" checked onchange="_repSelSync('rep_chk')"></td>
+        <td style="padding:7px 8px">${f.oficina.replace(/</g,'&lt;')} <span class="hint">· ${f.cifras.total}</span></td>
+        <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.cifras.conMeta,f.cifras.total)} <span class="hint">· ${f.cifras.conMeta}/${f.cifras.total}</span></td>
+        <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.cifras.conSeguimiento,f.cifras.total)} <span class="hint">· ${f.cifras.conSeguimiento}/${f.cifras.total}</span></td>
+        <td style="padding:7px 8px;text-align:right">${f.cifras.avancePromedio} %</td>
+        <td style="padding:7px 8px;white-space:nowrap">${REP_NIVELES[f.nivel]} <span style="letter-spacing:1px;color:var(--brand)">${'●'.repeat(f.nivel+1)}</span><span style="letter-spacing:1px;color:#cfd5d2">${'●'.repeat(5-f.nivel)}</span></td>
+        <td style="padding:7px 8px"><select id="rep_kudo_${i}" onchange="repCambiarKudo(${i},this.value)" style="font-size:12px;padding:3px 5px;border-radius:6px;border:1px solid var(--line)">${_repOpcionesKudo(f.kudo)}</select></td>
+        <td style="padding:7px 8px"><button class="btn btn-sm" id="rep_notabtn_${i}" onclick="repNota(${i})">✎ Nota</button></td>
+        <td style="padding:7px 8px" id="rep_res_${i}"></td></tr>`).join('')}
+      </tbody></table></div>`;
 }
 function _repSemaforo(parte,total){ const p= total? Math.round(parte/total*100):0; return (p>=80?'🟢':(p>=50?'🟡':'🔴'))+' '+p+' %'; }
 function _repRegistro(){ const r=document.querySelector('input[name=rep_registro]:checked'); return r?r.value:'formal'; }
@@ -10461,14 +10558,18 @@ async function _repfCalcular(){
   for(const nivel of ['N0','N1','N2','N3']){
     let recs=[]; try{ recs=await loadFichas(nivel); }catch(_){}
     const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
+    const R=window._REP_RANGO;
     recs.forEach(r=>{
       if(_fichaArchivada(r,nivel)) return;
+      if(R && !_repDentro(r.created_at,true)) return;                  // registrada fuera del rango
+      const posterior = !!(R && R.hasta && r.updated_at && _repDia(r.updated_at)>R.hasta);
+      if(posterior && R.exacto) return;                                 // solo dato exacto al corte
       const v=r.values||{};
       const dueno=(leerDueno(r,F)||'').trim(); if(!dueno) return;
       const nInd=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]).length, nNa=Object.keys(_leerNoAplica(r,nivel)||{}).length;
       const checks=REPF_CAMPOS.map(c=> c.k==='ind' ? (nInd+nNa)>0 : _repfLleno(_repfValor(v,c.col)) );
       const proceso=String(rutaFicha(r,nivel)||'').split(/\s*›\s*/).pop();
-      (grupos[dueno]=grupos[dueno]||[]).push({ nivel, proceso, checks });
+      (grupos[dueno]=grupos[dueno]||[]).push({ nivel, proceso, checks, creado:_repDia(r.created_at), modificado:_repDia(r.updated_at), posterior });
     });
   }
   return Object.keys(grupos).sort().map(ofi=>{
@@ -10484,7 +10585,7 @@ function _repfChecklist(f){
   return `<div style="overflow:auto"><table style="border-collapse:collapse;font-size:11.5px;min-width:100%">
     <thead><tr style="background:var(--paper)"><th style="padding:5px 6px;text-align:left">Ficha</th>${REPF_CAMPOS.map(c=>`<th style="padding:5px 4px;writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;white-space:nowrap">${c.l}</th>`).join('')}<th style="padding:5px 6px">%</th></tr></thead>
     <tbody>${f.fichas.map(x=>{ const n=x.checks.filter(Boolean).length; return `<tr style="border-top:1px solid var(--line)">
-      <td style="padding:5px 6px;min-width:220px"><span class="badge-n ${x.nivel.toLowerCase()}">${x.nivel}</span> ${_acEsc(x.proceso)}</td>
+      <td style="padding:5px 6px;min-width:220px"><span class="badge-n ${x.nivel.toLowerCase()}">${x.nivel}</span> ${_acEsc(x.proceso)}${x.posterior?` <span title="Editada el ${x.modificado}, después de la fecha de corte: se muestra su estado actual" style="color:#b9770e;font-size:11px">⚠ editada ${x.modificado}</span>`:''}</td>
       ${x.checks.map(c=>`<td style="text-align:center;padding:4px">${c?ok:no}</td>`).join('')}
       <td style="padding:5px 6px;text-align:right;white-space:nowrap"><b>${Math.round(n/REPF_CAMPOS.length*100)} %</b></td></tr>`; }).join('')}</tbody></table></div>`;
 }
@@ -10641,6 +10742,7 @@ async function descargarDirectorioOficinas(){
 window.descargarDirectorioOficinas=descargarDirectorioOficinas;
 
 async function descargarReporteFichasExcel(){
+  if(!window._REPF_FILAS){ toast('Primero elige el rango de fechas y pulsa 🔍 Buscar.', true); return; }
   toast('Preparando el reporte de fichas…');
   try{
     const F = window._REPF_FILAS || await _repfCalcular();
@@ -10656,7 +10758,7 @@ async function descargarReporteFichasExcel(){
     const porEtapa = REPF_NIVELES.map((n,i)=>F.filter(f=>f.nivel===i).length);
     const h1=[
       [{v:'Reporte de fichas de proceso registradas',s:'tit',m:7}],
-      [{v:'Matriz de Indicadores · SGOE ISO 21001 · Facultad de Ingeniería URP · al '+_xFechaLarga(),s:'sub',m:7}],
+      [{v:'Matriz de Indicadores · SGOE ISO 21001 · Facultad de Ingeniería URP · '+(_repRangoTxt()?'Periodo: '+_repRangoTxt():'al '+_xFechaLarga()),s:'sub',m:7}],
       [],
       [{v:'1. Resultado global',s:'sec',m:7}],
       ['Fichas vigentes','Oficinas dueñas','Fichas completas','% fichas completas','% campos llenos'].map(v=>({v,s:'th'})),
@@ -10676,20 +10778,21 @@ async function descargarReporteFichasExcel(){
     });
 
     // Hoja 2: Detalle por oficina y ficha (agrupado, con subtotal de cada oficina)
-    const cab=['Oficina / Ficha','Nivel',...REPF_CAMPOS.map(c=>c.l),'Campos llenos','% avance','Etapa','Falta completar'];
+    const cab=['Oficina / Ficha','Nivel',...REPF_CAMPOS.map(c=>c.l),'Campos llenos','% avance','Etapa','Falta completar','Registrada','Última modificación'];
     const h2=[[{v:'Detalle por oficina y por ficha',s:'tit',m:cab.length-1}],
-      [{v:'✓ = campo con contenido · ✗ = campo vacío. Solo se revisa que haya contenido, no su calidad. Cada oficina tiene una fila resumen (verde claro) seguida de sus fichas.',s:'sub',m:cab.length-1}],[],
+      [{v:'✓ = campo con contenido · ✗ = campo vacío. Solo se revisa que haya contenido, no su calidad. Cada oficina tiene una fila resumen (verde claro) seguida de sus fichas.'+(_repRangoTxt()?' Periodo: '+_repRangoTxt()+'. «⚠ después del corte» = la ficha se editó luego de la fecha final; se muestra su estado actual.':''),s:'sub',m:cab.length-1}],[],
       cab.map(v=>({v,s:'th'}))];
     F.forEach(f=>{
       const llenosOf=f.fichas.reduce((b,y)=>b+y.checks.filter(Boolean).length,0);
       const porCampo=REPF_CAMPOS.map((_,i)=>f.fichas.filter(y=>y.checks[i]).length);
       h2.push([{v:f.oficina+'  ('+f.fichas.length+' ficha'+(f.fichas.length===1?'':'s')+')',s:'grp'},{v:'',s:'grp'},
-        ...porCampo.map(n=>({v:n+'/'+f.fichas.length,s:'grpn'})),{v:llenosOf+'/'+(f.fichas.length*C),s:'grpn'},{v:f.pct+' %',s:_xPctStyle(f.pct)},{v:REPF_NIVELES[f.nivel],s:'grp'},{v:f.completas+' de '+f.fichas.length+' completas',s:'grp'}]);
+        ...porCampo.map(n=>({v:n+'/'+f.fichas.length,s:'grpn'})),{v:llenosOf+'/'+(f.fichas.length*C),s:'grpn'},{v:f.pct+' %',s:_xPctStyle(f.pct)},{v:REPF_NIVELES[f.nivel],s:'grp'},{v:f.completas+' de '+f.fichas.length+' completas',s:'grp'},{v:'',s:'grp'},{v:'',s:'grp'}]);
       f.fichas.forEach(x=>{
         const n=x.checks.filter(Boolean).length, p=Math.round(n/C*100);
         const falta=REPF_CAMPOS.filter((_,i)=>!x.checks[i]).map(c=>c.l);
         h2.push([{v:'    '+x.proceso,s:'td'},{v:x.nivel,s:'num'},...x.checks.map(c=>({v:c?'✓':'✗',s:c?'ok':'no'})),
-          {v:n+'/'+C,s:'num'},{v:p+' %',s:_xPctStyle(p)},{v:etapaFicha(p),s:'td'},{v:falta.length?falta.join(', '):'—',s:falta.length?'td':'okt'}]);
+          {v:n+'/'+C,s:'num'},{v:p+' %',s:_xPctStyle(p)},{v:etapaFicha(p),s:'td'},{v:falta.length?falta.join(', '):'—',s:falta.length?'td':'okt'},
+          {v:x.creado||'—',s:'num'},{v:(x.modificado||'—')+(x.posterior?' ⚠ después del corte':''),s:x.posterior?'midt':'num'}]);
       });
     });
 
@@ -10702,11 +10805,11 @@ async function descargarReporteFichasExcel(){
 
     const hojas=[
       { nombre:'Resumen global', anchos:[32,260,60,70,90,90,90,170,200], filas:h1 },
-      { nombre:'Detalle por oficina', anchos:[300,40,...REPF_CAMPOS.map(()=>52),70,62,90,300], filas:h2, fijar:4 },
+      { nombre:'Detalle por oficina', anchos:[300,40,...REPF_CAMPOS.map(()=>52),70,62,90,300,80,150], filas:h2, fijar:4 },
       { nombre:'Campos más débiles', anchos:[180,140,140,70], filas:h3 }
     ];
     if(dir.length) hojas.push(_xHojaDirectorio(dir));
-    _xDescargar(_xLibro(hojas), 'Reporte_fichas_registradas');
+    _xDescargar(_xLibro(hojas), 'Reporte_fichas_registradas'+(window._REP_RANGO&&_repRangoTxt()?('_'+(window._REP_RANGO.desde||'inicio')+'_al_'+window._REP_RANGO.hasta):''));
   }catch(e){ toast('No se pudo preparar el reporte: '+e.message, true); }
 }
 window.descargarReporteFichasExcel=descargarReporteFichasExcel;
@@ -10717,12 +10820,14 @@ async function repTab(t){
     if(d) d.style.display = x===t?'':'none';
     if(b){ b.style.background = x===t?'var(--brand)':'transparent'; b.style.color = x===t?'#fff':'var(--ink)'; } });
   _repEstado('', false);
-  if(t==='fic' && !window._REPF_FILAS){
+  if(t==='fic' && !window._REP_RANGO){ const c0=document.getElementById('repf_cuerpo'); if(c0) c0.innerHTML=_REP_ESPERA; }
+  else if(t==='fic' && !window._REPF_FILAS){
     const c=document.getElementById('repf_cuerpo'); if(c) c.innerHTML='<p>⏳ Revisando las fichas registradas…</p>';
     const filas=await _repfCalcular(); window._REPF_FILAS=filas;
     const reg=_repRegistro();
     const tot=filas.reduce((a,x)=>a+x.fichas.length,0), comp=filas.reduce((a,x)=>a+x.completas,0);
-    c.innerHTML = `<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
+    const _postN=filas.reduce((a,x)=>a+x.fichas.filter(y=>y.posterior).length,0);
+    c.innerHTML = `${_postN?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:#8a5a00">⚠ <b>${_postN}</b> ficha(s) se editaron después de la fecha de corte: se muestra su estado actual. Para contar solo las que no cambiaron, marca la casilla de «dato exacto» y vuelve a Buscar.</div>`:''}<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
       <button class="btn" onclick="descargarReporteFichasExcel()" title="Libro de Excel: resumen global, detalle por oficina y por ficha, campos más débiles y directorio">📥 Descargar reporte de fichas (Excel)</button>
       <button class="btn" onclick="descargarDirectorioOficinas()" title="Qué oficinas no tienen correo para reportes o no tienen cuenta en el aplicativo">📇 Oficinas sin correo o sin cuenta (Excel)</button></div>
@@ -10759,7 +10864,7 @@ async function enviarReporteFichas(modo){
   _repEstado('<span style="color:var(--slate)">⏳ Enviando '+sel.length+' correo(s)… No cierres esta ventana.</span>', true);
   try{
     const r=await fetch(REPORTE_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ clave:REPORTE_CLAVE, app:'fichas', modo, registro:_repRegistro(), envios }) });
+      body: JSON.stringify({ clave:REPORTE_CLAVE, app:'fichas', modo, registro:_repRegistro(), rango:_repRangoTxt(), envios }) });
     const d=await r.json();
     if(!d.ok){ _repEstado('<span style="color:#c0392b">✕ <b>No se envió nada.</b> '+_acEsc(d.error||'Error desconocido')+'</span>', false); sel.forEach(i=>{ const c=document.getElementById('repf_res_'+i); if(c) c.textContent=''; }); return; }
     const res=d.resultados||[];
@@ -10777,8 +10882,8 @@ window.enviarReporteFichas=enviarReporteFichas;
 async function abrirReporteAvance(){
   if(!esAdmin()){ toast('Solo el administrador puede enviar reportes.', true); return; }
   try{ await loadMatriz(); }catch(_){}
-  const filas=_repCifrasPorOficina();
-  window._REP_FILAS=filas; window._REPF_FILAS=null; window._REP_TAB='ind';
+  window._REP_RANGO=null;
+  window._REP_FILAS=[]; window._REPF_FILAS=null; window._REP_TAB='ind';
   const sinConfig = !REPORTE_URL || !REPORTE_CLAVE;
   const html = `
   <div id="rep_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
@@ -10798,6 +10903,7 @@ async function abrirReporteAvance(){
       <label><input type="radio" name="rep_registro" value="cercano" onchange="repCambiarRegistro()"> Cercano (peruano)</label>
       <span class="hint">Vale para las dos pestañas. El formal es el recomendado para Decanato y comités.</span>
     </div>
+    ${_repRangoBarra()}
     <div id="rep_tab_ind">
     <details style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0 12px;font-size:13px;line-height:1.55;color:var(--slate)">
       <summary style="cursor:pointer;font-weight:600;color:var(--brand)">💡 Cómo funciona este reporte y su escala de reconocimiento</summary>
@@ -10810,26 +10916,7 @@ async function abrirReporteAvance(){
     </details>
     ${sinConfig?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:11px 13px;margin-bottom:12px;color:#8a5a00"><b>Falta configurar el envío.</b></div>`:''}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px"><button class="btn" onclick="descargarDirectorioOficinas()" title="Qué oficinas no tienen correo para reportes o no tienen cuenta en el aplicativo">📇 Oficinas sin correo o sin cuenta (Excel)</button></div>
-    ${_repSelBarra('rep_chk', filas.length)}
-    <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="background:var(--paper);text-align:left">
-        <th style="padding:8px"><input type="checkbox" id="rep_chk_th" checked title="Seleccionar / quitar todas" onchange="_repSelTodos('rep_chk',this.checked)"></th>
-        <th style="padding:8px">Oficina</th>
-        <th style="padding:8px;text-align:right">Con meta</th><th style="padding:8px;text-align:right">Con seguimiento</th>
-        <th style="padding:8px;text-align:right">Avance</th><th style="padding:8px">Etapa de avance</th>
-        <th style="padding:8px">Kudo</th><th style="padding:8px"></th><th style="padding:8px">Resultado</th>
-      </tr></thead><tbody>
-      ${filas.map((f,i)=>`<tr style="border-bottom:1px solid var(--line)">
-        <td style="padding:7px 8px"><input type="checkbox" class="rep_chk" data-i="${i}" checked onchange="_repSelSync('rep_chk')"></td>
-        <td style="padding:7px 8px">${f.oficina.replace(/</g,'&lt;')} <span class="hint">· ${f.cifras.total}</span></td>
-        <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.cifras.conMeta,f.cifras.total)} <span class="hint">· ${f.cifras.conMeta}/${f.cifras.total}</span></td>
-        <td style="padding:7px 8px;text-align:right;white-space:nowrap">${_repSemaforo(f.cifras.conSeguimiento,f.cifras.total)} <span class="hint">· ${f.cifras.conSeguimiento}/${f.cifras.total}</span></td>
-        <td style="padding:7px 8px;text-align:right">${f.cifras.avancePromedio} %</td>
-        <td style="padding:7px 8px;white-space:nowrap">${REP_NIVELES[f.nivel]} <span style="letter-spacing:1px;color:var(--brand)">${'●'.repeat(f.nivel+1)}</span><span style="letter-spacing:1px;color:#cfd5d2">${'●'.repeat(5-f.nivel)}</span></td>
-        <td style="padding:7px 8px"><select id="rep_kudo_${i}" onchange="repCambiarKudo(${i},this.value)" style="font-size:12px;padding:3px 5px;border-radius:6px;border:1px solid var(--line)">${_repOpcionesKudo(f.kudo)}</select></td>
-        <td style="padding:7px 8px"><button class="btn btn-sm" id="rep_notabtn_${i}" onclick="repNota(${i})">✎ Nota</button></td>
-        <td style="padding:7px 8px" id="rep_res_${i}"></td></tr>`).join('')}
-      </tbody></table></div>
+    <div id="rep_ind_cuerpo">${_REP_ESPERA}</div>
     </div>
     <div id="rep_tab_fic" style="display:none">
       <details style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0 12px;font-size:13px;line-height:1.55;color:var(--slate)">
@@ -10892,7 +10979,7 @@ async function enviarReporteAvance(modo){
   _repEstado('<span style="color:var(--slate)">⏳ Enviando '+sel.length+' correo(s)… puede tardar unos segundos. No cierres esta ventana.</span>', true);
   try{
     const r=await fetch(REPORTE_URL,{ method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
-      body: JSON.stringify({ clave:REPORTE_CLAVE, app:'indicadores', modo, registro:_repRegistro(), envios }) });
+      body: JSON.stringify({ clave:REPORTE_CLAVE, app:'indicadores', rango:_repRangoTxt(), modo, registro:_repRegistro(), envios }) });
     const d=await r.json();
     if(!d.ok){ toast('No se pudo enviar: '+(d.error||'error desconocido'), true); sel.forEach(i=>{ const c=document.getElementById('rep_res_'+i); if(c) c.textContent=''; });
       _repEstado('<span style="color:#c0392b">✕ <b>No se envió nada.</b> '+String(d.error||'Error desconocido').replace(/</g,'&lt;')+'</span>', false); return; }
@@ -11096,7 +11183,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v126</span>
+      <span class="ac-ver">v127</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
