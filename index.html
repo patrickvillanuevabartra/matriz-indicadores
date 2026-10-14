@@ -10419,9 +10419,10 @@ function _repRangoBarra(){
         <button class="btn btn-sm" onclick="repAtajo('','${hoy}')">Todo, a hoy</button>
       </div>
     </div>
-    <label id="rep_exacto_wrap" style="display:none;margin:9px 0 0;font-size:12.5px;cursor:pointer;font-weight:400">
-      <input type="checkbox" id="rep_exacto" style="vertical-align:middle"> Fichas: contar <b>solo</b> las que no se modificaron después de la fecha «Hasta» (dato exacto al corte)</label>
-    <div class="hint" style="margin-top:7px;font-size:12px;line-height:1.5">Se usa la <b>fecha de registro en el sistema</b>. <b>Indicadores:</b> cuenta los indicadores existentes al «Hasta», sus metas registradas hasta esa fecha y solo los seguimientos registrados dentro del rango. <b>Fichas:</b> cuenta las fichas registradas dentro del rango; el sistema no guarda cómo estaba cada campo en el pasado, por eso las fichas editadas después del «Hasta» se marcan con ⚠.</div>
+    <details style="margin-top:8px;font-size:12.5px;color:var(--slate)"><summary style="cursor:pointer;color:var(--brand);font-weight:600">¿Qué se cuenta?</summary>
+      <div style="margin-top:6px;line-height:1.55">Se toma la <b>fecha en que cada cosa se ingresó al sistema</b>.<br>
+      • <b>Indicadores:</b> los que ya existían en la fecha «Hasta», con sus metas y seguimientos de ese periodo.<br>
+      • <b>Fichas:</b> las que se ingresaron entre «Desde» y «Hasta».</div></details>
     <div id="rep_rango_estado" style="margin-top:6px;font-size:13px;font-weight:600;color:var(--brand)"></div>
   </div>`;
 }
@@ -10429,11 +10430,10 @@ function repAtajo(d,h){ const a=document.getElementById('rep_desde'), b=document
 async function repBuscar(){
   const desde=(document.getElementById('rep_desde')||{}).value||'', hasta=(document.getElementById('rep_hasta')||{}).value||_repDia(new Date().toISOString());
   if(desde && hasta && desde>hasta){ toast('La fecha «Desde» no puede ser posterior a «Hasta».', true); return; }
-  window._REP_RANGO={ desde, hasta, exacto: !!(document.getElementById('rep_exacto')||{}).checked };
+  window._REP_RANGO={ desde, hasta, exacto: !!window._REP_SIN_EDITADAS };
   const est=document.getElementById('rep_rango_estado');
   const txt=_repRangoTxt();
   if(est) est.textContent='⏳ Buscando…';
-  const w=document.getElementById('rep_exacto_wrap'); if(w) w.style.display = (hasta && hasta<_repDia(new Date().toISOString())) ? '' : 'none';
   if((STATE.matriz||[]).length && !(STATE.matriz||[]).some(m=>m.created_at)) toast('Aviso: el servidor no devolvió las fechas de registro; el rango no se puede aplicar y se muestra todo.', true);
   window._REP_FILAS=_repCifrasPorOficina(); window._REPF_FILAS=null;
   const ci=document.getElementById('rep_ind_cuerpo'); if(ci) ci.innerHTML=_repIndTabla(window._REP_FILAS);
@@ -10441,7 +10441,21 @@ async function repBuscar(){
   if(window._REP_TAB==='fic') await repTab('fic'); else _repSelSync('rep_chk');
   if(est) est.textContent='✓ Mostrando: '+(txt?txt.charAt(0).toUpperCase()+txt.slice(1):'estado a la fecha (todo lo registrado hasta hoy)')+'.';
 }
-window.repBuscar=repBuscar; window.repAtajo=repAtajo;
+function _repfListaFuera(DG){
+  const R=window._REP_RANGO||{}, L=[...(DG.listaFuera||[])].sort((a,b)=>(a.creado||'').localeCompare(b.creado||'')||a.ofi.localeCompare(b.ofi,'es'));
+  const fmt=d=>{ if(!d) return '—'; const [y,m,dd]=d.split('-'); return dd+'/'+m+'/'+y; };
+  const motivo=x=> (R.hasta && x.creado>R.hasta) ? 'después del '+fmt(R.hasta) : (R.desde && x.creado<R.desde ? 'antes del '+fmt(R.desde) : '');
+  const desp=L.filter(x=>R.hasta && x.creado>R.hasta).length, antes=L.length-desp;
+  return `<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--brand);font-weight:600">Ver cuáles son y cuándo se ingresaron</summary>
+    <div style="margin:6px 0 2px">${desp?`<b>${desp}</b> se ingresaron <b>después del ${fmt(R.hasta)}</b>`:''}${desp&&antes?' y ':''}${antes?`<b>${antes}</b> <b>antes del ${fmt(R.desde)}</b>`:''}.</div>
+    <div style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-top:4px">
+    <table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="background:var(--paper);text-align:left;position:sticky;top:0">
+      <th style="padding:6px 8px">Fecha de ingreso</th><th style="padding:6px 8px">Oficina dueña</th><th style="padding:6px 8px">Proceso</th><th style="padding:6px 8px">Motivo</th></tr></thead><tbody>
+      ${L.map(x=>`<tr style="border-top:1px solid var(--line)"><td style="padding:5px 8px;white-space:nowrap"><b>${fmt(x.creado)}</b></td><td style="padding:5px 8px">${_acEsc(x.ofi)}</td><td style="padding:5px 8px">${_acEsc(x.proceso)}</td><td style="padding:5px 8px;white-space:nowrap;color:var(--slate)">${motivo(x)}</td></tr>`).join('')}
+    </tbody></table></div></details>`;
+}
+function repEditadas(quitar){ window._REP_SIN_EDITADAS=!!quitar; repBuscar(); }
+window.repBuscar=repBuscar; window.repAtajo=repAtajo; window.repEditadas=repEditadas;
 const _REP_ESPERA='<div style="padding:26px;text-align:center;color:var(--slate);border:1px dashed var(--line);border-radius:12px;margin:10px 0">Elige el <b>rango de fechas</b> y pulsa <b>🔍 Buscar</b> para ver el reporte.</div>';
 
 function _repCifrasPorOficina(){
@@ -10565,7 +10579,7 @@ function _repfNivel(pct, completas, total){
 async function _repfCalcular(){
   try{ await Promise.all([construirMapaIndicadores()]); }catch(_){}
   const grupos={};
-  const D={ total:0, sinFecha:0, fuera:0, posteriores:0, excluidasExacto:0 };
+  const D={ total:0, sinFecha:0, fuera:0, posteriores:0, excluidasExacto:0, listaFuera:[], listaEditadas:[] };
   for(const nivel of ['N0','N1','N2','N3']){
     let recs=[]; try{ recs=await loadFichas(nivel); }catch(_){}
     // Con rango: las fechas son imprescindibles. Si alguna ficha en memoria no las trae
@@ -10579,10 +10593,11 @@ async function _repfCalcular(){
       if(_fichaArchivada(r,nivel)) return;
       D.total++;
       if(R && !r.created_at) D.sinFecha++;
-      if(R && !_repDentro(r.created_at,true)){ D.fuera++; return; }    // registrada fuera del rango
+      const _info=()=>({ ofi:(leerDueno(r,F)||'').trim()||'(sin oficina dueña)', proceso:String(rutaFicha(r,nivel)||'').split(/\s*›\s*/).pop(), creado:_repDia(r.created_at), modificado:_repDia(r.updated_at) });
+      if(R && !_repDentro(r.created_at,true)){ D.fuera++; D.listaFuera.push(_info()); return; }    // registrada fuera del rango
       const posterior = !!(R && R.hasta && r.updated_at && _repDia(r.updated_at)>R.hasta);
       if(posterior) D.posteriores++;
-      if(posterior && R.exacto){ D.excluidasExacto++; return; }       // solo dato exacto al corte
+      if(posterior && R.exacto){ D.excluidasExacto++; D.listaEditadas.push(_info()); return; }       // solo dato exacto al corte
       const v=r.values||{};
       const dueno=(leerDueno(r,F)||'').trim(); if(!dueno) return;
       const nInd=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]).length, nNa=Object.keys(_leerNoAplica(r,nivel)||{}).length;
@@ -10828,6 +10843,18 @@ async function descargarReporteFichasExcel(){
       { nombre:'Detalle por oficina', anchos:[300,40,...REPF_CAMPOS.map(()=>52),70,62,90,300,80,150], filas:h2, fijar:4 },
       { nombre:'Campos más débiles', anchos:[180,140,140,70], filas:h3 }
     ];
+    const DGx=window._REPF_DIAG||{};
+    const fuera=[...(DGx.listaFuera||[])].sort((a,b)=>(a.creado||'').localeCompare(b.creado||''));
+    if(window._REP_RANGO && (fuera.length || (DGx.listaEditadas||[]).length)){
+      const fx=[[{v:'Fichas que NO entran en el reporte y por qué',s:'tit',m:4}],[{v:'Periodo: '+(_repRangoTxt()||'a la fecha'),s:'sub',m:4}],[],
+        ['Fecha de ingreso','Oficina dueña','Proceso','Última modificación','Motivo'].map(v=>({v,s:'th'}))];
+      const R=window._REP_RANGO;
+      fuera.forEach(x=>fx.push([{v:x.creado||'—',s:'num'},{v:x.ofi,s:'td'},{v:x.proceso,s:'td'},{v:x.modificado||'—',s:'num'},
+        {v:(R.hasta&&x.creado>R.hasta)?'Se ingresó después de la fecha «Hasta»':'Se ingresó antes de la fecha «Desde»',s:'midt'}]));
+      (DGx.listaEditadas||[]).forEach(x=>fx.push([{v:x.creado||'—',s:'num'},{v:x.ofi,s:'td'},{v:x.proceso,s:'td'},{v:x.modificado||'—',s:'num'},
+        {v:'Se quitó porque se modificó después de la fecha «Hasta»',s:'not'}]));
+      hojas.push({ nombre:'Fichas fuera del periodo', anchos:[90,230,300,110,260], filas:fx, fijar:4 });
+    }
     if(dir.length) hojas.push(_xHojaDirectorio(dir));
     _xDescargar(_xLibro(hojas), 'Reporte_fichas_registradas'+(window._REP_RANGO&&_repRangoTxt()?('_'+(window._REP_RANGO.desde||'inicio')+'_al_'+window._REP_RANGO.hasta):''));
   }catch(e){ toast('No se pudo preparar el reporte: '+e.message, true); }
@@ -10850,8 +10877,17 @@ async function repTab(t){
     const DG=window._REPF_DIAG||{};
     const _diag = !window._REP_RANGO ? '' : (DG.sinFecha
       ? `<div style="background:#fdecea;border:1px solid #f5b7b1;border-radius:9px;padding:9px 12px;margin:0 0 8px;font-size:13px;color:#922b21">⚠ <b>${DG.sinFecha} de ${DG.total}</b> fichas llegaron <b>sin fecha de registro</b> desde el servidor, así que el rango no se les pudo aplicar. Recarga la página (Ctrl+F5) y vuelve a Buscar; si persiste, avisa al administrador.</div>`
-      : `<div style="background:#eef7f2;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:var(--slate)">🔎 De <b>${DG.total}</b> fichas vigentes: <b>${DG.total-DG.fuera-(DG.excluidasExacto||0)}</b> entran en el rango · <b>${DG.fuera}</b> quedaron fuera por su fecha de registro${DG.excluidasExacto?` · <b>${DG.excluidasExacto}</b> excluidas por editarse después del corte`:''}.</div>`);
-    c.innerHTML = _diag + `${_postN?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:#8a5a00">⚠ <b>${_postN}</b> ficha(s) se editaron después de la fecha de corte: se muestra su estado actual. Para contar solo las que no cambiaron, marca la casilla de «dato exacto» y vuelve a Buscar.</div>`:''}<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
+      : `<div style="background:#eef7f2;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:var(--slate)">🔎 Hay <b>${DG.total}</b> fichas en total: <b>${DG.total-DG.fuera-(DG.excluidasExacto||0)}</b> entran en este periodo y <b>${DG.fuera}</b> no, porque se ingresaron en otras fechas.${DG.fuera?_repfListaFuera(DG):''}</div>`);
+    const _corte=window._REP_RANGO&&window._REP_RANGO.hasta?_repFechaTxt(window._REP_RANGO.hasta):'';
+    const _avisoEd = window._REP_SIN_EDITADAS
+      ? `<div style="background:#eef4fb;border:1px solid #c5d9ef;border-radius:9px;padding:10px 12px;margin:0 0 8px;font-size:13.5px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span>✂️ Se quitaron <b>${DG.excluidasExacto||0}</b> fichas porque alguien las modificó después del ${_corte}. Solo quedan las que no han cambiado desde esa fecha.
+          <details style="margin-top:4px"><summary style="cursor:pointer;color:var(--brand);font-weight:600">Ver cuáles</summary>${(DG.listaEditadas||[]).map(x=>`<div style="font-size:12.5px;padding:2px 0">• ${_acEsc(x.ofi)} — ${_acEsc(x.proceso)} <span class="hint">(ingresada ${x.creado}, modificada ${x.modificado})</span></div>`).join('')}</details></span>
+          <button class="btn btn-sm" onclick="repEditadas(false)">Volver a incluirlas</button></div>`
+      : (_postN ? `<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:10px 12px;margin:0 0 8px;font-size:13.5px;color:#6b4a00;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span>⚠ <b>${_postN}</b> de estas fichas se modificaron <b>después del ${_corte}</b>, así que se ven como están <b>hoy</b> (no como estaban ese día).</span>
+          <button class="btn btn-sm" onclick="repEditadas(true)">Quitarlas del reporte</button></div>` : '');
+    c.innerHTML = _diag + `${_avisoEd}<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
       <button class="btn" onclick="descargarReporteFichasExcel()" title="Libro de Excel: resumen global, detalle por oficina y por ficha, campos más débiles y directorio">📥 Descargar reporte de fichas (Excel)</button>
       <button class="btn" onclick="descargarDirectorioOficinas()" title="Qué oficinas no tienen correo para reportes o no tienen cuenta en el aplicativo">📇 Oficinas sin correo o sin cuenta (Excel)</button></div>
@@ -10906,7 +10942,7 @@ window.enviarReporteFichas=enviarReporteFichas;
 async function abrirReporteAvance(){
   if(!esAdmin()){ toast('Solo el administrador puede enviar reportes.', true); return; }
   try{ await loadMatriz(); }catch(_){}
-  window._REP_RANGO=null;
+  window._REP_RANGO=null; window._REP_SIN_EDITADAS=false;
   window._REP_FILAS=[]; window._REPF_FILAS=null; window._REP_TAB='ind';
   const sinConfig = !REPORTE_URL || !REPORTE_CLAVE;
   const html = `
@@ -11207,7 +11243,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v130</span>
+      <span class="ac-ver">v132</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
