@@ -10376,9 +10376,13 @@ function _repNivel(c){
    Fecha que se usa: la de REGISTRO en el sistema (QuintaDB guarda cuándo se creó y cuándo se
    modificó por última vez cada registro). «Hasta» = fecha de corte; «Desde» = inicio del periodo. */
 window._REP_RANGO = null;   // {desde:'YYYY-MM-DD'|'', hasta:'YYYY-MM-DD', exacto:bool}
+// Día (YYYY-MM-DD) en hora de Lima (UTC-5, sin horario de verano). Se calcula a mano:
+// toLocaleDateString depende del idioma del navegador y puede devolver «5/14/2026».
 function _repDia(iso){
   if(!iso) return '';
-  try{ return new Date(iso).toLocaleDateString('en-CA',{timeZone:'America/Lima'}); }catch(_){ return String(iso).slice(0,10); }
+  const t = (iso instanceof Date) ? iso.getTime() : Date.parse(String(iso));
+  if(isNaN(t)){ const m=String(iso).match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[1]+'-'+m[2]+'-'+m[3] : ''; }
+  return new Date(t - 5*3600*1000).toISOString().slice(0,10);
 }
 function _repDentro(iso, conDesde){
   const R=window._REP_RANGO; if(!R) return true;
@@ -11183,7 +11187,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v127</span>
+      <span class="ac-ver">v128</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
