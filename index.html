@@ -10559,15 +10559,24 @@ function _repfNivel(pct, completas, total){
 async function _repfCalcular(){
   try{ await Promise.all([construirMapaIndicadores()]); }catch(_){}
   const grupos={};
+  const D={ total:0, sinFecha:0, fuera:0, posteriores:0, excluidasExacto:0 };
   for(const nivel of ['N0','N1','N2','N3']){
     let recs=[]; try{ recs=await loadFichas(nivel); }catch(_){}
+    // Con rango: las fechas son imprescindibles. Si alguna ficha en memoria no las trae
+    // (p. ej. quedó en caché tras un guardado), se vuelve a leer la tabla completa del servidor.
+    if(window._REP_RANGO && recs.some(r=>!r.created_at)){
+      try{ const d=await API.records(entFicha(nivel), true); if(d && Array.isArray(d.records)){ recs=d.records; STATE.fichas[nivel]=recs; } }catch(_){}
+    }
     const F = nivel==='N0'?CONFIG.FICHA_N0_FIELDS : nivel==='N1'?CONFIG.FICHA_N1_FIELDS : nivel==='N3'?CONFIG.FICHA_N3_FIELDS : CONFIG.FICHA_N2_FIELDS;
     const R=window._REP_RANGO;
     recs.forEach(r=>{
       if(_fichaArchivada(r,nivel)) return;
-      if(R && !_repDentro(r.created_at,true)) return;                  // registrada fuera del rango
+      D.total++;
+      if(R && !r.created_at) D.sinFecha++;
+      if(R && !_repDentro(r.created_at,true)){ D.fuera++; return; }    // registrada fuera del rango
       const posterior = !!(R && R.hasta && r.updated_at && _repDia(r.updated_at)>R.hasta);
-      if(posterior && R.exacto) return;                                 // solo dato exacto al corte
+      if(posterior) D.posteriores++;
+      if(posterior && R.exacto){ D.excluidasExacto++; return; }       // solo dato exacto al corte
       const v=r.values||{};
       const dueno=(leerDueno(r,F)||'').trim(); if(!dueno) return;
       const nInd=(_SUBIND_POR_FICHA[nivel+'_'+r.id]||[]).length, nNa=Object.keys(_leerNoAplica(r,nivel)||{}).length;
@@ -10576,6 +10585,7 @@ async function _repfCalcular(){
       (grupos[dueno]=grupos[dueno]||[]).push({ nivel, proceso, checks, creado:_repDia(r.created_at), modificado:_repDia(r.updated_at), posterior });
     });
   }
+  window._REPF_DIAG = D;
   return Object.keys(grupos).sort().map(ofi=>{
     const fs=grupos[ofi], tot=fs.length*REPF_CAMPOS.length;
     const llenos=fs.reduce((a,x)=>a+x.checks.filter(Boolean).length,0);
@@ -10831,7 +10841,11 @@ async function repTab(t){
     const reg=_repRegistro();
     const tot=filas.reduce((a,x)=>a+x.fichas.length,0), comp=filas.reduce((a,x)=>a+x.completas,0);
     const _postN=filas.reduce((a,x)=>a+x.fichas.filter(y=>y.posterior).length,0);
-    c.innerHTML = `${_postN?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:#8a5a00">⚠ <b>${_postN}</b> ficha(s) se editaron después de la fecha de corte: se muestra su estado actual. Para contar solo las que no cambiaron, marca la casilla de «dato exacto» y vuelve a Buscar.</div>`:''}<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
+    const DG=window._REPF_DIAG||{};
+    const _diag = !window._REP_RANGO ? '' : (DG.sinFecha
+      ? `<div style="background:#fdecea;border:1px solid #f5b7b1;border-radius:9px;padding:9px 12px;margin:0 0 8px;font-size:13px;color:#922b21">⚠ <b>${DG.sinFecha} de ${DG.total}</b> fichas llegaron <b>sin fecha de registro</b> desde el servidor, así que el rango no se les pudo aplicar. Recarga la página (Ctrl+F5) y vuelve a Buscar; si persiste, avisa al administrador.</div>`
+      : `<div style="background:#eef7f2;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:var(--slate)">🔎 De <b>${DG.total}</b> fichas vigentes: <b>${DG.total-DG.fuera-(DG.excluidasExacto||0)}</b> entran en el rango · <b>${DG.fuera}</b> quedaron fuera por su fecha de registro${DG.excluidasExacto?` · <b>${DG.excluidasExacto}</b> excluidas por editarse después del corte`:''}.</div>`);
+    c.innerHTML = _diag + `${_postN?`<div style="background:#fff6e5;border:1px solid #f0d9a8;border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:#8a5a00">⚠ <b>${_postN}</b> ficha(s) se editaron después de la fecha de corte: se muestra su estado actual. Para contar solo las que no cambiaron, marca la casilla de «dato exacto» y vuelve a Buscar.</div>`:''}<div style="margin:0 0 10px;font-size:13.5px"><b>${tot}</b> ficha(s) vigentes en <b>${filas.length}</b> oficina(s) · <b>${comp}</b> completas (${tot?Math.round(comp/tot*100):0} %).</div>
 <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px">
       <button class="btn" onclick="descargarReporteFichasExcel()" title="Libro de Excel: resumen global, detalle por oficina y por ficha, campos más débiles y directorio">📥 Descargar reporte de fichas (Excel)</button>
       <button class="btn" onclick="descargarDirectorioOficinas()" title="Qué oficinas no tienen correo para reportes o no tienen cuenta en el aplicativo">📇 Oficinas sin correo o sin cuenta (Excel)</button></div>
@@ -11187,7 +11201,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v128</span>
+      <span class="ac-ver">v129</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
