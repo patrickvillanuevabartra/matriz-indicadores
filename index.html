@@ -8839,8 +8839,9 @@ function _mgPasosProg(){
         ? `Escribe en «<b>${_mgEsc(a)}</b>» lo que ya tenías logrado al inicio del periodo (el último dato conocido) y en «<b>${_mgEsc(b)}</b>» el total de ese momento. Si nunca se midió, usa la primera medición que hagas; escribe <b>0</b> solo si de verdad no hay nada logrado. <br>Ej.: 45 de 180 estudiantes el año pasado.`
         : 'Escribe el valor con el que empiezas el periodo: el último dato conocido. Si nunca se midió, usa la primera medición que hagas; escribe 0 solo si de verdad el valor es 0.' },
     { sel: tieneVars?'#pm_meta_grid':'#pm_meta', tit:'Meta: ¿a dónde quieres llegar al cierre?', txt: tieneVars
-        ? `Primero escribe en «<b>${_mgEsc(b)}</b>» el total que proyectas para el periodo. Luego, en «<b>${_mgEsc(a)}</b>», la cantidad que debes alcanzar para llegar a tu meta: total × porcentaje deseado. <br>Ej.: 200 × 30 % = <b>60 de 200</b>; o 8 de 8 para cumplir todo un cronograma.`
-        : 'Escribe el valor que esperas alcanzar al terminar el periodo.' },
+        ? `Primero revisa en «<b>${_mgEsc(b)}</b>» el total que proyectas para el periodo (si estaba vacío, se copió el de la línea base: cámbialo si proyectas otro). Luego, en «<b>${_mgEsc(a)}</b>», la cantidad que debes alcanzar para llegar a tu meta: total × porcentaje deseado. <br>Ej.: 200 × 30 % = <b>60 de 200</b>; o 8 de 8 para cumplir todo un cronograma.`
+        : 'Escribe el valor que esperas alcanzar al terminar el periodo.',
+      antes:_mgMetaDesdeBase, extra:_mgResumenBase },
     { sel:'#pm_plan_wrap', tit:'Opcional: la base de tu meta', txt:'Puedes enlazar el <b>cronograma</b> o el plan de trabajo. <b>Los informes de avance no van aquí</b>: van en ③ Seguimiento.' },
     { sel:'#pm_guardar', tit:'Guarda la meta', txt:'Pulsa <b>«+ Guardar programación»</b>. Después pasa a <b>③ Seguimiento</b> para reportar lo logrado y subir tus informes.', fin:'seg' }
   ];
@@ -8865,18 +8866,47 @@ function mgGuiar(){
   _MG_PASOS = tab==='seg' ? _mgPasosSeg() : _mgPasosProg();
   _MG_I=0; _mgMostrar();
 }
+// Lo que se escribió en la línea base (paso anterior), para usarlo en el paso de la meta.
+function _mgValoresBase(){
+  const g=document.getElementById('pm_ref_grid');
+  const ins=g?[...g.querySelectorAll('input[data-mkey]')]:[];
+  return { vars: ins.map(i=>i.value), total: (document.getElementById('pm_ref')||{}).value||'' };
+}
+function _mgResumenBase(){
+  const V=_mgVars(), b=_mgValoresBase();
+  if(V.n>=2 && b.vars.length>=2 && b.vars[0]!=='' && b.vars[1]!=='')
+    return `<div style="margin-top:6px;padding:6px 9px;background:#eef4ff;border:1px solid #adc4ee;border-radius:7px;color:#2b4c9b">📌 Tu línea base (paso anterior): <b>${_mgEsc(b.vars[0])} de ${_mgEsc(b.vars[1])}</b>${b.total!==''?' = <b>'+_mgEsc(b.total)+'</b>':''}. Úsala para decidir cuánto quieres mejorar.</div>`;
+  if(b.total!=='') return `<div style="margin-top:6px;padding:6px 9px;background:#eef4ff;border:1px solid #adc4ee;border-radius:7px;color:#2b4c9b">📌 Tu línea base (paso anterior): <b>${_mgEsc(b.total)}</b>. Úsala para decidir cuánto quieres mejorar.</div>`;
+  return '';
+}
+// Si la meta está vacía, se parte del total de la línea base (se puede cambiar).
+function _mgMetaDesdeBase(){
+  const V=_mgVars(); if(V.n<2) return;
+  const g=document.getElementById('pm_meta_grid'); if(!g) return;
+  const ins=[...g.querySelectorAll('input[data-mkey]')];
+  if(ins.length<2 || ins.some(i=>i.value!=='')) return;
+  const b=_mgValoresBase(); if(b.vars.length<2 || b.vars[1]==='') return;
+  ins[1].value=b.vars[1];
+  try{ calcularValorMeta('meta'); }catch(_){}
+}
 function _mgLimpiar(){
+  { const fm=document.getElementById('pm_meta'); const f=fm&&fm.closest('.field'); if(f) f.style.display=''; }
   document.querySelectorAll('.mg-coach').forEach(x=>x.remove());
   document.querySelectorAll('.mg-foco').forEach(x=>x.classList.remove('mg-foco'));
 }
 function _mgMostrar(){
   _mgLimpiar();
   const p=_MG_PASOS[_MG_I]; if(!p) return;
+  // La meta se ve recién en su paso: antes, solo distrae (la línea base va primero).
+  { const iMeta=_MG_PASOS.findIndex(x=>x.sel==='#pm_meta_grid'||x.sel==='#pm_meta');
+    const fm=document.getElementById('pm_meta'); const f=fm&&fm.closest('.field');
+    if(f && iMeta>=0 && _MG_I<iMeta) f.style.display='none'; }
+  if(typeof p.antes==='function'){ try{ p.antes(); }catch(_){ } }
   const el=document.querySelector(p.sel); if(!el){ _MG_I++; return _mgMostrar(); }
   const cont=el.closest('.field')||el;
   const c=document.createElement('div'); c.className='mg-coach';
   const ult=_MG_I===_MG_PASOS.length-1;
-  c.innerHTML=`<div class="cab">Paso ${_MG_I+1} de ${_MG_PASOS.length}</div><div class="tit">${p.tit}</div><div>${p.txt}</div>
+  c.innerHTML=`<div class="cab">Paso ${_MG_I+1} de ${_MG_PASOS.length}</div><div class="tit">${p.tit}</div><div>${p.txt}${typeof p.extra==='function'?p.extra():''}</div>
     <div class="bot">${_MG_I>0?'<button type="button" class="btn btn-ghost btn-sm" onclick="mgPaso(-1)">← Anterior</button>':''}
     ${p.ir?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();setMetaTab('${p.ir}');setTimeout(mgGuiar,50)">Ir a ② Programación</button>`
       : (ult? (p.fin?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();setMetaTab('${p.fin}');setTimeout(mgGuiar,50)">Seguir con ③ Seguimiento →</button>`:'<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar()">Listo</button>')
