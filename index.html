@@ -8444,6 +8444,104 @@ function _normalizarFormula(f){
     .replace(/(\d|\))\s*[xX]\s*(\d|\()/g,'$1*$2')  // "5 x 3" → "5*3" (x solo entre números/paréntesis)
     .replace(/,/g,'.');                              // coma decimal → punto
 }
+
+// ===== Ficha de cada variable y estado de los datos =====
+// Idea tomada de la «calculadora de indicadores»: cada dato lleva su unidad y
+// cómo registrarlo; una casilla vacía es un dato PENDIENTE (no un cero), y la
+// Matriz avisa cuando los números no tienen sentido. Los avisos no impiden guardar.
+// PISTAS_VAR permite corregir a mano la indicación de una variable concreta:
+//   clave = nombre de la variable en minúsculas y sin tildes; valor = texto.
+const PISTAS_VAR = {};
+function _pvNorm(t){ return String(t||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim(); }
+function _pvEsc(t){ return String(t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+// Unidad de la variable, sacada de su nombre: «N° de docentes evaluados» → docentes.
+function unidadDeVariable(nombre){
+  const n=_pvNorm(nombre);
+  if(/^[a-z]{2,7}$/.test(n) && /^[A-Z]{2,7}$/.test(String(nombre).trim())) return '';
+  if(/presupuesto/.test(n)) return 'soles (S/)';
+  if(/^horas?\b/.test(n)) return 'horas';
+  if(/porcentaje/.test(n)) return '%';
+  const m=n.match(/^(?:n(?:\.|\s)*[°º]|numero|nro\.?|total)\s*(?:total\s+)?(?:de\s+)?(?:la\s+|los\s+|las\s+|el\s+)?([a-zñ]+)/);
+  let u=m?m[1]:(n.match(/^([a-zñ]+)/)||[])[1]||'';
+  if(/^(de|del|total|base|programadas?|planificadas?|atendidos?|solicitados?)$/.test(u)) u='';
+  return u;
+}
+// Indicación de cómo registrar la variable. rol: 'arriba' (lo que se cuenta),
+// 'abajo' (el total de referencia) o '' si la fórmula no es una división simple.
+function pistaVariable(nombre, rol){
+  const n=_pvNorm(nombre);
+  if(PISTAS_VAR[n]) return PISTAS_VAR[n];
+  if(/^[A-Z]{2,7}$/.test(String(nombre).trim()))
+    return 'Es una sigla: revise en la ficha del indicador qué significa antes de registrar el dato.';
+  const partes=[];
+  const esTotal = rol==='abajo' || /\btotal\b|programad|planificad|establecid|esperad|recibid|reportad|identificad|propuest|formulad|vacantes|remitid|reservad|asignad[oa]s a la facultad|incorporad/.test(n);
+  if(rol==='abajo' || (esTotal && rol!=='arriba')){
+    partes.push('Es el total de referencia del periodo: según el plan, el cronograma o el registro oficial.');
+    partes.push('Use el mismo periodo que el dato de arriba.');
+  } else {
+    if(/plazo/.test(n)) partes.push('Cuente solo lo atendido dentro del plazo; lo atendido fuera de plazo no va aquí (sí va en el total).');
+    else if(/ejecutad|realizad|atendid|implementad|cerrad|culminad|aprobad|publicad|difundid|entregad|corregid|revisad|actualizad|evaluad|capacitad|formalizad|resuelt|registrad|verificad|operativ|alcanzad|lograd|iniciad/.test(n))
+      partes.push('Cuente solo lo ya realizado y que tenga evidencia (acta, informe, lista, resolución o registro).');
+    else partes.push('Escriba la cantidad del periodo que está midiendo.');
+  }
+  if(/docente|estudiante|ingresante|personal|personas|miembros|asistentes|egresad|postulante|matriculad/.test(n))
+    partes.push('Cuente a cada persona una sola vez.');
+  else if(/asignatura|curso/.test(n)) partes.push('Cuente cada asignatura una sola vez en el periodo.');
+  return partes.join(' ');
+}
+// ¿La fórmula es «A / B»? Devuelve qué variable va arriba y cuál abajo.
+function rolesFormula(formula, vars){
+  if(!vars || vars.length!==2) return null;
+  const f=_pvNorm(formula), a=_pvNorm(vars[0].nombre), b=_pvNorm(vars[1].nombre);
+  const i0=f.indexOf(a), i1=f.indexOf(b, i0+a.length), is=f.indexOf('/', i0+a.length);
+  if(i0<0 || i1<0 || is<0 || !(is<i1)) return null;
+  return { arriba: vars[0].key, abajo: vars[1].key };
+}
+// Etiqueta + indicación de una casilla de variable.
+function htmlCampoVariable(v, roles, attr, oninput, chico){
+  const rol = roles ? (roles.arriba===v.key ? 'arriba' : (roles.abajo===v.key ? 'abajo' : '')) : '';
+  const u=unidadDeVariable(v.nombre), p=pistaVariable(v.nombre, rol);
+  return `
+    <div class="field">
+      <label title="${_pvEsc(v.nombre)}"${chico?' style="font-size:11px"':''}>${_pvEsc(v.nombre)}${u?` <span style="font-weight:400;color:var(--mist)">(${_pvEsc(u)})</span>`:''}</label>
+      <input type="number" step="any" ${attr}="${v.key}" oninput="${oninput}" placeholder="dato pendiente">
+      <div class="pista-var" style="font-size:11.5px;color:var(--mist);line-height:1.4;margin-top:4px">${_pvEsc(p)}</div>
+    </div>`;
+}
+// Recuadro «Estado de los datos» bajo una calculadora de variables.
+function pintarEstadoDatos(grid, attr, vars, formula){
+  if(!grid) return null;
+  let box=grid.nextElementSibling;
+  if(!box || !box.classList || !box.classList.contains('estado-datos')){
+    box=document.createElement('div'); box.className='estado-datos';
+    box.style.cssText='font-size:12.5px;line-height:1.45;border-radius:8px;padding:7px 10px;margin-top:8px';
+    grid.parentNode.insertBefore(box, grid.nextSibling);
+  }
+  if(!vars || !vars.length){ box.style.display='none'; return null; }
+  const val={}; let vacios=0, negativos=false;
+  vars.forEach(v=>{
+    const inp=grid.querySelector('input['+attr+'="'+v.key+'"]');
+    const s=inp?String(inp.value).trim():'';
+    if(s===''){ vacios++; val[v.key]=null; return; }
+    const x=parseFloat(s); val[v.key]=x; if(x<0) negativos=true;
+  });
+  const roles=rolesFormula(formula, vars);
+  const pinta=(tipo, html)=>{
+    const c={ ok:['#eaf7ef','#a9d8b8','#1d6b3a'], av:['#fff8e6','#f0c987','#8a6100'], no:['#f3f4f6','#d1d5db','#4b5563'], pend:['#f3f4f6','#d1d5db','#4b5563'] }[tipo];
+    box.style.display='block'; box.style.background=c[0]; box.style.border='1px solid '+c[1]; box.style.color=c[2];
+    box.innerHTML=html;
+  };
+  let estado='ok';
+  if(vacios===vars.length){ pinta('pend','✏️ <b>Ingrese los datos.</b> Una casilla vacía es un dato pendiente; escriba 0 solo si lo comprobó.'); estado='pend'; }
+  else if(vacios){ pinta('pend','⏳ <b>Falta '+(vacios===1?'un dato':vacios+' datos')+'.</b> El resultado se calcula cuando estén todos. Una casilla vacía no se toma como cero.'); estado='pend'; }
+  else if(negativos){ pinta('av','⚠️ <b>Revise:</b> hay un número negativo.'); estado='av'; }
+  else if(roles && val[roles.abajo]===0){ pinta('no','➖ <b>No aplica:</b> el total (abajo) es 0, así que el indicador no se puede calcular. Revise el dato; si de verdad es 0, anote el motivo en la Observación.'); estado='no'; }
+  else if(roles && val[roles.arriba]>val[roles.abajo]){ pinta('av','⚠️ <b>Revise:</b> lo de arriba ('+val[roles.arriba]+') es mayor que el total de abajo ('+val[roles.abajo]+'), así que el resultado pasa de 100 %. Puede ser correcto en algunos indicadores (por ejemplo, postulantes por vacante), pero casi siempre es un error de conteo o de periodo.'); estado='av'; }
+  else pinta('ok','✅ <b>Datos completos.</b>');
+  return estado;
+}
+window.unidadDeVariable=unidadDeVariable; window.pistaVariable=pistaVariable; window.pintarEstadoDatos=pintarEstadoDatos;
+
 function detectarVariablesFormula(formula){
   if(!formula||!formula.trim()) return [];
   let f=String(formula);
@@ -8473,15 +8571,14 @@ function construirCamposFormula(formula){
   if(!_FORMULA_VARS.length){
     // Sin fórmula o sin variables detectables: entrada manual del valor real
     box.style.display='none'; grid.innerHTML='';
+    pintarEstadoDatos(grid,'data-fkey',[],formula);
     if(real){ real.readOnly=false; real.style.background=''; }
     return;
   }
   if(ref) ref.textContent='Fórmula: '+formula;
-  grid.innerHTML=_FORMULA_VARS.map(v=>`
-    <div class="field">
-      <label title="${v.nombre.replace(/"/g,'&quot;')}">${v.nombre.replace(/</g,'&lt;')}</label>
-      <input type="number" step="any" data-fkey="${v.key}" oninput="calcularValorReal()" placeholder="0">
-    </div>`).join('');
+  { const roles=rolesFormula(formula,_FORMULA_VARS);
+    grid.innerHTML=_FORMULA_VARS.map(v=>htmlCampoVariable(v, roles, 'data-fkey', 'calcularValorReal()', false)).join(''); }
+  pintarEstadoDatos(grid,'data-fkey',_FORMULA_VARS,formula);
   box.style.display='';
   if(real){ real.readOnly=true; real.style.background='var(--paper)'; real.placeholder='se calcula con la fórmula'; }
 }
@@ -8489,6 +8586,7 @@ function calcularValorReal(){
   const grid=document.getElementById('sm_vars_grid');
   const real=document.getElementById('sm_real');
   if(!grid||!real||!_FORMULA_VARS.length) return;
+  pintarEstadoDatos(grid,'data-fkey',_FORMULA_VARS,MT_CTX.formula);
   // 1) Partir de la fórmula ORIGINAL y sustituir cada variable por su valor (antes de tocar operadores,
   //    para no dañar nombres que contengan 'x', '÷', etc.)
   let expr=String(MT_CTX.formula||'');
@@ -8524,7 +8622,7 @@ let _FORMULA_VARS_META={ ref:[], meta:[] };
 // Limpia (deja en blanco) los inputs de variables del Seguimiento y recalcula el valor real.
 function _limpiarVarsSeg(){
   const grid=document.getElementById('sm_vars_grid');
-  if(grid){ grid.querySelectorAll('input').forEach(inp=>{ inp.value=''; }); }
+  if(grid){ grid.querySelectorAll('input').forEach(inp=>{ inp.value=''; }); pintarEstadoDatos(grid,'data-fkey',_FORMULA_VARS,MT_CTX.formula); }
   const real=document.getElementById('sm_real'); if(real && real.readOnly) real.value='';
 }
 window._limpiarVarsSeg=_limpiarVarsSeg;
@@ -8533,7 +8631,7 @@ function _limpiarVarsMeta(which){
   const arr = which? [which] : ['ref','meta'];
   arr.forEach(w=>{
     const grid=document.getElementById('pm_'+w+'_grid');
-    if(grid){ grid.querySelectorAll('input').forEach(inp=>{ inp.value=''; }); }
+    if(grid){ grid.querySelectorAll('input').forEach(inp=>{ inp.value=''; }); pintarEstadoDatos(grid,'data-mkey',_FORMULA_VARS_META[w]||[],MT_CTX.formula); }
     const campo=document.getElementById('pm_'+w); if(campo && campo.readOnly) campo.value='';
   });
 }
@@ -8551,17 +8649,15 @@ function construirCamposFormulaMeta(which, formula){
     // Sin fórmula detectable: ocultar la calculadora y permitir entrada manual
     if(calc) calc.style.display='none';
     if(campo){ campo.readOnly=false; campo.style.background=''; campo.placeholder=''; }
-    grid.innerHTML=''; return;
+    grid.innerHTML=''; pintarEstadoDatos(grid,'data-mkey',[],formula); return;
   }
   // Con fórmula: calculadora siempre visible, campo de solo lectura
   if(calc) calc.style.display='';
   if(campo){ campo.readOnly=true; campo.style.background='var(--paper)'; campo.placeholder='se calcula con la fórmula'; }
   if(fref) fref.textContent='Fórmula: '+formula;
-  grid.innerHTML=vars.map(v=>`
-    <div class="field">
-      <label title="${v.nombre.replace(/"/g,'&quot;')}" style="font-size:11px">${v.nombre.replace(/</g,'&lt;')}</label>
-      <input type="number" step="any" data-mkey="${v.key}" oninput="calcularValorMeta('${which}')" placeholder="0">
-    </div>`).join('');
+  { const roles=rolesFormula(formula,vars);
+    grid.innerHTML=vars.map(v=>htmlCampoVariable(v, roles, 'data-mkey', "calcularValorMeta('"+which+"')", true)).join(''); }
+  pintarEstadoDatos(grid,'data-mkey',vars,formula);
 }
 function toggleCalcMeta(which){
   const box=document.getElementById('pm_'+which+'_calc');
@@ -8573,6 +8669,7 @@ function calcularValorMeta(which){
   const grid=document.getElementById('pm_'+which+'_grid');
   const destino=document.getElementById('pm_'+which); // pm_ref / pm_meta
   if(!grid||!destino||!vars.length) return;
+  pintarEstadoDatos(grid,'data-mkey',vars,MT_CTX.formula);
   let expr=String(MT_CTX.formula||'');
   let faltan=false, algunoLleno=false;
   const ord=[...vars].sort((a,b)=>b.nombre.length-a.nombre.length);
@@ -9955,7 +10052,12 @@ function actualizarAvanceMatriz(avance){
 async function guardarSegMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const progId=g('sm_prog'), fecha=g('sm_fecha'), real=g('sm_real'), obs=g('sm_obs'), evid=g('sm_evid'), remed=g('sm_remed'), periodo=g('sm_periodo');
-  if(!real){ toast('Indica el valor real.', true); return; }
+  if(!real){
+    const gS=document.getElementById('sm_vars_grid');
+    const e=(_FORMULA_VARS.length && gS) ? pintarEstadoDatos(gS,'data-fkey',_FORMULA_VARS,MT_CTX.formula) : '';
+    toast(e==='no' ? 'No aplica: el total es 0 y el indicador no se puede calcular. Revise el dato; si de verdad es 0, explíquelo en la Observación.'
+        : (e==='pend' ? 'Falta un dato: complete todas las casillas (escriba 0 solo si lo comprobó).' : 'Indica el valor real.'), true);
+    return; }
   // Evidencia OBLIGATORIA: todo seguimiento debe respaldarse con al menos un enlace.
   if(!String(evid||'').trim()){ toast('Agrega al menos una evidencia (enlace) del seguimiento.', true);
     const w=document.getElementById('sm_evid_wrap'); if(w){ w.scrollIntoView({behavior:'smooth',block:'center'});
