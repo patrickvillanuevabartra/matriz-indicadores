@@ -8771,7 +8771,8 @@ const MG_EJEMPLOS = {
     '<b>② Programación:</b> línea base (ej.: <b>12</b> días promedio) y meta (ej.: <b>8</b> días). Aquí «menos» es mejor.',
     '<b>③ Seguimiento:</b> el promedio real del corte (ej.: <b>10</b> días) con el reporte que lo respalda como evidencia.' ] },
   general: { tit:'Indicador «lo logrado ÷ el total»', pasos:[
-    '<b>② Programación:</b> línea base = cómo estabas al empezar (si es la primera vez, suele ser <b>0</b>). Meta = a dónde quieres llegar al cierre del periodo.',
+    '<b>② Programación — línea base:</b> el valor del indicador al empezar el periodo, es decir, el último dato que tengas (por ejemplo, el del periodo anterior). Si nunca se midió, registra la primera medición que hagas. Escribe <b>0</b> solo si de verdad no hay nada logrado.',
+    '<b>② Programación — meta:</b> arriba, la cantidad que debes alcanzar; abajo, el total que proyectas. Ej.: si proyectas <b>200</b> estudiantes y quieres llegar al <b>30 %</b>, la meta es <b>60 de 200</b>.',
     '<b>③ Seguimiento:</b> en cada corte, cuánto llevas logrado y el total; el sistema calcula el avance.',
     '<b>Evidencias:</b> el enlace del documento que prueba ese número (informe, acta, reporte, resolución).' ] }
 };
@@ -8786,7 +8787,7 @@ function mgRender(){
   const abierto=!!window._MG_ABIERTO;
   const frac = V.n>=2
     ? `<div class="mg-frac"><div class="fr"><span class="num">${_mgEsc(V.arriba)}</span><span>${_mgEsc(V.abajo)}</span></div>
-         <div class="lbl">⬆ <b>Arriba</b>: lo que llevas <b>logrado</b>.<br>⬇ <b>Abajo</b>: el <b>total</b> que te propusiste o que existe.<br>El sistema hace la división por ti.</div></div>`
+         <div class="lbl">⬆ <b>Arriba</b>: la cantidad que se cuenta. En la <b>meta</b>, lo que <b>quieres alcanzar</b>; en el <b>seguimiento</b>, lo que <b>llevas logrado</b>.<br>⬇ <b>Abajo</b>: el <b>total</b>. En la meta, el total que <b>proyectas</b>; en el seguimiento, el total <b>real</b>.<br>El sistema hace la división por ti.<br><span style="display:inline-block;margin-top:4px">💡 <b>Para fijar la meta:</b> total proyectado × porcentaje deseado = lo que debes alcanzar arriba. Ej.: 200 estudiantes × 30 % = <b>60</b> → meta <b>60 de 200</b>.</span></div></div>`
     : (MT_CTX.formula ? `<div style="margin:6px 0">📐 ${_mgEsc(MT_CTX.formula)}</div>` : '<div class="hint">Este indicador no tiene fórmula registrada: escribe los valores directamente.</div>');
   box.innerHTML = `
     <div class="mg-ruta">
@@ -8835,10 +8836,10 @@ function _mgPasosProg(){
   return [
     { sel:'#pm_periodo_sel', tit:'¿Para qué periodo es la meta?', txt:'Elige el semestre o el año que vas a medir. Ej.: <b>2026</b> o <b>2026-II</b>. Si no aparece, escríbelo en la casilla de abajo.' },
     { sel: tieneVars?'#pm_ref_grid':'#pm_ref', tit:'Línea base: ¿cómo estabas al empezar?', txt: tieneVars
-        ? `Escribe en «<b>${_mgEsc(a)}</b>» lo que ya tenías logrado al inicio del periodo y en «<b>${_mgEsc(b)}</b>» el total. Si recién empiezas, lo logrado es <b>0</b>. <br>Ej.: 0 de 8 entregables.`
-        : 'Escribe el valor con el que empiezas el periodo. Si es la primera medición, suele ser 0.' },
+        ? `Escribe en «<b>${_mgEsc(a)}</b>» lo que ya tenías logrado al inicio del periodo (el último dato conocido) y en «<b>${_mgEsc(b)}</b>» el total de ese momento. Si nunca se midió, usa la primera medición que hagas; escribe <b>0</b> solo si de verdad no hay nada logrado. <br>Ej.: 45 de 180 estudiantes el año pasado.`
+        : 'Escribe el valor con el que empiezas el periodo: el último dato conocido. Si nunca se midió, usa la primera medición que hagas; escribe 0 solo si de verdad el valor es 0.' },
     { sel: tieneVars?'#pm_meta_grid':'#pm_meta', tit:'Meta: ¿a dónde quieres llegar al cierre?', txt: tieneVars
-        ? `En «<b>${_mgEsc(a)}</b>» lo que esperas lograr al final del periodo y en «<b>${_mgEsc(b)}</b>» el total. <br>Ej.: 8 de 8 = cumplir todo el cronograma.`
+        ? `Primero escribe en «<b>${_mgEsc(b)}</b>» el total que proyectas para el periodo. Luego, en «<b>${_mgEsc(a)}</b>», la cantidad que debes alcanzar para llegar a tu meta: total × porcentaje deseado. <br>Ej.: 200 × 30 % = <b>60 de 200</b>; o 8 de 8 para cumplir todo un cronograma.`
         : 'Escribe el valor que esperas alcanzar al terminar el periodo.' },
     { sel:'#pm_plan_wrap', tit:'Opcional: la base de tu meta', txt:'Puedes enlazar el <b>cronograma</b> o el plan de trabajo. <b>Los informes de avance no van aquí</b>: van en ③ Seguimiento.' },
     { sel:'#pm_guardar', tit:'Guarda la meta', txt:'Pulsa <b>«+ Guardar programación»</b>. Después pasa a <b>③ Seguimiento</b> para reportar lo logrado y subir tus informes.', fin:'seg' }
