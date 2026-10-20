@@ -224,6 +224,12 @@
   .mg-coach .tit{font-weight:700;font-size:14.5px;margin:2px 0 4px;color:#2a1f00}
   .mg-coach .bot{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
   .mg-foco{outline:3px solid #e8a33d !important;outline-offset:3px;border-radius:9px}
+  /* Modo guía: solo queda a la vista el campo del paso actual */
+  .mg-guiando .mg-foco{grid-column:1/-1}
+  .mg-guiando .pista-var, .mg-guiando .estado-datos, .mg-guiando #pm_ref_nota{display:none !important}
+  .mg-oculto{display:none !important}
+  .mg-coach .rec{margin-top:7px;padding:6px 9px;background:#fff;border:1px solid #f0d9a8;border-radius:7px;font-size:12.5px}
+  .mg-coach .dato{margin-top:7px;padding:6px 9px;background:#eef4ff;border:1px solid #adc4ee;border-radius:7px;color:#2b4c9b;font-size:12.5px}
   @media (max-width:760px){ .mg-ruta{grid-template-columns:1fr} }
 
   /* Editor de texto enriquecido (Base legal y Parte III) */
@@ -1330,7 +1336,7 @@
         <div id="mt_formula_box" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--slate)"></div>
         <div id="mt_prog_form" style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:6px">Nueva programación de meta</div>
-          <div style="font-size:12.5px;color:#6b4a00;background:#fff6e5;border:1px solid #f0d9a8;border-radius:8px;padding:7px 10px;margin-bottom:12px">📎 ¿Quieres subir un <b>informe, acta o resolución</b>? Eso es evidencia de lo logrado: va en <a href="#" onclick="setMetaTab('seg');return false" style="color:var(--brand);font-weight:700">③ Seguimiento</a>. Aquí solo se define <b>a dónde quieres llegar</b>.</div>
+          <div class="mg-aux" style="font-size:12.5px;color:#6b4a00;background:#fff6e5;border:1px solid #f0d9a8;border-radius:8px;padding:7px 10px;margin-bottom:12px">📎 ¿Quieres subir un <b>informe, acta o resolución</b>? Eso es evidencia de lo logrado: va en <a href="#" onclick="setMetaTab('seg');return false" style="color:var(--brand);font-weight:700">③ Seguimiento</a>. Aquí solo se define <b>a dónde quieres llegar</b>.</div>
           <div class="grid">
             <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha" onchange="sugerirPeriodoProg()"></div>
             <div class="field"><label>Periodo <span style="color:var(--mist);font-weight:400">(se sugiere; ajustable)</span></label>
@@ -1370,7 +1376,7 @@
             </div>
             <div class="field full"><label>Observación/comentario</label><textarea id="pm_obs"></textarea></div>
           </div>
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
+          <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
         </div>
         <div class="tabla-wrap"><table>
           <thead><tr><th>Fecha</th><th>Periodo</th><th>Referencia</th><th>Meta</th><th>Observación/comentario</th><th style="text-align:right">Acciones</th></tr></thead>
@@ -1382,7 +1388,7 @@
       <div id="mt_seg" class="hidden">
         <div id="mt_seg_form" style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
           <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:6px">Nuevo seguimiento</div>
-          <div style="font-size:12.5px;color:var(--slate);background:#eef7f2;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:12px">Registra <b>cuánto llevas logrado</b> en una fecha y adjunta los <b>enlaces de tus informes, actas o resoluciones</b> como evidencia. Puedes registrar varios seguimientos para la misma meta (uno por cada corte).</div>
+          <div class="mg-aux" style="font-size:12.5px;color:var(--slate);background:#eef7f2;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:12px">Registra <b>cuánto llevas logrado</b> en una fecha y adjunta los <b>enlaces de tus informes, actas o resoluciones</b> como evidencia. Puedes registrar varios seguimientos para la misma meta (uno por cada corte).</div>
           <div class="grid">
             <div class="field"><label>Meta de referencia</label><select id="sm_prog" onchange="evaluarRemediacion()"></select></div>
             <div class="field"><label>Fecha de evaluación</label><input type="date" id="sm_fecha"></div>
@@ -1406,7 +1412,7 @@
             <div class="field full hidden" id="sm_remed_box"><label>Plan de acción / mejora (enlaces) <span class="hint" style="font-weight:400">— opcional; sugerido cuando una medición de cierre queda por debajo de la meta</span></label><div class="ev-wrap" id="sm_remed_wrap" data-target="sm_remed"></div><input type="hidden" id="sm_remed"><div id="sm_remed_nota" style="font-size:11px;color:var(--mist);margin-top:5px;line-height:1.5"></div></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
           </div>
-          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="sm_cancelar" onclick="cancelarEdicionSeg()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
+          <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="sm_cancelar" onclick="cancelarEdicionSeg()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
         </div>
         <div class="tabla-wrap"><table>
           <thead><tr><th>Fecha eval.</th><th>Ref.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
@@ -8931,31 +8937,56 @@ function _mgPasosProg(){
   const V=_mgVars(), a=V.arriba||'lo logrado', b=V.abajo||'el total';
   const tieneVars=V.n>=2;
   return [
-    { sel:'#pm_periodo_sel', tit:'¿Para qué periodo es la meta?', txt:'Elige el semestre o el año que vas a medir. Ej.: <b>2026</b> o <b>2026-II</b>. Si no aparece, escríbelo en la casilla de abajo.' },
-    { sel: tieneVars?'#pm_ref_grid':'#pm_ref', tit:'Línea base: ¿cómo estabas al empezar?', txt: tieneVars
-        ? `Escribe en «<b>${_mgEsc(a)}</b>» lo que ya tenías logrado al inicio del periodo (el último dato conocido) y en «<b>${_mgEsc(b)}</b>» el total de ese momento. Si nunca se midió, usa la primera medición que hagas; escribe <b>0</b> solo si de verdad no hay nada logrado. <br>Ej.: 45 de 180 estudiantes el año pasado.`
-        : 'Escribe el valor con el que empiezas el periodo: el último dato conocido. Si nunca se midió, usa la primera medición que hagas; escribe 0 solo si de verdad el valor es 0.' },
-    { sel: tieneVars?'#pm_meta_grid':'#pm_meta', tit:'Meta: ¿a dónde quieres llegar al cierre?', txt: tieneVars
-        ? `Primero revisa en «<b>${_mgEsc(b)}</b>» el total que proyectas para el periodo (si estaba vacío, se copió el de la línea base: cámbialo si proyectas otro). Luego, en «<b>${_mgEsc(a)}</b>», la cantidad que debes alcanzar para llegar a tu meta: total × porcentaje deseado. <br>Ej.: 200 × 30 % = <b>60 de 200</b>; o 8 de 8 para cumplir todo un cronograma.`
-        : 'Escribe el valor que esperas alcanzar al terminar el periodo.',
-      antes:_mgMetaDesdeBase, extra:_mgResumenBase },
-    { sel:'#pm_plan_wrap', tit:'Opcional: la base de tu meta', txt:'Puedes enlazar el <b>cronograma</b> o el plan de trabajo. <b>Los informes de avance no van aquí</b>: van en ③ Seguimiento.' },
-    { sel:'#pm_guardar', tit:'Guarda la meta', txt:'Pulsa <b>«+ Guardar programación»</b>. Después pasa a <b>③ Seguimiento</b> para reportar lo logrado y subir tus informes.', fin:'seg' }
+    { sel:'#pm_periodo_sel', tit:'¿Para qué periodo es la meta?',
+      txt:'Elige el semestre o el año que vas a medir. Ej.: <b>2026</b> o <b>2026-II</b>. Si no aparece en la lista, escríbelo en la casilla de abajo.',
+      rec:'Se programa <b>una meta por periodo</b>.' },
+    { sel: tieneVars?'#pm_ref_grid':'#pm_ref', tit:'Línea base: ¿cómo estabas al empezar?',
+      txt: tieneVars
+        ? `Escribe cómo estaba el indicador <b>en el periodo anterior</b>: en «<b>${_mgEsc(a)}</b>» lo que se logró y en «<b>${_mgEsc(b)}</b>» el total de ese periodo.<br>Ej.: el año pasado se recibieron <b>180</b> solicitudes y se formalizaron <b>45</b> → escribe 45 y 180.`
+        : 'Escribe el valor que tuvo el indicador en el periodo anterior.',
+      extra:_mgNotaBase,
+      rec:'La línea base es <b>obligatoria</b>: siempre existe un punto de partida. Si no está en el sistema, <b>reconstrúyela</b> con tus registros del periodo anterior (actas, informes, listas, reportes). ¿No tienes el dato exacto? Marca «No tengo las bases de cálculo», escribe el valor estimado y su fuente.' },
+    { sel: tieneVars?'#pm_meta_grid':'#pm_meta', tit:'Meta: ¿a dónde quieres llegar al cierre?',
+      txt: tieneVars
+        ? `El total de «<b>${_mgEsc(b)}</b>» ya viene de tu línea base; cámbialo solo si proyectas otro total para este periodo. En «<b>${_mgEsc(a)}</b>» escribe cuánto quieres lograr.`
+        : 'Escribe el valor que quieres alcanzar al terminar el periodo.',
+      antes:_mgMetaDesdeBase, extra:_mgResumenBase,
+      rec:'La meta debe <b>mejorar la línea base</b> (o bajarla, si en tu indicador menos es mejor) y ser alcanzable en el periodo.' },
+    { sel:'#pm_plan_wrap', tit:'Opcional: la base de tu meta',
+      txt:'Si quieres, enlaza el <b>cronograma</b> o el plan de trabajo que respalda la meta.',
+      rec:'<b>Los informes de avance no van aquí</b>: van en ③ Seguimiento, como evidencias.' },
+    { sel:'#pm_guardar', tit:'Guarda la meta', txt:'Pulsa <b>«+ Guardar programación»</b>.', fin:'seg',
+      rec:'Luego registra lo logrado y sube tus informes en <b>③ Seguimiento</b>.' }
   ];
+}
+// Nota del paso «línea base»: si viene de un cierre anterior, se dice de dónde salió.
+function _mgNotaBase(){
+  const inp=document.getElementById('pm_ref');
+  const prev=(typeof _ultimoCierre==='function')?_ultimoCierre():null;
+  if(prev && inp && inp.dataset.heredado==='1')
+    return `<div class="dato">📌 Ya se cargó la línea base desde el cierre${prev.periodo?' de <b>'+_mgEsc(prev.periodo)+'</b>':' anterior'}: <b>${_mgEsc(prev.valor)}</b>. Revísala y continúa.</div>`;
+  return '';
 }
 function _mgPasosSeg(){
   const V=_mgVars(), a=V.arriba||'lo logrado', b=V.abajo||'el total';
   const sinMeta=!document.querySelector('#sm_prog option[value]:not([value=""])');
-  if(sinMeta) return [{ sel:'#sm_prog', tit:'Primero necesitas una meta', txt:'Todavía no hay una meta programada para este indicador. Ve a <b>② Programación</b>, define la meta del periodo y vuelve aquí.', ir:'prog' }];
+  if(sinMeta) return [{ sel:'#sm_prog', tit:'Primero necesitas una meta', txt:'Todavía no hay una meta programada para este indicador. Ve a <b>② Programación</b>, define la meta del periodo y vuelve aquí.', ir:'prog',
+    rec:'El seguimiento siempre se compara con una meta.' }];
   return [
-    { sel:'#sm_prog', tit:'¿Qué meta estás midiendo?', txt:'Elige la meta del periodo que corresponde a este avance.' },
-    { sel:'#sm_fecha', tit:'Fecha del corte', txt:'La fecha en que mides. Ej.: el día en que se entregó el informe.' },
-    { sel:'#sm_tipo_med', tit:'¿Avance o cierre?', txt:'<b>Parcial</b>: vas a mitad de camino. <b>De cierre</b>: terminó el periodo y este es el resultado final.' },
+    { sel:'#sm_prog', tit:'¿Qué meta estás midiendo?', txt:'Elige la meta del periodo que corresponde a este avance.',
+      rec:'El periodo y el total se toman de esa meta.' },
+    { sel:'#sm_fecha', tit:'Fecha del corte', txt:'La fecha en que mides. Ej.: el día en que se entregó el informe.',
+      rec:'Puedes registrar varios cortes para la misma meta.' },
+    { sel:'#sm_tipo_med', tit:'¿Avance o cierre?', txt:'<b>Parcial</b>: vas a mitad de camino. <b>De cierre</b>: terminó el periodo y este es el resultado final.',
+      rec:'El cierre de este periodo será la línea base del siguiente.' },
     { sel: (V.n>=2?'#sm_vars_grid':'#sm_real'), tit:'¿Cuánto llevas logrado?', txt: V.n>=2
-        ? `En «<b>${_mgEsc(a)}</b>» cuánto llevas logrado a la fecha y en «<b>${_mgEsc(b)}</b>» el total programado. <br>Ej.: 3 de 8 informes entregados. El sistema calcula el avance.`
-        : 'Escribe el valor real alcanzado a la fecha.' },
-    { sel:'#sm_evid_wrap', tit:'📎 Aquí van tus informes', txt:'Pega el enlace de cada informe, acta o resolución (Drive o SharePoint) y ponle una etiqueta clara. Ej.: «Informe Etapa I – Oficio 001-2026». Usa «+ Agregar otro enlace» para el siguiente.' },
-    { sel:'#sm_guardar', tit:'Guarda el seguimiento', txt:'Pulsa <b>«+ Guardar seguimiento»</b>. Cada vez que avances, registra un nuevo seguimiento con sus evidencias.' }
+        ? `En «<b>${_mgEsc(a)}</b>» cuánto llevas logrado a la fecha y en «<b>${_mgEsc(b)}</b>» el total del periodo. <br>Ej.: 3 de 8 informes entregados. El sistema calcula el avance.`
+        : 'Escribe el valor real alcanzado a la fecha.',
+      rec:'Cuenta solo lo ya realizado que tenga evidencia.' },
+    { sel:'#sm_evid_wrap', tit:'📎 Aquí van tus informes', txt:'Pega el enlace de cada informe, acta o resolución (Drive o SharePoint) y ponle una etiqueta clara. Ej.: «Informe Etapa I – Oficio 001-2026». Usa «+ Agregar otro enlace» para el siguiente.',
+      rec:'Comparte los enlaces para que se abran con cuenta URP.' },
+    { sel:'#sm_guardar', tit:'Guarda el seguimiento', txt:'Pulsa <b>«+ Guardar seguimiento»</b>.',
+      rec:'Cada vez que avances, registra un nuevo seguimiento con sus evidencias.' }
   ];
 }
 function mgGuiar(){
@@ -8971,10 +9002,15 @@ function _mgValoresBase(){
 }
 function _mgResumenBase(){
   const V=_mgVars(), b=_mgValoresBase();
-  if(V.n>=2 && b.vars.length>=2 && b.vars[0]!=='' && b.vars[1]!=='')
-    return `<div style="margin-top:6px;padding:6px 9px;background:#eef4ff;border:1px solid #adc4ee;border-radius:7px;color:#2b4c9b">📌 Tu línea base (paso anterior): <b>${_mgEsc(b.vars[0])} de ${_mgEsc(b.vars[1])}</b>${b.total!==''?' = <b>'+_mgEsc(b.total)+'</b>':''}. Úsala para decidir cuánto quieres mejorar.</div>`;
-  if(b.total!=='') return `<div style="margin-top:6px;padding:6px 9px;background:#eef4ff;border:1px solid #adc4ee;border-radius:7px;color:#2b4c9b">📌 Tu línea base (paso anterior): <b>${_mgEsc(b.total)}</b>. Úsala para decidir cuánto quieres mejorar.</div>`;
-  return '';
+  if(V.n>=2 && b.vars.length>=2 && b.vars[0]!=='' && b.vars[1]!==''){
+    const tot=parseFloat(b.vars[1]), lo=parseFloat(b.vars[0]);
+    const pctB = tot>0 ? Math.round(lo/tot*1000)/10 : null;
+    const sug = tot>0 ? Math.ceil(tot*Math.min(1,(pctB+10)/100)) : null;
+    return `<div class="dato">📌 Tu línea base (paso anterior): <b>${_mgEsc(b.vars[0])} de ${_mgEsc(b.vars[1])}</b>${pctB!==null?' = <b>'+pctB+' %</b>':''}. El total ya se copió abajo.`
+      + (sug!==null && sug>lo ? `<br>Ej.: para subir unos 10 puntos, la meta sería <b>${sug} de ${_mgEsc(b.vars[1])}</b>.` : '') + `</div>`;
+  }
+  if(b.total!=='') return `<div class="dato">📌 Tu línea base (paso anterior): <b>${_mgEsc(b.total)}</b>.</div>`;
+  return `<div class="dato" style="background:#fff6e5;border-color:#f0d9a8;color:#8a5a00">⚠ Aún no escribiste la línea base. Vuelve al paso anterior con «← Anterior».</div>`;
 }
 // Si la meta está vacía, se parte del total de la línea base (se puede cambiar).
 function _mgMetaDesdeBase(){
@@ -8986,24 +9022,33 @@ function _mgMetaDesdeBase(){
   ins[1].value=b.vars[1];
   try{ calcularValorMeta('meta'); }catch(_){}
 }
+let _MG_OCULTOS=[];
 function _mgLimpiar(){
-  { const fm=document.getElementById('pm_meta'); const f=fm&&fm.closest('.field'); if(f) f.style.display=''; }
+  _MG_OCULTOS.forEach(e=>e.classList.remove('mg-oculto')); _MG_OCULTOS=[];
+  document.querySelectorAll('.mg-guiando').forEach(x=>x.classList.remove('mg-guiando'));
   document.querySelectorAll('.mg-coach').forEach(x=>x.remove());
   document.querySelectorAll('.mg-foco').forEach(x=>x.classList.remove('mg-foco'));
 }
 function _mgMostrar(){
   _mgLimpiar();
   const p=_MG_PASOS[_MG_I]; if(!p) return;
-  // La meta se ve recién en su paso: antes, solo distrae (la línea base va primero).
-  { const iMeta=_MG_PASOS.findIndex(x=>x.sel==='#pm_meta_grid'||x.sel==='#pm_meta');
-    const fm=document.getElementById('pm_meta'); const f=fm&&fm.closest('.field');
-    if(f && iMeta>=0 && _MG_I<iMeta) f.style.display='none'; }
   if(typeof p.antes==='function'){ try{ p.antes(); }catch(_){ } }
   const el=document.querySelector(p.sel); if(!el){ _MG_I++; return _mgMostrar(); }
-  const cont=el.closest('.field')||el;
+  const cont=el.closest('.field')||el.closest('.mg-botones')||el;
+  const form=el.closest('#mt_prog_form, #mt_seg_form');
+  // Solo queda a la vista el campo de este paso: el resto se oculta mientras dure la guía.
+  if(form){
+    form.classList.add('mg-guiando');
+    form.querySelectorAll('.grid > .field, .mg-aux, .mg-botones').forEach(x=>{
+      if(x===cont || x.contains(cont) || cont.contains(x)) return;
+      x.classList.add('mg-oculto'); _MG_OCULTOS.push(x);
+    });
+  }
+  // La explicación general de arriba también se pliega para no distraer
+  document.querySelectorAll('#mg_guia .mg-card').forEach(x=>{ if(!x.classList.contains('mg-oculto')){ x.classList.add('mg-oculto'); _MG_OCULTOS.push(x); } });
   const c=document.createElement('div'); c.className='mg-coach';
   const ult=_MG_I===_MG_PASOS.length-1;
-  c.innerHTML=`<div class="cab">Paso ${_MG_I+1} de ${_MG_PASOS.length}</div><div class="tit">${p.tit}</div><div>${p.txt}${typeof p.extra==='function'?p.extra():''}</div>
+  c.innerHTML=`<div class="cab">Paso ${_MG_I+1} de ${_MG_PASOS.length}</div><div class="tit">${p.tit}</div><div>${p.txt}</div>${typeof p.extra==='function'?p.extra():''}${p.rec?'<div class="rec">💡 '+p.rec+'</div>':''}
     <div class="bot">${_MG_I>0?'<button type="button" class="btn btn-ghost btn-sm" onclick="mgPaso(-1)">← Anterior</button>':''}
     ${p.ir?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();setMetaTab('${p.ir}');setTimeout(mgGuiar,50)">Ir a ② Programación</button>`
       : (ult? (p.fin?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();setMetaTab('${p.fin}');setTimeout(mgGuiar,50)">Seguir con ③ Seguimiento →</button>`:'<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar()">Listo</button>')
@@ -9011,8 +9056,8 @@ function _mgMostrar(){
     <button type="button" class="btn btn-ghost btn-sm" onclick="_mgLimpiar()">Salir de la guía</button></div>`;
   cont.parentNode.insertBefore(c, cont);
   cont.classList.add('mg-foco');
-  try{ c.scrollIntoView({behavior:'smooth', block:'center'}); }catch(_){}
-  const foc=cont.querySelector('input:not([type=hidden]),select,textarea'); if(foc && p.sel!=='#pm_guardar' && p.sel!=='#sm_guardar') setTimeout(()=>{ try{ foc.focus({preventScroll:true}); }catch(_){ } }, 350);
+  try{ c.scrollIntoView({behavior:'smooth', block:'start'}); }catch(_){}
+  const foc=cont.querySelector('input:not([type=hidden]):not([readonly]),select,textarea'); if(foc && p.sel!=='#pm_guardar' && p.sel!=='#sm_guardar') setTimeout(()=>{ try{ foc.focus({preventScroll:true}); }catch(_){ } }, 350);
 }
 function mgPaso(d){ _MG_I=Math.max(0,Math.min(_MG_PASOS.length-1,_MG_I+d)); _mgMostrar(); }
 // Cuando cambian las tablas de metas o seguimientos (al cargar o guardar), actualizar la ruta
@@ -9399,17 +9444,21 @@ function _pintarNotaRef(){
   // Sin cierre previo
   if (yaTiene) { nota.style.display = 'none'; return; }
   caja('#fff8e6', '#f0c987', '#8a6100',
-    '⚠️ <b>Sin medición previa:</b> es el primer periodo de este indicador, así que no hay línea base que heredar.' +
-    '<br>Si dejas la referencia vacía, el avance se calculará sobre la meta (cuánto lograste de lo propuesto).' +
-    '<br><b>Importante:</b> si en este indicador <b>bajar es mejor</b> (deserción, desaprobación, quejas…), <b>no la dejes vacía</b>: ' +
-    'el cálculo se invertiría y un mal resultado se vería como bueno. Usa el dato del periodo anterior aunque venga de tus registros, ' +
-    'y anótalo en la Observación del indicador.');
+    '📏 <b>La línea base es obligatoria.</b> Este indicador aún no tiene un cierre registrado en el sistema, así que hay que <b>reconstruirla</b> con lo que ocurrió en el periodo anterior: ' +
+    'cuenta lo logrado y el total a partir de tus registros (actas, informes, listas, reportes). ' +
+    '<br>Si no tienes el dato exacto, marca «No tengo las bases de cálculo», escribe el valor estimado y su fuente. ' +
+    '<br>Solo si la actividad es <b>nueva</b> y nunca se realizó antes, usa la primera medición de este periodo y explícalo en la Observación.');
 }
 window._pintarNotaRef = _pintarNotaRef;
 
 async function guardarProgMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan'), periodo=g('pm_periodo');
+  if(String(ref||'').trim()===''){
+    toast('Falta la línea base (valor de referencia). Si no está en el sistema, reconstrúyela con tus registros del periodo anterior; si no tienes el dato exacto, marca «No tengo las bases de cálculo» e indica la fuente.', true);
+    const g=document.getElementById('pm_ref_grid')||document.getElementById('pm_ref'); if(g){ try{ g.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){ } }
+    return;
+  }
   if(!meta){ toast('Indica el valor meta.', true); return; }
   // Evidencia OBLIGATORIA: toda meta programada debe respaldarse con al menos un enlace.
   // Si los valores se ingresaron directamente (sin bases de cálculo), exigir el sustento:
@@ -11577,7 +11626,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v133</span>
+      <span class="ac-ver">v134</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
