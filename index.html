@@ -1404,6 +1404,7 @@
             <div class="field"><label>Tipo de medición</label><select id="sm_tipo_med" onchange="evaluarRemediacion()"><option value="Parcial">Parcial (corte / avance en curso)</option><option value="Cierre">De cierre (fin del periodo)</option></select></div>
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
             <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
+            <div class="field full" id="sm_avance_expl" style="display:none"></div>
             <div class="field full"><div style="font-size:11px;color:var(--mist);background:var(--paper);border-radius:8px;padding:8px 12px;line-height:1.5">📐 <strong>Fórmula del % de avance:</strong> (valor alcanzado − referencia) ÷ (meta − referencia) × 100. Funciona para indicadores donde subir es mejor y donde bajar es mejor. 100% = se alcanzó la meta; 0% = sin avance respecto a la línea base.<br><br><strong>Qué mide:</strong> cuánto se logró <em>respecto a la mejora proyectada</em>, no el valor absoluto alcanzado. Es decir, evalúa el grado de cumplimiento sobre la <em>tasa de incremento programada</em>.<br><br><strong>Ejemplo (Escuela Profesional de Ingeniería Informática):</strong><br>Línea base: 0,70 · Meta programada: 0,90 → la mejora proyectada es <strong>0,20</strong>.<br>Al corte del 31 de julio de 2026 la gestión real alcanzó <strong>91,18 %</strong> (0,91), es decir una mejora efectiva de <strong>0,21</strong> sobre la línea base.<br><span style="display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 9px;margin-top:5px;color:var(--slate)">% de avance = 0,21 ÷ 0,20 × 100 = <strong>105 %</strong></span><br>Supera el 100 % porque la mejora lograda fue mayor que la proyectada para el periodo.</div></div>
             <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span style="color:#c0392b">*</span> <span class="hint" style="font-weight:400">— obligatorio: puedes agregar varias; cada una con su etiqueta</span></label>
               <div class="ev-wrap" id="sm_evid_wrap" data-target="sm_evid"></div>
@@ -6455,7 +6456,7 @@ async function loadMatriz(forzar){
         const per=SM.periodo?(leerCampo(s,SM.periodo.id,'Periodo')||'(sin periodo)'):'(sin periodo)';
         const f=leerCampo(s, SM.fecha_eval.id, 'Fecha evaluación');
         const fechaVal=(f && !/fecha/i.test(f))?f:'';
-        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal, creado:s.created_at||'' };
+        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal, creado:s.created_at||'', real:realN, meta:metaN, ref:refN };
       }).filter(x=>x.pct!==null);
       m._segCreados = mios.map(s=>s.created_at||'');
       // Ordenar por fecha ascendente
@@ -7844,7 +7845,7 @@ function barraAvancePeriodos(periodos){
       <div style="display:flex;align-items:center;gap:6px">
         <div style="flex:1;height:6px;background:var(--line);border-radius:4px;overflow:hidden;min-width:45px;${realPct>100?'box-shadow:inset 0 0 0 1px var(--ok)':''}" ${realPct>100?`title="${attr('Superó la meta programada para este periodo.')}"`:''}><div style="width:${p}%;height:100%;background:${color}"></div></div>
         <span style="font-size:11px;font-weight:600;color:${color};white-space:nowrap">${realPct}%${realPct>100?' ★':''}</span>
-      </div></div>`;
+      </div>${(isFinite(x.real)&&isFinite(x.meta))?`<a href="#" onclick="event.stopPropagation();verExplicacionAvance(${x.real},${x.meta},${isFinite(x.ref)?x.ref:'NaN'},'${String(x.periodo||'').replace(/['"\<>]/g,'')}');return false" style="display:inline-block;margin-top:2px;font-size:11.5px;color:var(--brand);font-weight:600" title="Ver de dónde sale este porcentaje">ⓘ ¿Cómo salió?</a>`:''}</div>`;
   }).join('');
 }
 // ¿La relación tiene algún valor real (no vacío, no nombre de columna)?
@@ -8804,6 +8805,7 @@ async function abrirMetas(matId){
   ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
+  { const ex=document.getElementById('sm_avance_expl'); if(ex){ ex.innerHTML=''; ex.style.display='none'; } }
   const mb=document.getElementById('sm_remed_box'); if(mb) mb.classList.add('hidden');
   const ep=document.getElementById('sm_periodo'); if(ep){ ep.value=''; delete ep.dataset.touched; }
   { const stm=document.getElementById('sm_tipo_med'); if(stm) stm.value='Parcial'; }
@@ -9113,6 +9115,77 @@ function calcAvance(real, meta, ref){
   const pct = (r - base) / denom * 100;
   return Math.round(pct*100)/100;
 }
+
+
+/* =====================================================================
+   EXPLICACIÓN DEL % DE AVANCE (v135)
+   Cuando el resultado pasa de 100 % el usuario suele creer que hay un error.
+   Aquí se explica, con SUS números, de dónde sale el % y qué significa:
+   % de avance = mejora lograda ÷ mejora programada × 100.
+   ===================================================================== */
+function _avN(n){ let x=Number(n); if(!isFinite(x)) return '—'; if(Math.abs(x)<0.005) x=0; return x.toLocaleString('es-PE',{maximumFractionDigits:2}); }
+function _avPts(n){ return Math.abs(Math.round(Number(n)*100)/100)===1 ? 'punto' : 'puntos'; }
+function explicarAvanceHTML(real, meta, ref){
+  const r=parseFloat(real), m=parseFloat(meta), b0=parseFloat(ref);
+  if(isNaN(r)||isNaN(m)) return '';
+  const sinRef=isNaN(b0), b=sinRef?0:b0;
+  const prog=m-b, log=r-b, inv=prog<0;
+  const pct=calcAvance(r, m, sinRef?NaN:b0);
+  if(pct===null) return '';
+  const verboMeta = inv ? 'bajar' : 'subir';
+  const progAbs=Math.abs(prog), logDir = inv ? -log : log;      // mejora lograda en la dirección buena
+  let titulo, color, fondo, significado, consejo='';
+  if(prog===0){
+    titulo = r>=m ? '✅ Meta cumplida' : '⏳ Aún no se alcanza la meta'; color='#1f7a3f'; fondo='#e8f6ee';
+    significado = 'La meta es igual a la línea base, así que solo se verifica si se alcanzó (100 %) o no (0 %).';
+  } else if(pct>100.5){
+    titulo='🌟 ¡Superaron la meta!'; color='#1f7a3f'; fondo='#e8f6ee';
+    significado = `Lograron <b>${_avN(pct/100)} veces</b> la mejora que se propusieron: superaron la meta en <b>${_avN(pct-100)} %</b>. <b>No es un error:</b> el sistema no mide el valor final, sino <b>cuánto mejoraron respecto de lo que proyectaron</b>.`;
+    if(pct>=150) consejo='💡 Como la superaron con amplitud, para el próximo periodo conviene plantear una meta más ambiciosa.';
+  } else if(pct>=99.5){
+    titulo='✅ Meta cumplida'; color='#1f7a3f'; fondo='#e8f6ee';
+    significado='Lograron exactamente la mejora que se propusieron para el periodo.';
+  } else if(pct>0){
+    titulo='⏳ En camino a la meta'; color='#8a5a00'; fondo='#fff6e5';
+    significado = `Llevan el <b>${_avN(pct)} %</b> de la mejora propuesta. Faltan <b>${_avN(progAbs-logDir)}</b> ${_avPts(progAbs-logDir)} para llegar a la meta (${_avN(m)}).`;
+  } else {
+    titulo='⚠️ Todavía sin mejora'; color='#a33a2c'; fondo='#fdecea';
+    significado = (pct<0 ? 'El valor alcanzado quedó <b>peor que la línea base</b>.' : 'El valor alcanzado es <b>igual a la línea base</b>.') +
+      ' Aún no hay mejora respecto del punto de partida. Revisen las acciones; si es una medición de cierre, consideren un plan de acción.';
+  }
+  const lineaLog = logDir>0
+    ? `→ ${inv?'bajaron':'subieron'} <b>${_avN(Math.abs(log))}</b> ${_avPts(log)} (${_avN(r)} − ${_avN(b)}).`
+    : (logDir===0 ? '→ no hubo cambio respecto a la línea base.' : `→ ${inv?'subió':'bajó'} <b>${_avN(Math.abs(log))}</b> ${_avPts(log)} respecto a la línea base.`);
+  return `<div class="av-expl" style="border:1.5px solid ${color};background:${fondo};border-radius:12px;padding:13px 15px;font-size:14px;line-height:1.6;color:#1f2a24">
+    <div style="font-size:16px;font-weight:700;color:${color};margin-bottom:6px">${titulo} · ${_avN(pct)} % de avance</div>
+    <div style="font-weight:700;margin-bottom:2px">¿De dónde sale este ${_avN(pct)} %?</div>
+    <div>📍 <b>Punto de partida (línea base):</b> ${_avN(b)}${sinRef?' <span style="color:#6b7a71">(no se registró: se toma 0)</span>':''}</div>
+    <div>🎯 <b>Meta del periodo:</b> ${_avN(m)} → se propusieron ${verboMeta} <b>${_avN(progAbs)}</b> ${_avPts(progAbs)}.</div>
+    <div>📈 <b>Valor alcanzado:</b> ${_avN(r)} ${lineaLog}</div>
+    <div style="background:#fff;border:1px solid #d7e2dc;border-radius:9px;padding:9px 12px;margin:9px 0;font-size:15px;text-align:center">
+      % de avance = <b>mejora lograda</b> ÷ <b>mejora programada</b> × 100<br>
+      = ${_avN(inv?-log:log)} ÷ ${_avN(progAbs)} × 100 = <b style="font-size:17px;color:${color}">${_avN(pct)} %</b></div>
+    <div><b>¿Qué significa?</b> ${significado}</div>
+    ${consejo?`<div style="margin-top:6px">${consejo}</div>`:''}
+    <div style="margin-top:8px;font-size:13px;color:#4b5a52">Cómo leerlo: <b>100 %</b> = meta cumplida · <b>más de 100 % ★</b> = superaron la meta · <b>menos de 100 %</b> = aún falta para la meta.</div>
+  </div>`;
+}
+// Ventana con la explicación (desde la Matriz o desde la tabla de seguimientos)
+function verExplicacionAvance(real, meta, ref, titulo){
+  const html=explicarAvanceHTML(real, meta, ref);
+  if(!html){ toast('No hay datos suficientes (valor alcanzado y meta) para explicar este avance.', true); return; }
+  let m=document.getElementById('av_expl_modal'); if(m) m.remove();
+  document.body.insertAdjacentHTML('beforeend', `<div id="av_expl_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:10050;display:flex;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)this.remove()">
+    <div style="background:var(--card);border-radius:14px;max-width:640px;width:100%;max-height:88vh;overflow:auto;padding:18px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+        <h3 style="margin:0;font-size:18px">Cómo se calculó el avance${titulo?' · '+String(titulo).replace(/</g,'&lt;'):''}</h3>
+        <button class="icon-btn" onclick="document.getElementById('av_expl_modal').remove()" title="Cerrar">✕</button></div>
+      ${html}
+      <div style="text-align:right;margin-top:12px"><button class="btn btn-primary" onclick="document.getElementById('av_expl_modal').remove()">Entendido</button></div>
+    </div></div>`);
+  if(typeof _ajustarModalZoom==='function') _ajustarModalZoom('av_expl_modal');
+}
+window.explicarAvanceHTML=explicarAvanceHTML; window.verExplicacionAvance=verExplicacionAvance;
 
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
@@ -9918,6 +9991,8 @@ function evaluarRemediacion(){
   let pct=null;
   if(!isNaN(real) && meta!==null){ pct=calcAvance(real, meta, ref); }
   if(elAvance) elAvance.value = pct!==null ? pct+'%' : '';
+  { const ex=document.getElementById('sm_avance_expl');
+    if(ex){ const h = pct!==null ? explicarAvanceHTML(real, meta, ref) : ''; ex.innerHTML=h; ex.style.display = h ? '' : 'none'; } }
   // Plan de acción/mejora: SOLO se sugiere (nunca se exige) cuando la medición es DE CIERRE
   // y el avance quedó por debajo de la meta. En medición parcial no aplica (es avance en curso).
   const tipoMed = (document.getElementById('sm_tipo_med')||{}).value || 'Parcial';
@@ -10010,7 +10085,7 @@ async function cargarSegMetas(){
         const rmLinks=(typeof _evParse==='function'?_evParse(remed):[]).filter(x=>x.url).map(x=>
           `<a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener" style="color:var(--bad);font-size:11px">${(x.etq||'plan de mejora').replace(/</g,'&lt;')} ↗</a>`);
         const links=[...evLinks, ...rmLinks].filter(Boolean).join(' · ');
-        return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(refN)?'—':refN}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
+        return `<tr><td>${f?fmtFecha(f):'—'}</td><td>${isNaN(refN)?'—':refN}</td><td>${isNaN(metaN)?'—':metaN}</td><td><strong>${isNaN(realN)?'—':realN}</strong></td><td>${!isNaN(pctN)?barraAvance(pctN)+(!isNaN(realN)&&!isNaN(metaN)?`<a href="#" onclick="verExplicacionAvance(${realN},${metaN},${isNaN(refN)?'NaN':refN});return false" style="display:inline-block;margin-top:3px;font-size:12px;color:var(--brand);font-weight:600">ⓘ ¿Cómo salió este %?</a>`:''):'—'}</td><td style="font-size:12px">${(obs||'').replace(/</g,'&lt;')||'—'}${links?'<br>'+links:''}</td>
           <td style="text-align:right;white-space:nowrap">
             <button class="icon-btn" title="Ver detalle" onclick="_verDetalleSeg('${r.id}')">👁️</button>
             <button class="icon-btn" title="Editar" onclick="editarSegMeta('${r.id}')" style="${soloLectura()?'display:none':''}">✏️</button>
@@ -11626,7 +11701,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v134</span>
+      <span class="ac-ver">v135</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
