@@ -10132,23 +10132,60 @@ async function verDetalleFicha(nivel, fichaId){
     }
   }catch(_){}
   const nInd=nIndFicha(r,nivel);
+  // Lectura robusta: con name_value QuintaDB devuelve el valor bajo el NOMBRE real de la
+  // columna (p. ej. «Proveedores/Cliente»); leer por field-id devuelve el nombre del campo.
+  const leer=(f, cols)=>{
+    const v=r.values||{};
+    const esNombre=x=>cols.some(c=>c.trim()===String(x||'').trim());
+    for(const c of cols){ const x=(typeof _repfValor==='function')?_repfValor(v,c):(v[c]||''); if(x && !esNombre(x) && !esBasura(x)) return x; }
+    const y=f?leerCampo(r,f.id,cols[0]):''; return (y && !esNombre(y))?y:'';
+  };
+  const VACIO='<span style="color:var(--mist);font-style:italic">Sin información registrada</span>';
+  // Texto por componente: «[M01.06.01.01 …] contenido» o «【 M01.06.01.01 … 】 contenido»
+  const porComp=txt=>{
+    const t=String(txt||'');
+    if(!t.trim()) return {__html:VACIO};
+    const marcado=t.replace(/【\s*([^】]+?)\s*】/g,'\n§§$1§§\n').replace(/^\s*\[([^\]\n]+)\]\s*/gm,'\n§§$1§§\n');
+    const partes=marcado.split('§§');
+    if(partes.length<3) return t;                       // texto simple
+    let html='', general=partes[0].trim(), hay=false;
+    if(general){ html+=`<div style="margin-bottom:6px">${_autolink(general)}</div>`; hay=true; }
+    for(let k=1;k<partes.length;k+=2){
+      const nom=partes[k].trim(), cont=(partes[k+1]||'').trim();
+      if(cont) hay=true;
+      html+=`<div style="margin:0 0 8px"><div style="font-weight:700;color:var(--brand);font-size:13px">${String(nom).replace(/</g,'&lt;')}</div><div>${cont?_autolink(cont):'<span style="color:var(--mist);font-style:italic">(sin información para este componente)</span>'}</div></div>`;
+    }
+    return {__html: hay?html:VACIO+'<div style="font-size:12px;color:var(--mist);margin-top:3px">Ningún componente tiene información en este campo.</div>'};
+  };
+  const sec=t=>({__sec:t});
   const filas=[
+    sec('I. Datos generales'),
     ['Nivel', nivel],
     ['Ruta del proceso', rutaFicha(r,nivel)],
     ['Dueño del proceso', leerDueno(r,F)],
-    ['Objetivo del proceso', objFicha(r,nivel)],
-    ['Alcance', cur(F.alcance,'Alcance')],
-    ['Base legal', {__rte: cur(F.base_legal,'Base legal')}],
-    ['Proveedores', cur(F.proveedores,'Proveedores')],
-    ['Entrada', cur(F.entrada,'Entrada')],
-    ['Producto / salida', cur(F.producto,'Producto')],
-    ['Receptor / cliente', cur(F.receptor,'Receptor')],
-    ['Controles', cur(F.controles,'Controles')],
-    ['Registros', cur(F.registros,'Registros')],
-    ['Indicadores ('+nInd+')', {__html: indsHtml || (nInd+' indicador(es)')}]
+    ['Objetivo del proceso', objFicha(r,nivel)||{__html:VACIO}],
+    ['Alcance', leer(F.alcance,['Alcance'])||{__html:VACIO}],
+    ['Base legal', (b=>b?{__rte:b}:{__html:VACIO})(leer(F.base_legal,['Base legal']))],
+    sec('II. Estructura operativa (SIPOC)'),
+    ['Proveedores', porComp(leer(F.proveedores,['Proveedores/Cliente','Proveedores','Proveedor']))],
+    ['Entradas', porComp(leer(F.entrada,['Entrada/Insumo','Entrada','Entradas']))],
+    ['Productos / salidas', porComp(leer(F.producto,['Producto','Productos','Producto/Salida']))],
+    ['Receptores / clientes', porComp(leer(F.receptor,['Receptor final del producto','Receptor','Receptor / cliente']))],
+    sec('III. Recursos y control del desempeño'),
+    ['Indicadores ('+nInd+')', {__html: indsHtml || (nInd? nInd+' indicador(es)' : VACIO)}],
+    ['Controles', porComp(leer(F.controles,['Controles']))],
+    ['Documentos internos', porComp(leer(F.docs_internos,['Documentos internos ','Documentos internos']))],
+    ['Documentos externos', porComp(leer(F.docs_externos,['Documentos externos']))],
+    ['Recursos humanos', porComp(leer(F.rrhh,['Recursos Humanos','Recursos humanos']))],
+    ['Sistemas informáticos', porComp(leer(F.sistemas,['Sistemas Informáticos','Sistemas informáticos']))],
+    ['Registros', porComp(leer(F.registros,['Registros']))],
+    ['Instalaciones (infraestructura)', porComp(leer(F.instalaciones,['Instalaciones','Infraestructura']))],
+    ['Equipos', porComp(leer(F.equipos,['Equipos']))]
   ];
-  const html=filas.map(([e,v])=>_detRow(e,v)).filter(Boolean).join('');
-  document.getElementById('det_titulo').textContent = (rutaFicha(r,nivel)||'Ficha').slice(0,80);
+  const html=filas.map(x=> x && x.__sec
+    ? `<div style="margin:16px 0 4px;padding:6px 10px;background:#eef7f2;border-left:4px solid var(--brand);border-radius:6px;font-weight:700;font-size:14px;color:var(--brand)">${x.__sec}</div>`
+    : _detRow(x[0], x[1])).filter(Boolean).join('');
+  document.getElementById('det_titulo').textContent = String(rutaFicha(r,nivel)||'Ficha').split(/\s*›\s*/).pop();
   document.getElementById('det_cuerpo').innerHTML = html||'<p class="hint">Sin datos.</p>';
   document.getElementById('modalDetalle').classList.add('show'); document.body.style.overflow='hidden';
 }
