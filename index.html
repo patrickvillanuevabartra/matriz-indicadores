@@ -255,6 +255,10 @@
   .mg-frac .fr{display:inline-flex;flex-direction:column;align-items:stretch;text-align:center;min-width:220px;max-width:460px}
   .mg-frac .fr span{padding:5px 10px;font-size:13px}
   .mg-frac .fr .num{border-bottom:2px solid var(--ink);font-weight:600}
+  .mg-ec{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px;width:100%}
+  .mg-ec .ind{font-size:16px;font-weight:700;color:var(--brand);max-width:340px;line-height:1.35}
+  .mg-ec .eq{font-size:22px;font-weight:700;color:var(--ink)}
+  .mg-ec .fr span{font-size:15px}
   .mg-frac .lbl{font-size:12px;color:var(--slate);line-height:1.5}
   .mg-acciones{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
   .mg-tabla{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
@@ -8989,7 +8993,7 @@ function mgRender(){
   const V=_mgVars(), est=_mgEstados();
   const vista=window._MG_VISTA||'prog';
   const frac = V.n>=2
-    ? `<div class="mg-frac"><div class="fr"><span class="num">${_mgEsc(V.arriba)}</span><span>${_mgEsc(V.abajo)}</span></div>
+    ? `<div class="mg-frac"><div class="mg-ec"><span class="ind">${_mgEsc(String(MT_CTX.indicador||'Indicador').replace(/^[A-Z]{1,3}\d+(\.\d+)*\s+/,''))}</span><span class="eq">=</span><div class="fr"><span class="num">${_mgEsc(V.arriba)}</span><span>${_mgEsc(V.abajo)}</span></div>${/\*\s*100\b/.test(MT_CTX.formula||'')?'<span class="eq">× 100</span>':''}</div>
          <div class="lbl">⬆ <b>Arriba</b>: la cantidad que se cuenta. En la <b>meta</b>, lo que <b>quieres alcanzar</b>; en el <b>seguimiento</b>, lo que <b>llevas logrado</b>.<br>⬇ <b>Abajo</b>: el <b>total</b>. En la meta, el total que <b>proyectas</b>; en el seguimiento, el total <b>real</b>.<br>El sistema hace la división por ti.<br><span style="display:inline-block;margin-top:4px">💡 <b>Para fijar la meta:</b> total proyectado × porcentaje deseado = lo que debes alcanzar arriba. Ej.: 200 estudiantes × 30 % = <b>60</b> → meta <b>60 de 200</b>.</span></div></div>`
     : (MT_CTX.formula ? `<div style="margin:6px 0">📐 ${_mgEsc(MT_CTX.formula)}</div>` : '<div class="hint">Este indicador no tiene fórmula registrada: escribe los valores directamente.</div>');
   box.innerHTML = `
