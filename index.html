@@ -8929,13 +8929,13 @@ async function abrirMetas(matId){
   mgForm('prog', false); mgForm('seg', false);
   { const tt=document.getElementById('pm_form_tit'); if(tt) tt.textContent='Nueva meta';
     const ts=document.getElementById('sm_form_tit'); if(ts) ts.textContent='Nuevo seguimiento'; }
-  setMetaTab('prog');
+  setMetaTab('explica');
   document.getElementById('modalMetas').classList.add('show'); document.body.style.overflow='hidden';
   _llenarPeriodoSel('pm','');   // desplegable de periodos factibles en programación
   window._MG_ABIERTO=false; mgRender();
   await cargarProgMetas();
   await cargarSegMetas();
-  { const e=_mgEstados(); if(!e.prog && !sl) setMetaTab('explica'); else mgRender(); }
+  setMetaTab('explica');   // siempre se empieza por el paso 1
 }
 window.abrirMetas=abrirMetas;
 
