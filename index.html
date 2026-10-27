@@ -194,6 +194,42 @@
   .modal-close{background:transparent;border:0;font-size:24px;line-height:1;color:var(--mist);cursor:pointer;padding:2px 8px;border-radius:8px;transition:.15s}
   .modal-close:hover{background:var(--paper);color:var(--ink)}
   .modal-body{padding:8px 26px 4px}
+  /* ===== v136: historial de metas, celda de avance y explicación ===== */
+  .av-cel{border:1px solid var(--line);border-radius:10px;padding:7px 9px;margin-bottom:6px;background:var(--card);min-width:150px}
+  .av-cel .per{font-size:12px;font-weight:700;color:var(--slate);display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .av-chip{display:inline-block;font-size:10.5px;font-weight:700;border-radius:10px;padding:1px 7px;background:var(--paper);color:var(--slate);border:1px solid var(--line)}
+  .av-chip.cierre{background:#e8f1fb;color:#1f5a96;border-color:#bcd5ee}
+  .av-cel .val{font-size:12.5px;color:var(--ink);margin:3px 0 4px;line-height:1.4}
+  .av-cel .val b{font-size:13.5px}
+  .av-cel .sub{font-size:11.5px;color:var(--mist)}
+  .hm-wrap{margin-top:6px}
+  .hm-tit{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:4px 0 10px}
+  .hm-tit h3{margin:0;font-size:17px}
+  .hm-meta{border:1.5px solid var(--line);border-radius:14px;margin-bottom:14px;overflow:hidden;background:var(--card)}
+  .hm-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:12px 14px;background:#f3faf6;border-bottom:1px solid var(--line)}
+  .hm-head .t{font-size:16px;font-weight:700;color:var(--brand)}
+  .hm-nums{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .hm-num{background:#fff;border:1px solid var(--line);border-radius:10px;padding:5px 10px;font-size:12px;color:var(--slate);line-height:1.25}
+  .hm-num b{display:block;font-size:16px;color:var(--ink)}
+  .hm-num.ult b{color:var(--brand)}
+  .hm-acc{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .hm-body{padding:10px 14px 12px}
+  .hm-seg{display:grid;grid-template-columns:110px 1fr auto;gap:12px;align-items:start;padding:10px 0;border-top:1px dashed var(--line)}
+  .hm-seg:first-child{border-top:0}
+  .hm-seg .f{font-size:13.5px;font-weight:700;color:var(--ink)}
+  .hm-seg .f .av-chip{margin-top:4px}
+  .hm-seg .c{font-size:13.5px;line-height:1.5}
+  .hm-ev{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+  .hm-ev a{font-size:12.5px;background:#eef7f2;border:1px solid #cfe6d9;color:var(--brand);border-radius:8px;padding:3px 8px;text-decoration:none;font-weight:600}
+  .hm-ev a.pl{background:#fdecea;border-color:#f3c3bd;color:#a33a2c}
+  .hm-vacio{font-size:13.5px;color:var(--slate);background:var(--paper);border:1px dashed var(--line);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  @media (max-width:700px){ .hm-seg{grid-template-columns:1fr} }
+  .rg{position:relative;height:128px;margin:12px 8px 4px}
+  .rg .eje{position:absolute;left:0;right:0;top:63px;height:2px;background:#cdd8d2}
+  .rg .bar{position:absolute;height:12px;border-radius:6px}
+  .rg .mk{position:absolute;top:38px;width:2px;height:52px;background:#5b6b63}
+  .rg .lb{position:absolute;font-size:12.5px;line-height:1.25;transform:translateX(-50%);text-align:center;white-space:nowrap}
+
   /* ===== Guía de Metas y Seguimiento (v133) ===== */
   .mg-ruta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 14px}
   .mg-paso{border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--card);cursor:pointer;text-align:left;font-family:inherit;transition:border-color .15s, box-shadow .15s}
@@ -1378,7 +1414,7 @@
           </div>
           <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
         </div>
-        <div class="tabla-wrap"><table>
+        <div class="tabla-wrap" style="display:none"><table>
           <thead><tr><th>Fecha</th><th>Periodo</th><th>Referencia</th><th>Meta</th><th>Observación/comentario</th><th style="text-align:right">Acciones</th></tr></thead>
           <tbody id="mt_prog_tabla"><tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr></tbody>
         </table></div>
@@ -1415,11 +1451,12 @@
           </div>
           <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="sm_cancelar" onclick="cancelarEdicionSeg()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
         </div>
-        <div class="tabla-wrap"><table>
+        <div class="tabla-wrap" style="display:none"><table>
           <thead><tr><th>Fecha eval.</th><th>Ref.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
           <tbody id="mt_seg_tabla"><tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr></tbody>
         </table></div>
       </div>
+      <div id="mt_hist" class="hm-wrap"></div>
     </div>
     <div class="modal-foot">
       <button type="button" class="btn btn-ghost" onclick="cerrarModal('modalMetas')">Cerrar</button>
@@ -6456,7 +6493,9 @@ async function loadMatriz(forzar){
         const per=SM.periodo?(leerCampo(s,SM.periodo.id,'Periodo')||'(sin periodo)'):'(sin periodo)';
         const f=leerCampo(s, SM.fecha_eval.id, 'Fecha evaluación');
         const fechaVal=(f && !/fecha/i.test(f))?f:'';
-        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal, creado:s.created_at||'', real:realN, meta:metaN, ref:refN };
+        const tipoM = SM.tipo_medicion ? (leerCampo(s, SM.tipo_medicion.id, 'Tipo de medición')||'') : '';
+        let varsC = {}; try{ varsC = SM.variables_calculo ? _parseVars(leerCampo(s, SM.variables_calculo.id, 'Variables de cálculo')) : {}; }catch(_){ varsC={}; }
+        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal, creado:s.created_at||'', real:realN, meta:metaN, ref:refN, tipo:(tipoM==='Cierre'?'Cierre':'Parcial'), vars:varsC };
       }).filter(x=>x.pct!==null);
       m._segCreados = mios.map(s=>s.created_at||'');
       // Ordenar por fecha ascendente
@@ -7834,18 +7873,47 @@ function barraAvance(pct){
     <span style="font-size:12px;font-weight:600;color:${color};white-space:nowrap">${real}%${real>100?' ★':''}</span></div>`;
 }
 // Desglose de avance por periodo: una mini-fila por periodo con su nombre, barra y %.
+// Hilo de cortes de un mismo periodo (misma meta): cómo evolucionó, del primero al último.
+function _avHilo(lista){
+  const fF=f=>{ const m=String(f||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m? m[3]+'/'+m[2] : 'sin fecha'; };
+  const fmt=v=>(typeof _avN==='function')?_avN(v):v;
+  let dup=false;
+  const items=lista.map((x,i)=>{
+    const prev=lista[i-1];
+    if(prev && prev.fecha===x.fecha && prev.real===x.real) dup=true;
+    const flecha = !prev ? '' : (x.pct>prev.pct+0.5 ? ' <span style="color:var(--ok)">▲</span>' : (x.pct<prev.pct-0.5 ? ' <span style="color:var(--bad)">▼</span>' : ' <span style="color:var(--mist)">＝</span>'));
+    return `<div style="display:flex;justify-content:space-between;gap:6px"><span>${fF(x.fecha)} · ${x.tipo==='Cierre'?'Cierre':'Parcial'}</span><span><b>${isFinite(x.real)?fmt(x.real):'—'}</b> · ${Math.round(x.pct)} %${flecha}</span></div>`;
+  }).join('');
+  return `<details style="margin-top:4px" onclick="event.stopPropagation()"><summary style="cursor:pointer;font-size:12px;color:var(--slate);font-weight:600">Ver los ${lista.length} cortes de esta meta</summary>
+    <div style="font-size:12px;line-height:1.55;margin-top:3px;border-left:3px solid var(--brand-2);padding-left:7px">${items}</div>
+    ${dup?'<div style="font-size:11.5px;color:#a33a2c;margin-top:3px">⚠ Hay dos cortes con la misma fecha y el mismo valor: probablemente se registró dos veces. Revísalo en Metas → historial.</div>':''}
+  </details>`;
+}
 function barraAvancePeriodos(periodos){
   if(!periodos || !periodos.length) return '<span class="hint" style="font-size:12px">Ver metas</span>';
-  return periodos.map(x=>{
-    const realPct=Math.round(x.pct);                     // valor real: puede pasar de 100
-    const p=Math.max(0,Math.min(100,realPct));            // ancho de la barra
+  // Agrupar por periodo y quedarse con el último corte de cada uno
+  const grupos={}, orden=[];
+  periodos.forEach(x=>{ const k=x.periodo||'—'; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(x); });
+  const fmt=v=>(typeof _avN==='function')?_avN(v):v;
+  return orden.map(k=>{
+    const lista=grupos[k].slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
+    const x=lista[lista.length-1];
+    const realPct=Math.round(x.pct);
+    const p=Math.max(0,Math.min(100,realPct));
     const color = realPct>=90?'var(--ok)' : realPct>=60?'var(--warn)' : 'var(--bad)';
-    return `<div style="margin-bottom:5px">
-      <div style="font-size:10px;color:var(--slate);font-weight:600;margin-bottom:2px">${(x.periodo||'—').replace(/</g,'&lt;')}</div>
-      <div style="display:flex;align-items:center;gap:6px">
-        <div style="flex:1;height:6px;background:var(--line);border-radius:4px;overflow:hidden;min-width:45px;${realPct>100?'box-shadow:inset 0 0 0 1px var(--ok)':''}" ${realPct>100?`title="${attr('Superó la meta programada para este periodo.')}"`:''}><div style="width:${p}%;height:100%;background:${color}"></div></div>
-        <span style="font-size:11px;font-weight:600;color:${color};white-space:nowrap">${realPct}%${realPct>100?' ★':''}</span>
-      </div>${(isFinite(x.real)&&isFinite(x.meta))?`<a href="#" onclick="event.stopPropagation();verExplicacionAvance(${x.real},${x.meta},${isFinite(x.ref)?x.ref:'NaN'},'${String(x.periodo||'').replace(/['"\<>]/g,'')}');return false" style="display:inline-block;margin-top:2px;font-size:11.5px;color:var(--brand);font-weight:600" title="Ver de dónde sale este porcentaje">ⓘ ¿Cómo salió?</a>`:''}</div>`;
+    const vv=Object.values(x.vars||{});
+    const detalle = vv.length===2 ? ` <span class="sub">(${fmt(vv[0])} de ${fmt(vv[1])})</span>` : '';
+    const tieneVals = isFinite(x.real) && isFinite(x.meta);
+    return `<div class="av-cel">
+      <div class="per">${String(k).replace(/</g,'&lt;')} <span class="av-chip ${x.tipo==='Cierre'?'cierre':''}">${x.tipo==='Cierre'?'Cierre':'Parcial'}</span>${lista.length>1?`<span class="sub" style="font-weight:400">· ${lista.length} cortes</span>`:''}</div>
+      ${tieneVals?`<div class="val">Alcanzado: <b>${fmt(x.real)}</b>${detalle}<br><span class="sub">Meta: ${fmt(x.meta)} · Línea base: ${isFinite(x.ref)?fmt(x.ref):'—'}</span></div>`:''}
+      <div style="display:flex;align-items:center;gap:6px" title="% de avance: cuánto se avanzó desde la línea base hacia la meta">
+        <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:45px;${realPct>100?'box-shadow:inset 0 0 0 1px var(--ok)':''}"><div style="width:${p}%;height:100%;background:${color}"></div></div>
+        <span style="font-size:12.5px;font-weight:700;color:${color};white-space:nowrap">${realPct}%${realPct>100?' ★':''}</span>
+      </div>
+      ${tieneVals?`<a href="#" onclick="event.stopPropagation();verExplicacionAvance(${x.real},${x.meta},${isFinite(x.ref)?x.ref:'NaN'},'${String(k).replace(/['"\\<>]/g,'')}');return false" style="display:inline-block;margin-top:3px;font-size:12px;color:var(--brand);font-weight:600">ⓘ ¿Cómo salió este %?</a>`:''}
+      ${lista.length>1?_avHilo(lista):''}
+    </div>`;
   }).join('');
 }
 // ¿La relación tiene algún valor real (no vacío, no nombre de columna)?
@@ -8437,7 +8505,7 @@ window.eliminarMatriz=eliminarMatriz;
 
 /* ---- Modal de Metas (Programación + Seguimiento) ---- */
 let MT_CTX={ matId:null, indicador:'' };
-let PM_EDIT_ID=null, SM_EDIT_ID=null, SM_EDIT_META=null, SM_EDIT_REF=null;
+let PM_EDIT_ID=null, SM_EDIT_ID=null, SM_EDIT_META=null, SM_EDIT_REF=null, SM_EDIT_PROG='';
 // ===== FÓRMULA: detectar variables y calcular el valor real =====
 // La fórmula es texto libre, p.ej. "(N° de materiales actualizados / Total de materiales) × 100".
 // Detectamos como VARIABLES los tramos de texto que no son números ni operadores.
@@ -9125,6 +9193,24 @@ function calcAvance(real, meta, ref){
    ===================================================================== */
 function _avN(n){ let x=Number(n); if(!isFinite(x)) return '—'; if(Math.abs(x)<0.005) x=0; return x.toLocaleString('es-PE',{maximumFractionDigits:2}); }
 function _avPts(n){ return Math.abs(Math.round(Number(n)*100)/100)===1 ? 'punto' : 'puntos'; }
+function _avRegla(b, m, r){
+  const lo=Math.min(b,m,r), hi=Math.max(b,m,r), span=(hi-lo)||1;
+  const pos=v=>6+(v-lo)/span*88;                       // 6 % de margen a cada lado
+  const pb=pos(b), pm=pos(m), pr=pos(r);
+  const barra=(a,z,top,color)=>`<div class="bar" style="left:${Math.min(a,z)}%;width:${Math.max(0.8,Math.abs(z-a))}%;top:${top}px;background:${color}"></div>`;
+  return `<div class="rg">
+    <div class="eje"></div>
+    ${barra(pb,pm,44,'#bfe3cd')}${barra(pb,pr,70,'#1f9d55')}
+    <div class="mk" style="left:${pb}%"></div><div class="mk" style="left:${pm}%;background:#1f7a3f"></div>
+    <div class="lb" style="left:${pb}%;top:0">📍 Línea base<br><b>${_avN(b)}</b></div>
+    <div class="lb" style="left:${pm}%;top:${Math.abs(pm-pb)<14?'94':'0'}px;color:#1f7a3f">🎯 Meta<br><b>${_avN(m)}</b></div>
+    <div class="lb" style="left:${Math.min(92,Math.max(8,pr))}%;top:94px;color:#11633a">📈 Alcanzado<br><b>${_avN(r)}</b></div>
+  </div>
+  <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:#4b5a52;margin:2px 0 4px">
+    <span><span style="display:inline-block;width:22px;height:9px;border-radius:5px;background:#bfe3cd;vertical-align:middle"></span> Lo que se propusieron mejorar</span>
+    <span><span style="display:inline-block;width:22px;height:9px;border-radius:5px;background:#1f9d55;vertical-align:middle"></span> Lo que mejoraron</span>
+  </div>`;
+}
 function explicarAvanceHTML(real, meta, ref){
   const r=parseFloat(real), m=parseFloat(meta), b0=parseFloat(ref);
   if(isNaN(r)||isNaN(m)) return '';
@@ -9132,42 +9218,42 @@ function explicarAvanceHTML(real, meta, ref){
   const prog=m-b, log=r-b, inv=prog<0;
   const pct=calcAvance(r, m, sinRef?NaN:b0);
   if(pct===null) return '';
-  const verboMeta = inv ? 'bajar' : 'subir';
-  const progAbs=Math.abs(prog), logDir = inv ? -log : log;      // mejora lograda en la dirección buena
+  const progAbs=Math.abs(prog), logDir=inv?-log:log;
+  const veces = progAbs ? logDir/progAbs : 0;
   let titulo, color, fondo, significado, consejo='';
   if(prog===0){
     titulo = r>=m ? '✅ Meta cumplida' : '⏳ Aún no se alcanza la meta'; color='#1f7a3f'; fondo='#e8f6ee';
-    significado = 'La meta es igual a la línea base, así que solo se verifica si se alcanzó (100 %) o no (0 %).';
+    significado='La meta era mantener el mismo valor de la línea base; solo se verifica si se alcanzó (100 %) o no (0 %).';
   } else if(pct>100.5){
     titulo='🌟 ¡Superaron la meta!'; color='#1f7a3f'; fondo='#e8f6ee';
-    significado = `Lograron <b>${_avN(pct/100)} veces</b> la mejora que se propusieron: superaron la meta en <b>${_avN(pct-100)} %</b>. <b>No es un error:</b> el sistema no mide el valor final, sino <b>cuánto mejoraron respecto de lo que proyectaron</b>.`;
+    significado=`Mejoraron <b>${_avN(veces)} veces</b> lo que se habían propuesto. Por eso el resultado pasa de 100 %. <b>No es un error.</b>`;
     if(pct>=150) consejo='💡 Como la superaron con amplitud, para el próximo periodo conviene plantear una meta más ambiciosa.';
   } else if(pct>=99.5){
     titulo='✅ Meta cumplida'; color='#1f7a3f'; fondo='#e8f6ee';
-    significado='Lograron exactamente la mejora que se propusieron para el periodo.';
+    significado='Mejoraron exactamente lo que se habían propuesto.';
   } else if(pct>0){
     titulo='⏳ En camino a la meta'; color='#8a5a00'; fondo='#fff6e5';
-    significado = `Llevan el <b>${_avN(pct)} %</b> de la mejora propuesta. Faltan <b>${_avN(progAbs-logDir)}</b> ${_avPts(progAbs-logDir)} para llegar a la meta (${_avN(m)}).`;
+    significado=`Llevan <b>${_avN(pct)} %</b> de la mejora que se propusieron. Les falta mejorar <b>${_avN(progAbs-logDir)}</b> para llegar a la meta.`;
   } else {
     titulo='⚠️ Todavía sin mejora'; color='#a33a2c'; fondo='#fdecea';
-    significado = (pct<0 ? 'El valor alcanzado quedó <b>peor que la línea base</b>.' : 'El valor alcanzado es <b>igual a la línea base</b>.') +
-      ' Aún no hay mejora respecto del punto de partida. Revisen las acciones; si es una medición de cierre, consideren un plan de acción.';
+    significado=(pct<0?'El valor alcanzado quedó <b>peor que la línea base</b>':'El valor alcanzado es <b>igual a la línea base</b>')+': todavía no hay mejora. Revisen las acciones; si es la medición de cierre, consideren un plan de acción.';
   }
-  const lineaLog = logDir>0
-    ? `→ ${inv?'bajaron':'subieron'} <b>${_avN(Math.abs(log))}</b> ${_avPts(log)} (${_avN(r)} − ${_avN(b)}).`
-    : (logDir===0 ? '→ no hubo cambio respecto a la línea base.' : `→ ${inv?'subió':'bajó'} <b>${_avN(Math.abs(log))}</b> ${_avPts(log)} respecto a la línea base.`);
-  return `<div class="av-expl" style="border:1.5px solid ${color};background:${fondo};border-radius:12px;padding:13px 15px;font-size:14px;line-height:1.6;color:#1f2a24">
-    <div style="font-size:16px;font-weight:700;color:${color};margin-bottom:6px">${titulo} · ${_avN(pct)} % de avance</div>
-    <div style="font-weight:700;margin-bottom:2px">¿De dónde sale este ${_avN(pct)} %?</div>
-    <div>📍 <b>Punto de partida (línea base):</b> ${_avN(b)}${sinRef?' <span style="color:#6b7a71">(no se registró: se toma 0)</span>':''}</div>
-    <div>🎯 <b>Meta del periodo:</b> ${_avN(m)} → se propusieron ${verboMeta} <b>${_avN(progAbs)}</b> ${_avPts(progAbs)}.</div>
-    <div>📈 <b>Valor alcanzado:</b> ${_avN(r)} ${lineaLog}</div>
-    <div style="background:#fff;border:1px solid #d7e2dc;border-radius:9px;padding:9px 12px;margin:9px 0;font-size:15px;text-align:center">
-      % de avance = <b>mejora lograda</b> ÷ <b>mejora programada</b> × 100<br>
-      = ${_avN(inv?-log:log)} ÷ ${_avN(progAbs)} × 100 = <b style="font-size:17px;color:${color}">${_avN(pct)} %</b></div>
+  const verbo = inv ? 'bajar' : 'subir';
+  return `<div class="av-expl" style="border:1.5px solid ${color};background:${fondo};border-radius:12px;padding:14px 16px;font-size:14.5px;line-height:1.6;color:#1f2a24">
+    <div style="font-size:17px;font-weight:700;color:${color}">${titulo} · ${_avN(pct)} % de avance</div>
+    <div style="font-size:15px;margin:6px 0 2px">Partieron de <b>${_avN(b)}</b>${sinRef?' <span style="color:#6b7a71;font-size:13px">(no se registró línea base: se toma 0)</span>':''}, querían ${verbo} hasta <b>${_avN(m)}</b> y llegaron a <b>${_avN(r)}</b>.</div>
+    ${_avRegla(b,m,r)}
+    <div style="background:#fff;border:1px solid #d7e2dc;border-radius:10px;padding:10px 13px;margin:8px 0">
+      <div style="font-weight:700;margin-bottom:4px">Así se calcula, en 3 pasos:</div>
+      <div><b>1.</b> Lo que se propusieron mejorar: ${_avN(m)} − ${_avN(b)} = <b>${_avN(progAbs)}</b></div>
+      <div><b>2.</b> Lo que mejoraron: ${_avN(r)} − ${_avN(b)} = <b>${_avN(inv?-log:log)}</b></div>
+      <div><b>3.</b> Se compara uno con otro: ${_avN(inv?-log:log)} ÷ ${_avN(progAbs)} = <b>${_avN(veces)}</b> → × 100 = <b style="font-size:17px;color:${color}">${_avN(pct)} %</b></div>
+    </div>
     <div><b>¿Qué significa?</b> ${significado}</div>
     ${consejo?`<div style="margin-top:6px">${consejo}</div>`:''}
-    <div style="margin-top:8px;font-size:13px;color:#4b5a52">Cómo leerlo: <b>100 %</b> = meta cumplida · <b>más de 100 % ★</b> = superaron la meta · <b>menos de 100 %</b> = aún falta para la meta.</div>
+    <details style="margin-top:8px;font-size:13.5px"><summary style="cursor:pointer;color:var(--brand);font-weight:700">¿Por qué no se mira solo el valor alcanzado?</summary>
+      <div style="margin-top:5px">Porque el sistema mide <b>cuánto mejoró cada oficina desde donde partió</b>, no el número final. Es como un viaje: si planearon avanzar ${_avN(progAbs)} km y avanzaron ${_avN(Math.max(0,inv?-log:log))} km, hicieron el ${_avN(pct)} % del recorrido planeado. Así la comparación es justa para todas, partan de donde partan. El valor alcanzado (${_avN(r)}) también se muestra en la Matriz y en el historial.</div></details>
+    <div style="margin-top:8px;font-size:13px;color:#4b5a52"><b>100 %</b> = meta cumplida · <b>más de 100 % ★</b> = superaron la meta · <b>menos de 100 %</b> = aún falta.</div>
   </div>`;
 }
 // Ventana con la explicación (desde la Matriz o desde la tabla de seguimientos)
@@ -9187,6 +9273,120 @@ function verExplicacionAvance(real, meta, ref, titulo){
 }
 window.explicarAvanceHTML=explicarAvanceHTML; window.verExplicacionAvance=verExplicacionAvance;
 
+
+/* ---------- Historial de metas y seguimientos (v136) ----------
+   Una tarjeta por meta programada, con sus seguimientos debajo (del más antiguo
+   al más reciente), sus números, evidencias y acciones. */
+function _segProgId(sg){
+  const P=STATE.progMetas||[];
+  if(!sg || !P.length) return '';
+  const rid=SM.rel_prog_meta && sg.rel_values ? sg.rel_values[SM.rel_prog_meta.id] : null;
+  const arr=Array.isArray(rid)?rid:(rid?[rid]:[]);
+  for(const id of arr){ if(P.some(p=>p.id===id)) return id; }
+  const txt=JSON.stringify(sg.values||{});
+  const hit=P.find(p=>txt.includes(p.id)); if(hit) return hit.id;
+  const num=x=>{ const n=parseFloat(String(x==null?'':x).replace(',','.')); return isNaN(n)?NaN:n; };
+  const per=SM.periodo?leerCampo(sg,SM.periodo.id,'Periodo'):'';
+  const mSeg=SM.meta_seg?num(leerCampo(sg,SM.meta_seg.id,'Meta seguimiento')):NaN;
+  const delPer=P.filter(p=>PM.periodo && per && leerCampo(p,PM.periodo.id,'Periodo')===per);
+  const exacta=delPer.find(p=>num(leerCampo(p,PM.valor_meta.id,'Valor meta'))===mSeg);
+  if(exacta) return exacta.id;
+  return delPer.length===1 ? delPer[0].id : '';
+}
+window._segProgId=_segProgId;
+function renderHistorialMetas(){
+  const box=document.getElementById('mt_hist'); if(!box) return;
+  const P=STATE.progMetas||[], S=STATE.segMetas||[];
+  const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const fmt=v=>{ const n=parseFloat(String(v==null?'':v).replace(',','.')); return isNaN(n)?(v||'—'):_avN(n); };
+  const num=x=>{ const n=parseFloat(String(x==null?'':x).replace('%','').replace(',','.')); return isNaN(n)?NaN:n; };
+  const sl=soloLectura();
+  if(!P.length && !S.length){
+    box.innerHTML=`<div class="hm-tit"><h3>📚 Historial de este indicador</h3></div><div class="hm-vacio">Todavía no hay metas ni seguimientos registrados. Empieza por <b>② Programación</b>.</div>`; return;
+  }
+  const porMeta={}; const sueltos=[];
+  S.forEach(sg=>{ const id=_segProgId(sg); if(id){ (porMeta[id]=porMeta[id]||[]).push(sg); } else sueltos.push(sg); });
+  const segHTML=sg=>{
+    const f=leerCampo(sg,SM.fecha_eval.id,'Fecha evaluación'); const fv=(f && !/fecha/i.test(f))?f:'';
+    const realN=num(leerCampo(sg,SM.valor_real.id,'Valor real obtenido'));
+    const metaN=SM.meta_seg?num(leerCampo(sg,SM.meta_seg.id,'Meta seguimiento')):NaN;
+    const refN=SM.ref_seg?num(leerCampo(sg,SM.ref_seg.id,'Referencia seguimiento')):NaN;
+    let pct=SM.avance_app?num(leerCampo(sg,SM.avance_app.id,'Avance')):NaN;
+    if(isNaN(pct)){ const c=calcAvance(realN,metaN,refN); pct=c===null?NaN:c; }
+    const tipo=SM.tipo_medicion?(leerCampo(sg,SM.tipo_medicion.id,'Tipo de medición')==='Cierre'?'Cierre':'Parcial'):'Parcial';
+    let vars={}; try{ vars=SM.variables_calculo?_parseVars(leerCampo(sg,SM.variables_calculo.id,'Variables de cálculo')):{}; }catch(_){}
+    const vv=Object.values(vars);
+    const obs=limpiarEtiqueta(leerCampo(sg,SM.observacion.id,'Observación'));
+    const ev=(typeof _evParse==='function'?_evParse(leerCampo(sg,SM.evidencias.id,'Evidencias')):[]).filter(x=>x.url);
+    const pl=(typeof _evParse==='function'?_evParse(leerCampo(sg,SM.plan_remediacion.id,'Plan de remediación')):[]).filter(x=>x.url);
+    const lk=(x,cl,d)=>`<a class="${cl}" href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener">📎 ${esc(x.etq||d)} ↗</a>`;
+    return `<div class="hm-seg">
+      <div class="f">${fv?fmtFecha(fv):'Sin fecha'}<br><span class="av-chip ${tipo==='Cierre'?'cierre':''}">${tipo==='Cierre'?'Cierre':'Parcial'}</span></div>
+      <div class="c">Alcanzado: <b style="font-size:15px">${isNaN(realN)?'—':_avN(realN)}</b>${vv.length===2?` <span style="color:var(--mist)">(${fmt(vv[0])} de ${fmt(vv[1])})</span>`:''}
+        ${!isNaN(pct)?`<div style="max-width:320px;margin-top:4px">${barraAvance(pct)}</div>`:''}
+        ${(!isNaN(realN)&&!isNaN(metaN))?`<a href="#" onclick="verExplicacionAvance(${realN},${metaN},${isNaN(refN)?'NaN':refN});return false" style="font-size:13px;color:var(--brand);font-weight:700">ⓘ ¿Cómo salió este %?</a>`:''}
+        ${obs?`<div style="margin-top:4px;color:var(--slate)">💬 ${esc(obs)}</div>`:''}
+        ${(ev.length||pl.length)?`<div class="hm-ev">${ev.map(x=>lk(x,'','evidencia')).join('')}${pl.map(x=>lk(x,'pl','plan de mejora')).join('')}</div>`:'<div style="margin-top:4px;color:#a33a2c;font-size:12.5px">Sin evidencias adjuntas</div>'}
+      </div>
+      <div class="hm-acc">
+        <button class="icon-btn" title="Ver detalle" onclick="_verDetalleSeg('${sg.id}')">👁️</button>
+        ${sl?'':`<button class="icon-btn" title="Editar este seguimiento" onclick="setMetaTab('seg');editarSegMeta('${sg.id}')">✏️</button>
+        <button class="icon-btn" title="Eliminar" onclick="eliminarSegMeta('${sg.id}')">🗑️</button>`}
+      </div></div>`;
+  };
+  const ordenSeg=a=>a.slice().sort((x,y)=>String(leerCampo(x,SM.fecha_eval.id,'Fecha evaluación')||'').localeCompare(String(leerCampo(y,SM.fecha_eval.id,'Fecha evaluación')||'')));
+  const ordP=P.slice().sort((a,b)=>String(PM.periodo?leerCampo(b,PM.periodo.id,'Periodo'):'').localeCompare(String(PM.periodo?leerCampo(a,PM.periodo.id,'Periodo'):'')));
+  let html=`<div class="hm-tit"><h3>📚 Historial de este indicador</h3><span class="hint" style="font-size:13px">Cada meta con sus seguimientos debajo, del más antiguo al más reciente.</span></div>`;
+  ordP.forEach(p=>{
+    const per=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):'';
+    const ref=leerCampo(p,PM.valor_ref.id,'Valor de referencia'), meta=leerCampo(p,PM.valor_meta.id,'Valor meta');
+    const fP=leerCampo(p,PM.fecha_prog.id,'Fecha programación');
+    const obs=limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación'));
+    const plan=(typeof _evParse==='function'?_evParse(leerCampo(p,PM.plan_accion.id,'Plan de acción')):[]).filter(x=>x.url);
+    const segs=ordenSeg(porMeta[p.id]||[]);
+    const ult=segs[segs.length-1];
+    const ultReal=ult?num(leerCampo(ult,SM.valor_real.id,'Valor real obtenido')):NaN;
+    let ultPct=ult&&SM.avance_app?num(leerCampo(ult,SM.avance_app.id,'Avance')):NaN;
+    if(ult && isNaN(ultPct)){ const c=calcAvance(ultReal,num(meta),num(ref)); ultPct=c===null?NaN:c; }
+    html+=`<div class="hm-meta">
+      <div class="hm-head">
+        <div>
+          <div class="t">🎯 Meta ${esc(per||'sin periodo')}</div>
+          <div class="hm-nums">
+            <div class="hm-num">Línea base<b>${fmt(ref)}</b></div>
+            <div class="hm-num">Meta<b>${fmt(meta)}</b></div>
+            <div class="hm-num ult">Último alcanzado<b>${isNaN(ultReal)?'—':_avN(ultReal)}</b></div>
+            <div class="hm-num ult">% de avance<b>${isNaN(ultPct)?'—':_avN(ultPct)+' %'+(ultPct>100?' ★':'')}</b></div>
+          </div>
+          <div style="font-size:12.5px;color:var(--mist);margin-top:6px">Programada el ${fmtFecha(fP)||'—'}${obs?' · 💬 '+esc(obs):''}</div>
+          ${plan.length?`<div class="hm-ev">${plan.map(x=>`<a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener">📎 ${esc(x.etq||'plan de acción')} ↗</a>`).join('')}</div>`:''}
+        </div>
+        <div class="hm-acc">
+          <button class="icon-btn" title="Ver detalle de la meta" onclick="_verDetalleProg('${p.id}')">👁️</button>
+          ${sl?'':`<button class="icon-btn" title="Editar la meta" onclick="setMetaTab('prog');editarProgMeta('${p.id}')">✏️</button>
+          <button class="icon-btn" title="Eliminar la meta" onclick="eliminarProgMeta('${p.id}')">🗑️</button>`}
+        </div>
+      </div>
+      <div class="hm-body">
+        ${segs.length ? segs.map(segHTML).join('') : `<div class="hm-vacio"><span>Aún no hay seguimientos para esta meta.</span>${sl?'':`<button class="btn btn-primary btn-sm" onclick="mgNuevoSeg('${p.id}')">+ Registrar seguimiento</button>`}</div>`}
+        ${(segs.length && !sl)?`<div style="margin-top:8px"><button class="btn btn-ghost btn-sm" onclick="mgNuevoSeg('${p.id}')">+ Registrar otro seguimiento de esta meta</button></div>`:''}
+      </div></div>`;
+  });
+  if(sueltos.length){
+    html+=`<div class="hm-meta"><div class="hm-head"><div><div class="t" style="color:#8a5a00">Seguimientos sin meta vinculada</div><div style="font-size:12.5px;color:var(--mist);margin-top:4px">No se pudo identificar a qué meta pertenecen. Ábrelos con ✏️, elige la meta y guarda.</div></div></div>
+      <div class="hm-body">${ordenSeg(sueltos).map(segHTML).join('')}</div></div>`;
+  }
+  box.innerHTML=html;
+}
+// Registrar un seguimiento ya apuntando a una meta concreta
+function mgNuevoSeg(progId){
+  if(typeof cancelarEdicionSeg==='function'){ try{ cancelarEdicionSeg(); }catch(_){ } }
+  setMetaTab('seg');
+  const sel=document.getElementById('sm_prog'); if(sel){ sel.value=progId; try{ evaluarRemediacion(); }catch(_){ } }
+  const f=document.getElementById('mt_seg_form'); if(f){ try{ f.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){ } }
+}
+window.renderHistorialMetas=renderHistorialMetas; window.mgNuevoSeg=mgNuevoSeg;
+
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
   try{
@@ -9195,7 +9395,7 @@ async function cargarProgMetas(){
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
     if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const per=PM.periodo?leerCampo(r,PM.periodo.id,'Periodo'):''; return `<option value="${r.id}">${per?per+' · ':''}Meta ${m||'—'}</option>`; }).join(''); }
-    if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; return; }
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; try{ renderHistorialMetas(); }catch(_){ } return; }
     tb.innerHTML=mias.map(r=>{
       const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación');
       const per=PM.periodo?leerCampo(r,PM.periodo.id,'Periodo'):'';
@@ -10051,7 +10251,7 @@ async function cargarSegMetas(){
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
     STATE.segMetas=mias;
     if(typeof _pintarNotaRef==='function') _pintarNotaRef();
-    if(!mias.length){ tb.innerHTML='<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); return; }
+    if(!mias.length){ tb.innerHTML='<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Sin seguimientos aún.</td></tr>'; actualizarAvanceMatriz(null); try{ renderHistorialMetas(); }catch(_){ } return; }
     let ultimoAvance=null, ultimaFecha='';
     const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
     // Preparar filas con su periodo
@@ -10095,6 +10295,7 @@ async function cargarSegMetas(){
     });
     tb.innerHTML=html;
     actualizarAvanceMatriz(ultimoAvance);
+    try{ renderHistorialMetas(); }catch(e){ console.warn('historial', e); }
   }catch(e){ tb.innerHTML=`<tr><td colspan="7" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
 
@@ -10116,6 +10317,8 @@ function editarSegMeta(segId){
   if(SM.tipo_medicion){ const tm=leerCampo(s, SM.tipo_medicion.id, 'Tipo de medición'); const selTm=document.getElementById('sm_tipo_med'); if(selTm) selTm.value=(tm==='Cierre'?'Cierre':'Parcial'); }
   set('sm_obs', limpiarEtiqueta(leerCampo(s,SM.observacion.id,'Observación')));
   const elPer=document.getElementById('sm_periodo'); if(elPer){ elPer.value=SM.periodo?leerCampo(s,SM.periodo.id,'Periodo'):''; elPer.dataset.touched='1'; }
+  // La meta de referencia queda elegida en el desplegable (antes quedaba vacío)
+  { const sel=document.getElementById('sm_prog'); const pid=_segProgId(s); if(sel){ sel.value = pid || ''; } SM_EDIT_PROG = pid || ''; }
   // Mostrar el panel con la meta propia (y variables ref/meta si la programación las tiene)
   const info=document.getElementById('sm_meta_info');
   if(info && !isNaN(SM_EDIT_META)){
@@ -10188,9 +10391,11 @@ async function guardarSegMeta(){
       const i=w.querySelector('.ev-url'); if(i){ i.focus(); i.style.borderColor='#c0392b'; } } return; }
   let meta=null, ref=null;
   if(SM_EDIT_ID){
-    // Edición: usar la meta/referencia PROPIAS del seguimiento (no del desplegable)
-    meta = !isNaN(SM_EDIT_META)?SM_EDIT_META:null;
-    ref = !isNaN(SM_EDIT_REF)?SM_EDIT_REF:null;
+    // Edición: si en el desplegable hay una meta elegida, se usan sus valores y se
+    // vincula; si no, se conservan la meta/referencia PROPIAS del seguimiento.
+    const pSel = progId && STATE.progMetas ? STATE.progMetas.find(x=>x.id===progId) : null;
+    if(pSel){ meta=parseFloat(leerCampo(pSel,PM.valor_meta.id,'Valor meta')); ref=parseFloat(leerCampo(pSel,PM.valor_ref.id,'Valor de referencia')); if(isNaN(ref)) ref=null; }
+    else { meta = !isNaN(SM_EDIT_META)?SM_EDIT_META:null; ref = !isNaN(SM_EDIT_REF)?SM_EDIT_REF:null; }
   } else {
     // Creación: exigir elegir la programación (periodo)
     if(!progId){ toast('Elige la meta de referencia (periodo) que estás evaluando.', true); return; }
@@ -10199,6 +10404,7 @@ async function guardarSegMeta(){
   const pct = calcAvance(real, meta, ref);
   const campos={};
   if(!SM_EDIT_ID){ campos[SM.rel_matriz.id]=[MT_CTX.matId]; if(progId) campos[SM.rel_prog_meta.id]=[progId]; }
+  else if(progId){ campos[SM.rel_prog_meta.id]=[progId]; }
   if(fecha) campos[SM.fecha_eval.id]=fecha;
   campos[SM.valor_real.id]=real;
   // Tipo de medición (Parcial / Cierre), si hay campo configurado
@@ -11701,7 +11907,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v135</span>
+      <span class="ac-ver">v136</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
