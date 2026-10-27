@@ -231,6 +231,14 @@
   .rg .lb{position:absolute;font-size:12.5px;line-height:1.25;transform:translateX(-50%);text-align:center;white-space:nowrap}
 
   /* ===== Guía de Metas y Seguimiento (v133) ===== */
+  .mg-nuevo-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:var(--paper);border:1.5px dashed var(--brand-2);border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:14px;color:var(--slate);line-height:1.45}
+  .mg-nuevo-bar .btn{font-size:15px;padding:10px 20px}
+  .mg-form-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .mg-form-cab .tt{font-size:17px;font-weight:700;color:var(--ink)}
+  .mg-form-cab .bb{display:flex;gap:8px;align-items:center}
+  .av-tit{font-size:12px;font-weight:700;color:var(--slate);margin-bottom:2px}
+  .av-est{font-size:12.5px;font-weight:700;margin-top:3px}
+  .av-leyenda{font-size:12.5px;color:var(--slate);background:var(--paper);border-radius:8px;padding:6px 10px;margin:4px 0 10px;line-height:1.5}
   .mg-ruta{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:0 0 14px}
   .mg-paso{border:1.5px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--card);cursor:pointer;text-align:left;font-family:inherit;transition:border-color .15s, box-shadow .15s}
   .mg-paso:hover{border-color:var(--brand-2)}
@@ -1362,16 +1370,16 @@
     </div>
     <div class="modal-body">
       <div id="mg_guia"></div>
-      <div style="display:flex;gap:4px;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:4px;margin-bottom:18px;width:fit-content">
-        <button class="mt-tab active" data-t="prog" onclick="setMetaTab('prog')" style="border:0;background:var(--brand);color:#fff;font-family:inherit;font-size:13px;font-weight:600;padding:8px 16px;border-radius:7px;cursor:pointer">② Programación · la meta</button>
-        <button class="mt-tab" data-t="seg" onclick="setMetaTab('seg')" style="border:0;background:transparent;color:var(--slate);font-family:inherit;font-size:13px;font-weight:600;padding:8px 16px;border-radius:7px;cursor:pointer">③ Seguimiento · avance y evidencias</button>
-      </div>
 
       <!-- Programación -->
       <div id="mt_prog">
         <div id="mt_formula_box" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--slate)"></div>
-        <div id="mt_prog_form" style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
-          <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:6px">Nueva programación de meta</div>
+        <div id="mt_prog_bar" class="mg-nuevo-bar"><button type="button" class="btn btn-accent" onclick="mgNuevo('prog')">+ Nueva meta</button>
+          <span>Se programa <b>una meta por periodo</b>: cómo empiezas (línea base) y a dónde quieres llegar (meta). Tus metas aparecen abajo, en el historial.</span></div>
+        <div id="mt_prog_form" style="display:none;background:var(--paper);border:1.5px solid var(--brand-2);border-radius:12px;padding:16px 18px;margin-bottom:16px">
+          <div class="mg-form-cab"><div class="tt" id="pm_form_tit">Nueva meta</div>
+            <div class="bb"><button type="button" class="btn btn-ghost btn-sm" onclick="mgGuiar()">🧭 Guíame paso a paso</button>
+            <button type="button" class="icon-btn" title="Cerrar sin guardar" onclick="cancelarEdicionMeta()">✕</button></div></div>
           <div class="mg-aux" style="font-size:12.5px;color:#6b4a00;background:#fff6e5;border:1px solid #f0d9a8;border-radius:8px;padding:7px 10px;margin-bottom:12px">📎 ¿Quieres subir un <b>informe, acta o resolución</b>? Eso es evidencia de lo logrado: va en <a href="#" onclick="setMetaTab('seg');return false" style="color:var(--brand);font-weight:700">③ Seguimiento</a>. Aquí solo se define <b>a dónde quieres llegar</b>.</div>
           <div class="grid">
             <div class="field"><label>Fecha de programación</label><input type="date" id="pm_fecha" onchange="sugerirPeriodoProg()"></div>
@@ -1412,7 +1420,7 @@
             </div>
             <div class="field full"><label>Observación/comentario</label><textarea id="pm_obs"></textarea></div>
           </div>
-          <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
+          <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="pm_cancelar" onclick="cancelarEdicionMeta()">Cancelar</button><button class="btn btn-accent btn-sm" id="pm_guardar" onclick="guardarProgMeta()">+ Guardar programación</button></div>
         </div>
         <div class="tabla-wrap" style="display:none"><table>
           <thead><tr><th>Fecha</th><th>Periodo</th><th>Referencia</th><th>Meta</th><th>Observación/comentario</th><th style="text-align:right">Acciones</th></tr></thead>
@@ -1422,8 +1430,12 @@
 
       <!-- Seguimiento -->
       <div id="mt_seg" class="hidden">
-        <div id="mt_seg_form" style="background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:16px 18px;margin-bottom:16px">
-          <div style="font-size:13px;font-weight:600;color:var(--slate);margin-bottom:6px">Nuevo seguimiento</div>
+        <div id="mt_seg_bar" class="mg-nuevo-bar"><button type="button" class="btn btn-accent" onclick="mgNuevo('seg')">+ Nuevo seguimiento</button>
+          <span>Cada vez que mides: <b>cuánto lograste</b> y los <b>enlaces de tus informes</b>. Tus seguimientos aparecen abajo, debajo de su meta.</span></div>
+        <div id="mt_seg_form" style="display:none;background:var(--paper);border:1.5px solid var(--brand-2);border-radius:12px;padding:16px 18px;margin-bottom:16px">
+          <div class="mg-form-cab"><div class="tt" id="sm_form_tit">Nuevo seguimiento</div>
+            <div class="bb"><button type="button" class="btn btn-ghost btn-sm" onclick="mgGuiar()">🧭 Guíame paso a paso</button>
+            <button type="button" class="icon-btn" title="Cerrar sin guardar" onclick="cancelarEdicionSeg()">✕</button></div></div>
           <div class="mg-aux" style="font-size:12.5px;color:var(--slate);background:#eef7f2;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:12px">Registra <b>cuánto llevas logrado</b> en una fecha y adjunta los <b>enlaces de tus informes, actas o resoluciones</b> como evidencia. Puedes registrar varios seguimientos para la misma meta (uno por cada corte).</div>
           <div class="grid">
             <div class="field"><label>Meta de referencia</label><select id="sm_prog" onchange="evaluarRemediacion()"></select></div>
@@ -1441,7 +1453,7 @@
             <div class="field"><label>Valor real alcanzado</label><input type="number" step="any" id="sm_real" oninput="evaluarRemediacion()"></div>
             <div class="field"><label>% de avance (calculado)</label><input id="sm_avance" readonly style="background:var(--paper);font-weight:700" placeholder="—"></div>
             <div class="field full" id="sm_avance_expl" style="display:none"></div>
-            <div class="field full"><div style="font-size:11px;color:var(--mist);background:var(--paper);border-radius:8px;padding:8px 12px;line-height:1.5">📐 <strong>Fórmula del % de avance:</strong> (valor alcanzado − referencia) ÷ (meta − referencia) × 100. Funciona para indicadores donde subir es mejor y donde bajar es mejor. 100% = se alcanzó la meta; 0% = sin avance respecto a la línea base.<br><br><strong>Qué mide:</strong> cuánto se logró <em>respecto a la mejora proyectada</em>, no el valor absoluto alcanzado. Es decir, evalúa el grado de cumplimiento sobre la <em>tasa de incremento programada</em>.<br><br><strong>Ejemplo (Escuela Profesional de Ingeniería Informática):</strong><br>Línea base: 0,70 · Meta programada: 0,90 → la mejora proyectada es <strong>0,20</strong>.<br>Al corte del 31 de julio de 2026 la gestión real alcanzó <strong>91,18 %</strong> (0,91), es decir una mejora efectiva de <strong>0,21</strong> sobre la línea base.<br><span style="display:inline-block;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:5px 9px;margin-top:5px;color:var(--slate)">% de avance = 0,21 ÷ 0,20 × 100 = <strong>105 %</strong></span><br>Supera el 100 % porque la mejora lograda fue mayor que la proyectada para el periodo.</div></div>
+            <div class="field full"><div style="font-size:13.5px;color:var(--slate);background:#eef7f2;border:1px solid var(--line);border-radius:9px;padding:9px 13px;line-height:1.5">📐 <b>¿Cómo sale el % de avance?</b> Se compara <b>lo que mejoraste</b> desde la línea base con <b>lo que te propusiste mejorar</b> hasta la meta. <b>100 %</b> = meta cumplida. Cuando escribas el valor alcanzado, aquí arriba verás la cuenta con tus números.</div></div>
             <div class="field full"><label>Evidencias (enlaces a SharePoint/Drive) <span style="color:#c0392b">*</span> <span class="hint" style="font-weight:400">— obligatorio: puedes agregar varias; cada una con su etiqueta</span></label>
               <div class="ev-wrap" id="sm_evid_wrap" data-target="sm_evid"></div>
               <input type="hidden" id="sm_evid">
@@ -1449,7 +1461,7 @@
             <div class="field full hidden" id="sm_remed_box"><label>Plan de acción / mejora (enlaces) <span class="hint" style="font-weight:400">— opcional; sugerido cuando una medición de cierre queda por debajo de la meta</span></label><div class="ev-wrap" id="sm_remed_wrap" data-target="sm_remed"></div><input type="hidden" id="sm_remed"><div id="sm_remed_nota" style="font-size:11px;color:var(--mist);margin-top:5px;line-height:1.5"></div></div>
             <div class="field full"><label>Observación</label><textarea id="sm_obs"></textarea></div>
           </div>
-          <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="sm_cancelar" onclick="cancelarEdicionSeg()" style="display:none">Cancelar</button><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
+          <div class="mg-botones" style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button class="btn btn-ghost btn-sm" id="sm_cancelar" onclick="cancelarEdicionSeg()">Cancelar</button><button class="btn btn-accent btn-sm" id="sm_guardar" onclick="guardarSegMeta()">+ Guardar seguimiento</button></div>
         </div>
         <div class="tabla-wrap" style="display:none"><table>
           <thead><tr><th>Fecha eval.</th><th>Ref.</th><th>Meta</th><th>Real</th><th>% Avance</th><th>Observación</th><th style="text-align:right">Acciones</th></tr></thead>
@@ -6454,12 +6466,14 @@ function leerDueno(r, F){
 
 async function loadMatriz(forzar){
   if(!forzar && STATE.matriz && STATE.matriz.length) return STATE.matriz;
-  const data = await API.records(CONFIG.ENTITIES.MATRIZ_IND);
+  // Tras abrir/guardar metas se lee sin caché para que la matriz muestre el avance actualizado
+  const _fresco=!!window._METAS_FRESCAS; window._METAS_FRESCAS=false;
+  const data = await API.records(CONFIG.ENTITIES.MATRIZ_IND, _fresco);
   STATE.matriz = data.records||[];
   // Leer PROG_METAS y SEG_METAS EN PARALELO (ambas dependen solo de STATE.matriz, no una de otra).
   const [progRes, segRes] = await Promise.allSettled([
-    API.records(CONFIG.ENTITIES.PROG_METAS),
-    API.records(CONFIG.ENTITIES.SEG_METAS)
+    API.records(CONFIG.ENTITIES.PROG_METAS, _fresco),
+    API.records(CONFIG.ENTITIES.SEG_METAS, _fresco)
   ]);
   // Programaciones de meta por indicador
   try{
@@ -7862,15 +7876,29 @@ async function renderMatriz(){
 }
 window.renderMatriz=renderMatriz;
 
-function barraAvance(pct){
+// Qué significa el color del avance, en palabras
+function _avEstado(pct){
+  const r=Math.round(Number(pct));
+  if(r<0)    return { t:'Retrocedió: quedó por debajo de la línea base', c:'var(--bad)' };
+  if(r===0)  return { t:'Sin avance todavía', c:'var(--bad)' };
+  if(r<60)   return { t:'Avance bajo (menos de 60 %)', c:'var(--bad)' };
+  if(r<90)   return { t:'En camino (60 a 89 %)', c:'var(--warn)' };
+  if(r<100)  return { t:'Casi cumplida (90 a 99 %)', c:'var(--ok)' };
+  if(r===100)return { t:'Meta cumplida', c:'var(--ok)' };
+  return { t:'Superó la meta ★', c:'var(--ok)' };
+}
+const AV_LEYENDA='<b>Colores del avance:</b> 🟢 90 % o más · 🟡 60 a 89 % · 🔴 menos de 60 %. Un % <b>negativo</b> significa que el valor alcanzado quedó <b>por debajo de la línea base</b> (retrocedió).';
+function _avPctTxt(r){ return (r<0?'−'+Math.abs(r):r)+' %'; }
+function barraAvance(pct, conTitulo){
   const real=Math.round(pct);                       // valor real: PUEDE superar el 100%
   const p=Math.max(0,Math.min(100,real));           // ancho de la barra (no puede desbordar)
   const color = real>=90?'var(--ok)' : real>=60?'var(--warn)' : 'var(--bad)';
   // Si se superó la meta, la barra se llena y se marca con un borde para distinguirlo del 100%
   const extra = real>100 ? 'box-shadow:inset 0 0 0 1px var(--ok)' : '';
-  return `<div style="display:flex;align-items:center;gap:7px" ${real>100?`title="${attr('Superó la meta programada: la mejora lograda fue mayor que la proyectada para el periodo.')}"`:''}>
+  const est=_avEstado(real);
+  return `${conTitulo?'<div class="av-tit">% de avance hacia la meta</div>':''}<div style="display:flex;align-items:center;gap:7px" title="${attr('% de avance: cuánto se avanzó desde la línea base hacia la meta. '+est.t+'.')}">
     <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:50px;${extra}"><div style="width:${p}%;height:100%;background:${color}"></div></div>
-    <span style="font-size:12px;font-weight:600;color:${color};white-space:nowrap">${real}%${real>100?' ★':''}</span></div>`;
+    <span style="font-size:12px;font-weight:600;color:${color};white-space:nowrap">${_avPctTxt(real)}${real>100?' ★':''}</span></div>${conTitulo?`<div class="av-est" style="color:${est.c}">● ${est.t}</div>`:''}`;
 }
 // Desglose de avance por periodo: una mini-fila por periodo con su nombre, barra y %.
 // Hilo de cortes de un mismo periodo (misma meta): cómo evolucionó, del primero al último.
@@ -7907,10 +7935,12 @@ function barraAvancePeriodos(periodos){
     return `<div class="av-cel">
       <div class="per">${String(k).replace(/</g,'&lt;')} <span class="av-chip ${x.tipo==='Cierre'?'cierre':''}">${x.tipo==='Cierre'?'Cierre':'Parcial'}</span>${lista.length>1?`<span class="sub" style="font-weight:400">· ${lista.length} cortes</span>`:''}</div>
       ${tieneVals?`<div class="val">Alcanzado: <b>${fmt(x.real)}</b>${detalle}<br><span class="sub">Meta: ${fmt(x.meta)} · Línea base: ${isFinite(x.ref)?fmt(x.ref):'—'}</span></div>`:''}
-      <div style="display:flex;align-items:center;gap:6px" title="% de avance: cuánto se avanzó desde la línea base hacia la meta">
+      <div class="av-tit">% de avance hacia la meta</div>
+      <div style="display:flex;align-items:center;gap:6px" title="% de avance: cuánto se avanzó desde la línea base hacia la meta. Colores: verde 90 % o más; ámbar 60 a 89 %; rojo menos de 60 %.">
         <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:45px;${realPct>100?'box-shadow:inset 0 0 0 1px var(--ok)':''}"><div style="width:${p}%;height:100%;background:${color}"></div></div>
-        <span style="font-size:12.5px;font-weight:700;color:${color};white-space:nowrap">${realPct}%${realPct>100?' ★':''}</span>
+        <span style="font-size:12.5px;font-weight:700;color:${color};white-space:nowrap">${_avPctTxt(realPct)}${realPct>100?' ★':''}</span>
       </div>
+      <div class="av-est" style="color:${_avEstado(realPct).c}">● ${_avEstado(realPct).t}</div>
       ${tieneVals?`<a href="#" onclick="event.stopPropagation();verExplicacionAvance(${x.real},${x.meta},${isFinite(x.ref)?x.ref:'NaN'},'${String(k).replace(/['"\\<>]/g,'')}');return false" style="display:inline-block;margin-top:3px;font-size:12px;color:var(--brand);font-weight:600">ⓘ ¿Cómo salió este %?</a>`:''}
       ${lista.length>1?_avHilo(lista):''}
     </div>`;
@@ -8892,15 +8922,16 @@ async function abrirMetas(matId){
   construirCamposFormulaMeta('meta', formula);
   // Modo solo lectura (Usuario libre): ocultar formularios de agregar metas
   const sl=soloLectura();
-  const pf=document.getElementById('mt_prog_form'); if(pf) pf.style.display = sl?'none':'';
-  const sf=document.getElementById('mt_seg_form'); if(sf) sf.style.display = sl?'none':'';
+  mgForm('prog', false); mgForm('seg', false);
+  { const tt=document.getElementById('pm_form_tit'); if(tt) tt.textContent='Nueva meta';
+    const ts=document.getElementById('sm_form_tit'); if(ts) ts.textContent='Nuevo seguimiento'; }
   setMetaTab('prog');
   document.getElementById('modalMetas').classList.add('show'); document.body.style.overflow='hidden';
   _llenarPeriodoSel('pm','');   // desplegable de periodos factibles en programación
   window._MG_ABIERTO=false; mgRender();
   await cargarProgMetas();
   await cargarSegMetas();
-  { const e=_mgEstados(); window._MG_ABIERTO = !e.prog && !sl; mgRender(); }
+  { const e=_mgEstados(); if(!e.prog && !sl) setMetaTab('explica'); else mgRender(); }
 }
 window.abrirMetas=abrirMetas;
 
@@ -8951,52 +8982,37 @@ const MG_EJEMPLOS = {
 };
 function _mgEstados(){
   const filas=id=>{ const tb=document.getElementById(id); if(!tb) return 0; return [...tb.querySelectorAll('tr')].filter(tr=>!tr.querySelector('td.hint')).length; };
-  return { prog: filas('mt_prog_tabla'), seg: filas('mt_seg_tabla') };
+  return { prog: (STATE.progMetas||[]).length, seg: (STATE.segMetas||[]).length };
 }
 function mgRender(){
   const box=document.getElementById('mg_guia'); if(!box) return;
-  const V=_mgVars(), tipo=_mgTipo(), ej=MG_EJEMPLOS[tipo], est=_mgEstados();
-  const tab=(document.getElementById('mt_seg')&&!document.getElementById('mt_seg').classList.contains('hidden'))?'seg':'prog';
-  const abierto=!!window._MG_ABIERTO;
+  const V=_mgVars(), est=_mgEstados();
+  const vista=window._MG_VISTA||'prog';
   const frac = V.n>=2
     ? `<div class="mg-frac"><div class="fr"><span class="num">${_mgEsc(V.arriba)}</span><span>${_mgEsc(V.abajo)}</span></div>
          <div class="lbl">⬆ <b>Arriba</b>: la cantidad que se cuenta. En la <b>meta</b>, lo que <b>quieres alcanzar</b>; en el <b>seguimiento</b>, lo que <b>llevas logrado</b>.<br>⬇ <b>Abajo</b>: el <b>total</b>. En la meta, el total que <b>proyectas</b>; en el seguimiento, el total <b>real</b>.<br>El sistema hace la división por ti.<br><span style="display:inline-block;margin-top:4px">💡 <b>Para fijar la meta:</b> total proyectado × porcentaje deseado = lo que debes alcanzar arriba. Ej.: 200 estudiantes × 30 % = <b>60</b> → meta <b>60 de 200</b>.</span></div></div>`
     : (MT_CTX.formula ? `<div style="margin:6px 0">📐 ${_mgEsc(MT_CTX.formula)}</div>` : '<div class="hint">Este indicador no tiene fórmula registrada: escribe los valores directamente.</div>');
   box.innerHTML = `
     <div class="mg-ruta">
-      <button type="button" class="mg-paso ${abierto?'on':''}" onclick="mgToggleExplica()">
+      <button type="button" class="mg-paso ${vista==='explica'?'on':''}" onclick="setMetaTab('explica')">
         <div><span class="n">1</span><span class="t">Entiende tu indicador</span></div>
-        <div class="d">Qué se cuenta arriba y abajo de la fórmula, con un ejemplo.</div>
-        <span class="e ok">${abierto?'Ocultar':'Ver explicación'}</span></button>
-      <button type="button" class="mg-paso ${tab==='prog'?'on':''}" onclick="setMetaTab('prog')">
+        <div class="d">Qué se cuenta arriba y qué abajo en la fórmula.</div>
+        <span class="e ok">Ver explicación</span></button>
+      <button type="button" class="mg-paso ${vista==='prog'?'on':''}" onclick="setMetaTab('prog')">
         <div><span class="n">2</span><span class="t">Programa la meta</span></div>
         <div class="d">Una vez por periodo: cómo empiezas (línea base) y a dónde quieres llegar (meta).</div>
         <span class="e ${est.prog?'ok':''}">${est.prog? '✓ '+est.prog+' meta'+(est.prog>1?'s':'')+' programada'+(est.prog>1?'s':'') : 'Pendiente'}</span></button>
-      <button type="button" class="mg-paso ${tab==='seg'?'on':''}" onclick="setMetaTab('seg')">
+      <button type="button" class="mg-paso ${vista==='seg'?'on':''}" onclick="setMetaTab('seg')">
         <div><span class="n">3</span><span class="t">Reporta el avance</span></div>
         <div class="d">Cada vez que mides: cuánto lograste y los <b>enlaces de tus informes</b>.</div>
         <span class="e ${est.seg?'ok':''}">${est.seg? '✓ '+est.seg+' seguimiento'+(est.seg>1?'s':'') : (est.prog?'Pendiente':'Primero programa la meta')}</span></button>
     </div>
-    <div class="mg-card" style="${abierto?'':'display:none'}">
+    ${vista==='explica'?`<div class="mg-card">
       <h4>Tu indicador en palabras simples</h4>
       ${frac}
-      <div class="mg-ej"><b>📘 Ejemplo resuelto — ${_mgEsc(ej.tit)}</b><ol>${ej.pasos.map(x=>'<li>'+x+'</li>').join('')}</ol></div>
-      <details style="margin-top:8px"><summary style="cursor:pointer;font-weight:600;color:var(--brand)">¿Dónde va cada cosa?</summary>
-        <table class="mg-tabla">
-          <tr><td>Informes, actas, resoluciones, reportes</td><td>③ Seguimiento › <b>Evidencias</b> (un enlace por documento, con etiqueta)</td></tr>
-          <tr><td>Cronograma o plan de trabajo</td><td>② Programación › <b>Plan de Acción</b> (opcional)</td></tr>
-          <tr><td>Cómo empiezas y a dónde quieres llegar</td><td>② Programación › <b>Línea base</b> y <b>Meta</b></td></tr>
-          <tr><td>Cuánto llevas logrado hoy</td><td>③ Seguimiento › valores de la fórmula</td></tr>
-          <tr><td>Aclaraciones</td><td>Campo <b>Observación/comentario</b> de cada pestaña</td></tr>
-        </table>
-        <div class="hint" style="margin-top:6px">Los enlaces de Drive deben poder abrirse con cuenta URP: en Drive, «Compartir» → «Universidad Ricardo Palma» o «Cualquier persona con el enlace».</div>
-      </details>
-    </div>
-    <div class="mg-acciones" style="margin:-4px 0 14px">
-      <button type="button" class="btn btn-primary btn-sm" onclick="mgGuiar()">🧭 Guíame paso a paso</button>
-      <button type="button" class="btn btn-ghost btn-sm" onclick="mgToggleExplica()">${abierto?'Ocultar la explicación':'📘 Ver un ejemplo resuelto'}</button>
-    </div>`;
-  // La fórmula ya se muestra arriba en lenguaje simple: evitar duplicarla
+      <div style="margin-top:14px"><button type="button" class="btn btn-primary" onclick="setMetaTab('prog')">Entendido: ir a programar la meta →</button></div>
+    </div>`:''}`;
+  // La fórmula ya se muestra en la explicación: evitar duplicarla
   const fb=document.getElementById('mt_formula_box'); if(fb && V.n>=2) fb.style.display='none';
 }
 function mgToggleExplica(){ window._MG_ABIERTO=!window._MG_ABIERTO; mgRender(); }
@@ -9120,8 +9136,8 @@ function _mgMostrar(){
   const ult=_MG_I===_MG_PASOS.length-1;
   c.innerHTML=`<div class="cab">Paso ${_MG_I+1} de ${_MG_PASOS.length}</div><div class="tit">${p.tit}</div><div>${p.txt}</div>${typeof p.extra==='function'?p.extra():''}${p.rec?'<div class="rec">💡 '+p.rec+'</div>':''}
     <div class="bot">${_MG_I>0?'<button type="button" class="btn btn-ghost btn-sm" onclick="mgPaso(-1)">← Anterior</button>':''}
-    ${p.ir?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();setMetaTab('${p.ir}');setTimeout(mgGuiar,50)">Ir a ② Programación</button>`
-      : (ult? (p.fin?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();setMetaTab('${p.fin}');setTimeout(mgGuiar,50)">Seguir con ③ Seguimiento →</button>`:'<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar()">Listo</button>')
+    ${p.ir?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();mgNuevo('${p.ir}');setTimeout(mgGuiar,120)">Ir a ② Programación</button>`
+      : (ult? (p.fin?`<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar();mgNuevo('${p.fin}');setTimeout(mgGuiar,120)">Seguir con ③ Seguimiento →</button>`:'<button type="button" class="btn btn-primary btn-sm" onclick="_mgLimpiar()">Listo</button>')
            : '<button type="button" class="btn btn-primary btn-sm" onclick="mgPaso(1)">Siguiente →</button>')}
     <button type="button" class="btn btn-ghost btn-sm" onclick="_mgLimpiar()">Salir de la guía</button></div>`;
   cont.parentNode.insertBefore(c, cont);
@@ -9137,13 +9153,35 @@ function mgPaso(d){ _MG_I=Math.max(0,Math.min(_MG_PASOS.length-1,_MG_I+d)); _mgM
 window.mgRender=mgRender; window.mgToggleExplica=mgToggleExplica; window.mgGuiar=mgGuiar; window.mgPaso=mgPaso; window._mgLimpiar=_mgLimpiar;
 
 function setMetaTab(t){
-  document.querySelectorAll('.mt-tab').forEach(b=>{ const on=b.dataset.t===t; b.style.background=on?'var(--brand)':'transparent'; b.style.color=on?'#fff':'var(--slate)'; });
+  window._MG_VISTA=t;
   document.getElementById('mt_prog').classList.toggle('hidden', t!=='prog');
   document.getElementById('mt_seg').classList.toggle('hidden', t!=='seg');
+  { const h=document.getElementById('mt_hist'); if(h) h.classList.toggle('hidden', t==='explica'); }
   if(typeof _mgLimpiar==='function') _mgLimpiar();
   if(typeof mgRender==='function') mgRender();
 }
 window.setMetaTab=setMetaTab;
+// Mostrar u ocultar el formulario (el diseño queda limpio: solo se abre con «+ Nuevo» o ✏️)
+function mgForm(t, abrir){
+  const f=document.getElementById(t==='prog'?'mt_prog_form':'mt_seg_form');
+  const b=document.getElementById(t==='prog'?'mt_prog_bar':'mt_seg_bar');
+  const sl=(typeof soloLectura==='function') && soloLectura();
+  if(f) f.style.display=(abrir && !sl)?'':'none';
+  if(b) b.style.display=(abrir || sl)?'none':'';
+  if(!abrir && typeof _mgLimpiar==='function') _mgLimpiar();
+  if(abrir && f){ setTimeout(()=>{ try{ f.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){ } }, 60); }
+}
+function mgNuevo(t){
+  if(t==='seg' && !(STATE.progMetas||[]).length){
+    toast('Primero programa una meta (paso 2). El seguimiento siempre se compara con una meta.', true);
+    setMetaTab('prog'); return mgNuevo('prog');
+  }
+  setMetaTab(t);
+  if(t==='prog'){ cancelarEdicionMeta(); } else { cancelarEdicionSeg(); }
+  const tt=document.getElementById(t==='prog'?'pm_form_tit':'sm_form_tit'); if(tt) tt.textContent = t==='prog'?'Nueva meta':'Nuevo seguimiento';
+  mgForm(t, true);
+}
+window.mgForm=mgForm; window.mgNuevo=mgNuevo;
 
 // Determina si un registro de meta está relacionado con un indicador de la matriz.
 // QuintaDB devuelve la relación de formas inconsistentes (array, string JSON, bajo
@@ -9219,41 +9257,36 @@ function explicarAvanceHTML(real, meta, ref){
   const pct=calcAvance(r, m, sinRef?NaN:b0);
   if(pct===null) return '';
   const progAbs=Math.abs(prog), logDir=inv?-log:log;
-  const veces = progAbs ? logDir/progAbs : 0;
-  let titulo, color, fondo, significado, consejo='';
+  let titulo, color, fondo, significado;
   if(prog===0){
     titulo = r>=m ? '✅ Meta cumplida' : '⏳ Aún no se alcanza la meta'; color='#1f7a3f'; fondo='#e8f6ee';
-    significado='La meta era mantener el mismo valor de la línea base; solo se verifica si se alcanzó (100 %) o no (0 %).';
+    significado='La meta era mantener el mismo valor de la línea base: solo se verifica si se alcanzó (100 %) o no (0 %).';
   } else if(pct>100.5){
-    titulo='🌟 ¡Superaron la meta!'; color='#1f7a3f'; fondo='#e8f6ee';
-    significado=`Mejoraron <b>${_avN(veces)} veces</b> lo que se habían propuesto. Por eso el resultado pasa de 100 %. <b>No es un error.</b>`;
-    if(pct>=150) consejo='💡 Como la superaron con amplitud, para el próximo periodo conviene plantear una meta más ambiciosa.';
+    titulo='🌟 Superaron la meta'; color='#1f7a3f'; fondo='#e8f6ee';
+    significado='Mejoraron <b>más</b> de lo que se propusieron; por eso pasa de 100 %. <b>No es un error.</b>';
   } else if(pct>=99.5){
     titulo='✅ Meta cumplida'; color='#1f7a3f'; fondo='#e8f6ee';
-    significado='Mejoraron exactamente lo que se habían propuesto.';
+    significado='Mejoraron exactamente lo que se propusieron.';
   } else if(pct>0){
     titulo='⏳ En camino a la meta'; color='#8a5a00'; fondo='#fff6e5';
-    significado=`Llevan <b>${_avN(pct)} %</b> de la mejora que se propusieron. Les falta mejorar <b>${_avN(progAbs-logDir)}</b> para llegar a la meta.`;
+    significado=`Les falta mejorar <b>${_avN(progAbs-logDir)}</b> para llegar a la meta (${_avN(m)}).`;
+  } else if(pct===0 || logDir===0){
+    titulo='⚠️ Todavía sin avance'; color='#a33a2c'; fondo='#fdecea';
+    significado='El valor alcanzado es igual a la línea base: aún no hay mejora.';
   } else {
-    titulo='⚠️ Todavía sin mejora'; color='#a33a2c'; fondo='#fdecea';
-    significado=(pct<0?'El valor alcanzado quedó <b>peor que la línea base</b>':'El valor alcanzado es <b>igual a la línea base</b>')+': todavía no hay mejora. Revisen las acciones; si es la medición de cierre, consideren un plan de acción.';
+    titulo='⚠️ Retrocedió'; color='#a33a2c'; fondo='#fdecea';
+    significado='El valor alcanzado quedó <b>por debajo de la línea base</b> (empeoró). Por eso el % sale <b>negativo</b>. Revisen las acciones o el dato registrado.';
   }
-  const verbo = inv ? 'bajar' : 'subir';
-  return `<div class="av-expl" style="border:1.5px solid ${color};background:${fondo};border-radius:12px;padding:14px 16px;font-size:14.5px;line-height:1.6;color:#1f2a24">
-    <div style="font-size:17px;font-weight:700;color:${color}">${titulo} · ${_avN(pct)} % de avance</div>
-    <div style="font-size:15px;margin:6px 0 2px">Partieron de <b>${_avN(b)}</b>${sinRef?' <span style="color:#6b7a71;font-size:13px">(no se registró línea base: se toma 0)</span>':''}, querían ${verbo} hasta <b>${_avN(m)}</b> y llegaron a <b>${_avN(r)}</b>.</div>
+  const cuenta = logDir>=0
+    ? `Se propusieron mejorar <b>${_avN(progAbs)}</b> y mejoraron <b>${_avN(logDir)}</b>.<br><span style="font-size:17px">${_avN(logDir)} de ${_avN(progAbs)} = <b style="color:${color}">${_avN(pct)} %</b></span>`
+    : `Se propusieron mejorar <b>${_avN(progAbs)}</b>, pero en vez de mejorar <b>retrocedieron ${_avN(-logDir)}</b>.<br><span style="font-size:17px">−${_avN(-logDir)} de ${_avN(progAbs)} = <b style="color:${color}">${_avN(pct)} %</b></span>`;
+  return `<div class="av-expl" style="border:1.5px solid ${color};background:${fondo};border-radius:12px;padding:14px 16px;font-size:15px;line-height:1.6;color:#1f2a24">
+    <div style="font-size:17px;font-weight:700;color:${color}">${titulo} · ${_avN(pct)} %</div>
+    <div style="margin:6px 0 2px">📍 Partieron de <b>${_avN(b)}</b>${sinRef?' <span style="color:#6b7a71;font-size:13px">(sin línea base: se toma 0)</span>':''} · 🎯 la meta era <b>${_avN(m)}</b> · 📈 llegaron a <b>${_avN(r)}</b>.</div>
     ${_avRegla(b,m,r)}
-    <div style="background:#fff;border:1px solid #d7e2dc;border-radius:10px;padding:10px 13px;margin:8px 0">
-      <div style="font-weight:700;margin-bottom:4px">Así se calcula, en 3 pasos:</div>
-      <div><b>1.</b> Lo que se propusieron mejorar: ${_avN(m)} − ${_avN(b)} = <b>${_avN(progAbs)}</b></div>
-      <div><b>2.</b> Lo que mejoraron: ${_avN(r)} − ${_avN(b)} = <b>${_avN(inv?-log:log)}</b></div>
-      <div><b>3.</b> Se compara uno con otro: ${_avN(inv?-log:log)} ÷ ${_avN(progAbs)} = <b>${_avN(veces)}</b> → × 100 = <b style="font-size:17px;color:${color}">${_avN(pct)} %</b></div>
-    </div>
-    <div><b>¿Qué significa?</b> ${significado}</div>
-    ${consejo?`<div style="margin-top:6px">${consejo}</div>`:''}
-    <details style="margin-top:8px;font-size:13.5px"><summary style="cursor:pointer;color:var(--brand);font-weight:700">¿Por qué no se mira solo el valor alcanzado?</summary>
-      <div style="margin-top:5px">Porque el sistema mide <b>cuánto mejoró cada oficina desde donde partió</b>, no el número final. Es como un viaje: si planearon avanzar ${_avN(progAbs)} km y avanzaron ${_avN(Math.max(0,inv?-log:log))} km, hicieron el ${_avN(pct)} % del recorrido planeado. Así la comparación es justa para todas, partan de donde partan. El valor alcanzado (${_avN(r)}) también se muestra en la Matriz y en el historial.</div></details>
-    <div style="margin-top:8px;font-size:13px;color:#4b5a52"><b>100 %</b> = meta cumplida · <b>más de 100 % ★</b> = superaron la meta · <b>menos de 100 %</b> = aún falta.</div>
+    <div style="background:#fff;border:1px solid #d7e2dc;border-radius:10px;padding:10px 13px;margin:8px 0;text-align:center">${cuenta}</div>
+    <div>${significado}</div>
+    <div style="margin-top:8px;font-size:13px;color:#4b5a52"><b>100 %</b> = meta cumplida · <b>más de 100 %</b> = la superaron · <b>menos de 100 %</b> = aún falta · <b>negativo</b> = retrocedió.</div>
   </div>`;
 }
 // Ventana con la explicación (desde la Matriz o desde la tabla de seguimientos)
@@ -9302,7 +9335,7 @@ function renderHistorialMetas(){
   const num=x=>{ const n=parseFloat(String(x==null?'':x).replace('%','').replace(',','.')); return isNaN(n)?NaN:n; };
   const sl=soloLectura();
   if(!P.length && !S.length){
-    box.innerHTML=`<div class="hm-tit"><h3>📚 Historial de este indicador</h3></div><div class="hm-vacio">Todavía no hay metas ni seguimientos registrados. Empieza por <b>② Programación</b>.</div>`; return;
+    box.innerHTML=`<div class="hm-tit"><h3>📚 Historial de este indicador</h3></div><div class="hm-vacio"><span>Todavía no hay metas ni seguimientos registrados. Empieza con el botón <b>«+ Nueva meta»</b> del paso 2.</span></div>`; return;
   }
   const porMeta={}; const sueltos=[];
   S.forEach(sg=>{ const id=_segProgId(sg); if(id){ (porMeta[id]=porMeta[id]||[]).push(sg); } else sueltos.push(sg); });
@@ -9323,7 +9356,7 @@ function renderHistorialMetas(){
     return `<div class="hm-seg">
       <div class="f">${fv?fmtFecha(fv):'Sin fecha'}<br><span class="av-chip ${tipo==='Cierre'?'cierre':''}">${tipo==='Cierre'?'Cierre':'Parcial'}</span></div>
       <div class="c">Alcanzado: <b style="font-size:15px">${isNaN(realN)?'—':_avN(realN)}</b>${vv.length===2?` <span style="color:var(--mist)">(${fmt(vv[0])} de ${fmt(vv[1])})</span>`:''}
-        ${!isNaN(pct)?`<div style="max-width:320px;margin-top:4px">${barraAvance(pct)}</div>`:''}
+        ${!isNaN(pct)?`<div style="max-width:340px;margin-top:6px">${barraAvance(pct,true)}</div>`:''}
         ${(!isNaN(realN)&&!isNaN(metaN))?`<a href="#" onclick="verExplicacionAvance(${realN},${metaN},${isNaN(refN)?'NaN':refN});return false" style="font-size:13px;color:var(--brand);font-weight:700">ⓘ ¿Cómo salió este %?</a>`:''}
         ${obs?`<div style="margin-top:4px;color:var(--slate)">💬 ${esc(obs)}</div>`:''}
         ${(ev.length||pl.length)?`<div class="hm-ev">${ev.map(x=>lk(x,'','evidencia')).join('')}${pl.map(x=>lk(x,'pl','plan de mejora')).join('')}</div>`:'<div style="margin-top:4px;color:#a33a2c;font-size:12.5px">Sin evidencias adjuntas</div>'}
@@ -9336,7 +9369,7 @@ function renderHistorialMetas(){
   };
   const ordenSeg=a=>a.slice().sort((x,y)=>String(leerCampo(x,SM.fecha_eval.id,'Fecha evaluación')||'').localeCompare(String(leerCampo(y,SM.fecha_eval.id,'Fecha evaluación')||'')));
   const ordP=P.slice().sort((a,b)=>String(PM.periodo?leerCampo(b,PM.periodo.id,'Periodo'):'').localeCompare(String(PM.periodo?leerCampo(a,PM.periodo.id,'Periodo'):'')));
-  let html=`<div class="hm-tit"><h3>📚 Historial de este indicador</h3><span class="hint" style="font-size:13px">Cada meta con sus seguimientos debajo, del más antiguo al más reciente.</span></div>`;
+  let html=`<div class="hm-tit"><h3>📚 Historial de este indicador</h3><span class="hint" style="font-size:13px">Cada meta con sus seguimientos debajo, del más antiguo al más reciente.</span></div><div class="av-leyenda">${AV_LEYENDA}</div>`;
   ordP.forEach(p=>{
     const per=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):'';
     const ref=leerCampo(p,PM.valor_ref.id,'Valor de referencia'), meta=leerCampo(p,PM.valor_meta.id,'Valor meta');
@@ -9356,7 +9389,7 @@ function renderHistorialMetas(){
             <div class="hm-num">Línea base<b>${fmt(ref)}</b></div>
             <div class="hm-num">Meta<b>${fmt(meta)}</b></div>
             <div class="hm-num ult">Último alcanzado<b>${isNaN(ultReal)?'—':_avN(ultReal)}</b></div>
-            <div class="hm-num ult">% de avance<b>${isNaN(ultPct)?'—':_avN(ultPct)+' %'+(ultPct>100?' ★':'')}</b></div>
+            <div class="hm-num ult">% de avance<b style="color:${isNaN(ultPct)?'inherit':_avEstado(ultPct).c}">${isNaN(ultPct)?'—':_avPctTxt(Math.round(ultPct*100)/100)+(ultPct>100?' ★':'')}</b>${isNaN(ultPct)?'':`<span style="display:block;font-size:11.5px;font-weight:600;color:${_avEstado(ultPct).c}">${_avEstado(ultPct).t}</span>`}</div>
           </div>
           <div style="font-size:12.5px;color:var(--mist);margin-top:6px">Programada el ${fmtFecha(fP)||'—'}${obs?' · 💬 '+esc(obs):''}</div>
           ${plan.length?`<div class="hm-ev">${plan.map(x=>`<a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener">📎 ${esc(x.etq||'plan de acción')} ↗</a>`).join('')}</div>`:''}
@@ -9382,15 +9415,16 @@ function renderHistorialMetas(){
 function mgNuevoSeg(progId){
   if(typeof cancelarEdicionSeg==='function'){ try{ cancelarEdicionSeg(); }catch(_){ } }
   setMetaTab('seg');
+  { const tt=document.getElementById('sm_form_tit'); if(tt) tt.textContent='Nuevo seguimiento'; }
+  mgForm('seg', true);
   const sel=document.getElementById('sm_prog'); if(sel){ sel.value=progId; try{ evaluarRemediacion(); }catch(_){ } }
-  const f=document.getElementById('mt_seg_form'); if(f){ try{ f.scrollIntoView({behavior:'smooth',block:'start'}); }catch(_){ } }
 }
 window.renderHistorialMetas=renderHistorialMetas; window.mgNuevoSeg=mgNuevoSeg;
 
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
   try{
-    const data=await API.records(CONFIG.ENTITIES.PROG_METAS);
+    const data=await API.records(CONFIG.ENTITIES.PROG_METAS, true); window._METAS_FRESCAS=true;
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
@@ -9414,6 +9448,7 @@ async function cargarProgMetas(){
           <button class="icon-btn" title="Eliminar" onclick="eliminarProgMeta('${r.id}')" style="${soloLectura()?'display:none':''}">🗑️</button>
         </td></tr>`;
     }).join('');
+    try{ renderHistorialMetas(); }catch(e){ console.warn('historial', e); }
   }catch(e){ tb.innerHTML=`<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Error: ${e.message}</td></tr>`; }
 }
 
@@ -9477,8 +9512,8 @@ function _verDetalleSeg(segId){
 window._verDetalleSeg=_verDetalleSeg;
 
 // Mostrar/ocultar el botón Cancelar en cada formulario al entrar/salir de modo edición.
-function _mostrarBtnCancelarMeta(v){ const b=document.getElementById('pm_cancelar'); if(b) b.style.display=v?'':'none'; }
-function _mostrarBtnCancelarSeg(v){ const b=document.getElementById('sm_cancelar'); if(b) b.style.display=v?'':'none'; }
+function _mostrarBtnCancelarMeta(v){ const b=document.getElementById('pm_cancelar'); if(b) b.style.display=''; }
+function _mostrarBtnCancelarSeg(v){ const b=document.getElementById('sm_cancelar'); if(b) b.style.display=''; }
 // Cancelar edición de meta: limpiar el formulario y volver a modo "crear".
 function cancelarEdicionMeta(){
   PM_EDIT_ID=null;
@@ -9492,6 +9527,7 @@ function cancelarEdicionMeta(){
   _limpiarVarsMeta();
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
   _mostrarBtnCancelarMeta(false);
+  mgForm('prog', false);
 }
 window.cancelarEdicionMeta=cancelarEdicionMeta;
 // Cancelar edición de seguimiento: limpiar el formulario y volver a modo "crear".
@@ -9507,6 +9543,7 @@ function cancelarEdicionSeg(){
   _limpiarVarsSeg();
   const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='+ Guardar seguimiento';
   _mostrarBtnCancelarSeg(false);
+  mgForm('seg', false);
 }
 window.cancelarEdicionSeg=cancelarEdicionSeg;
 
@@ -9567,7 +9604,11 @@ window._periodoSelChange=_periodoSelChange;
 // Editar una programación: carga sus valores en el formulario y cambia a modo edición
 function editarProgMeta(progId){
   const p=(STATE.progMetas||[]).find(x=>x.id===progId); if(!p) return;
+  if(window._MG_VISTA!=='prog') setMetaTab('prog');
+  _limpiarVarsMeta();
   PM_EDIT_ID=progId;
+  { const tt=document.getElementById('pm_form_tit'); if(tt) tt.textContent='✏️ Editar meta'+(PM.periodo&&leerCampo(p,PM.periodo.id,'Periodo')?' · '+leerCampo(p,PM.periodo.id,'Periodo'):''); }
+  mgForm('prog', true);
   const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
   set('pm_fecha', leerCampo(p,PM.fecha_prog.id,'Fecha programación'));
   set('pm_ref', leerCampo(p,PM.valor_ref.id,'Valor de referencia'));
@@ -9602,7 +9643,6 @@ function editarProgMeta(progId){
       if(alguno){ const box=document.getElementById('pm_'+which+'_calc'); if(box) box.style.display=''; calcularValorMeta(which); }
     }catch(_){}
   });
-  document.getElementById('pm_fecha').scrollIntoView({behavior:'smooth',block:'center'});
 }
 window.editarProgMeta=editarProgMeta;
 
@@ -9727,6 +9767,11 @@ window._pintarNotaRef = _pintarNotaRef;
 async function guardarProgMeta(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan'), periodo=g('pm_periodo');
+  { const parcial=w=>{ const gr=document.getElementById('pm_'+w+'_grid'); if(!gr) return false;
+      const ins=[...gr.querySelectorAll('input[data-mkey]')]; const ll=ins.filter(i=>i.value!=='').length; return ll>0 && ll<ins.length; };
+    for(const [w,nom] of [['ref','la línea base'],['meta','la meta']]){
+      if(parcial(w)){ toast('Completa todos los datos de '+nom+': lo de arriba y lo de abajo de la fórmula.', true);
+        const gr=document.getElementById('pm_'+w+'_grid'); if(gr){ try{ gr.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){ } } return; } } }
   if(String(ref||'').trim()===''){
     toast('Falta la línea base (valor de referencia). Si no está en el sistema, reconstrúyela con tus registros del periodo anterior; si no tienes el dato exacto, marca «No tengo las bases de cálculo» e indica la fuente.', true);
     const g=document.getElementById('pm_ref_grid')||document.getElementById('pm_ref'); if(g){ try{ g.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){ } }
@@ -9802,6 +9847,7 @@ async function guardarProgMeta(){
   if(typeof _pintarNotaRef==='function') setTimeout(_pintarNotaRef, 60);
     const ep=document.getElementById('pm_periodo'); if(ep){ delete ep.dataset.touched; ep.style.display='none'; } _llenarPeriodoSel('pm','');
     _limpiarVarsMeta();   // dejar las variables de referencia y meta en blanco
+    mgForm('prog', false);
     _mostrarBtnCancelarMeta(false);
     await cargarProgMetas();
     // Refrescar la tabla de la matriz EN VIVO (contador de metas y avances), sin cerrar el
@@ -10284,7 +10330,7 @@ window.sugerirPeriodoProg=sugerirPeriodoProg;
 async function cargarSegMetas(){
   const tb=document.getElementById('mt_seg_tabla');
   try{
-    const data=await API.records(CONFIG.ENTITIES.SEG_METAS);
+    const data=await API.records(CONFIG.ENTITIES.SEG_METAS, true); window._METAS_FRESCAS=true;
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
     STATE.segMetas=mias;
     if(typeof _pintarNotaRef==='function') _pintarNotaRef();
@@ -10338,7 +10384,10 @@ async function cargarSegMetas(){
 
 function editarSegMeta(segId){
   const s=(STATE.segMetas||[]).find(x=>x.id===segId); if(!s) return;
+  if(window._MG_VISTA!=='seg') setMetaTab('seg');
   SM_EDIT_ID=segId;
+  { const tt=document.getElementById('sm_form_tit'); if(tt) tt.textContent='✏️ Editar seguimiento'; }
+  mgForm('seg', true);
   const numOf=x=>{ if(x===''||x===null||x===undefined) return NaN; const n=parseFloat(String(x).replace('%','').replace(',','.').trim()); return isNaN(n)?NaN:n; };
   // Recuperar la meta y referencia PROPIAS de este seguimiento (no del desplegable)
   SM_EDIT_META = SM.meta_seg?numOf(leerCampo(s,SM.meta_seg.id,'Meta seguimiento')):NaN;
@@ -10474,6 +10523,7 @@ async function guardarSegMeta(){
     const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
     _limpiarVarsSeg();   // dejar las variables del indicador en blanco para el próximo seguimiento
     _mostrarBtnCancelarSeg(false);
+    mgForm('seg', false);
     await cargarSegMetas();
     STATE.matriz=[]; renderMatriz();
   }catch(err){ console.error('Error guardando seguimiento:', err); toast('Error: '+err.message, true); }
@@ -11944,7 +11994,7 @@ async function _acAbrirInterno(tipoIni, procesoIni){
     <div class="ac-cuerpo" id="ac_cuerpo"></div>
     <div class="ac-pie">
       <div class="ac-estado" id="ac_estado"></div>
-      <span class="ac-ver">v136</span>
+      <span class="ac-ver">v137</span>
       <button class="btn" id="ac_atras" onclick="acAtras()">← Atrás</button>
       <button class="btn btn-primary" id="ac_sig" onclick="acSiguiente()">Siguiente →</button>
     </div>
