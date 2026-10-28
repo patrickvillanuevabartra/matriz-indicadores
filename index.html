@@ -9617,6 +9617,7 @@ function cancelarEdicionMeta(){
   _limpiarVarsMeta();
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
   _mostrarBtnCancelarMeta(false);
+  { const a=document.getElementById('pm_nombre_aviso'); if(a) a.remove(); const pn=document.getElementById('pm_nombre'); if(pn){ pn.style.outline=''; pn.style.background=''; } }
   mgForm('prog', false);
 }
 window.cancelarEdicionMeta=cancelarEdicionMeta;
@@ -9855,6 +9856,71 @@ function _pintarNotaRef(){
 }
 window._pintarNotaRef = _pintarNotaRef;
 
+// Ventana con una sola pregunta: «¿Son dos metas diferentes?»
+function _pmPreguntaOtra(ex, periodo){
+  const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const vr=leerCampo(ex, PM.valor_ref.id, 'Valor de referencia'), vm=leerCampo(ex, PM.valor_meta.id, 'Valor meta');
+  const nEx=_pmNombre(ex);
+  const nRef=(document.getElementById('pm_ref')||{}).value||'—', nMeta=(document.getElementById('pm_meta')||{}).value||'—';
+  const nNom=String((document.getElementById('pm_nombre')||{}).value||'').trim();
+  const propia=PM_EDIT_ID?(STATE.progMetas||[]).find(x=>x.id===PM_EDIT_ID):null;
+  const perPropia=propia&&PM.periodo?leerCampo(propia, PM.periodo.id, 'Periodo'):'';
+  const cambioPer = !!(propia && perPropia && perPropia!==periodo);
+  let m=document.getElementById('pm_dup_modal'); if(m) m.remove();
+  const caja=(tit,b,mt,nom,color)=>`<div style="flex:1;min-width:200px;border:2px solid ${color};border-radius:12px;padding:12px 14px;background:#fff">
+      <div style="font-size:14px;font-weight:700;color:${color};margin-bottom:4px">${tit}</div>
+      ${nom?`<div style="font-size:15px;font-weight:700;margin-bottom:2px">«${esc(nom)}»</div>`:'<div style="font-size:14px;color:#6b7a71;margin-bottom:2px">(sin nombre)</div>'}
+      <div style="font-size:16px">Línea base <b>${esc(b)}</b> → Meta <b>${esc(mt)}</b></div></div>`;
+  document.body.insertAdjacentHTML('beforeend', `<div id="pm_dup_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.5);z-index:10060;display:flex;align-items:center;justify-content:center;padding:20px">
+    <div style="background:var(--card);border-radius:16px;max-width:620px;width:100%;max-height:90vh;overflow:auto;padding:22px 24px;font-size:16px;line-height:1.5;color:var(--ink)">
+      <h3 style="margin:0 0 6px;font-size:20px">En «${esc(periodo)}» ya hay una meta</h3>
+      <div style="color:var(--slate);margin-bottom:12px">Compara las dos:</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+        ${caja('Meta que ya existe', vr||'—', vm||'—', nEx, '#6b7a71')}
+        ${caja('La que estás guardando', nRef, nMeta, nNom, '#0f8f5e')}
+      </div>
+      <div id="pmd_p1">
+        <div style="font-size:19px;font-weight:700;margin-bottom:12px">¿Son dos metas diferentes?</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button type="button" class="btn btn-primary" style="font-size:16px;padding:12px 20px" onclick="document.getElementById('pmd_p1').style.display='none';document.getElementById('pmd_p2').style.display='';setTimeout(()=>{const i=document.getElementById('pmd_nombre');if(i)i.focus();},50)">Sí, son diferentes</button>
+          <button type="button" class="btn btn-ghost" style="font-size:16px;padding:12px 20px" onclick="_pmDupNo('${ex.id}', ${cambioPer?`'${esc(perPropia).replace(/'/g,'')}'`:'null'})">${cambioPer?'No, me equivoqué de periodo':'No, es la misma meta'}</button>
+        </div>
+      </div>
+      <div id="pmd_p2" style="display:none">
+        <div style="font-size:17px;font-weight:700;margin-bottom:6px">Escribe un nombre para reconocer <u>la que estás guardando</u>:</div>
+        <input id="pmd_nombre" value="${esc(nNom===nEx?'':nNom)}" placeholder="Ej.: Convenio con la Universidad X" style="width:100%;font-size:17px;padding:11px 13px;border:2px solid var(--brand-2);border-radius:10px" oninput="document.getElementById('pmd_err').style.display='none'" onkeydown="if(event.key==='Enter')_pmDupGuardar()">
+        <div style="font-size:14px;color:var(--slate);margin-top:6px">Ejemplos: «Convenio con la Universidad X», «Convocatoria 2025-2026», «Sede Surco».</div>
+        <div id="pmd_err" style="display:none;color:#a33a2c;font-weight:700;margin-top:6px"></div>
+        <div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">
+          <button type="button" class="btn btn-primary" style="font-size:16px;padding:12px 20px" onclick="_pmDupGuardar()">Guardar con este nombre</button>
+          <button type="button" class="btn btn-ghost" style="font-size:16px;padding:12px 20px" onclick="document.getElementById('pmd_p2').style.display='none';document.getElementById('pmd_p1').style.display=''">← Volver</button>
+        </div>
+      </div>
+      <div style="text-align:right;margin-top:14px"><button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('pm_dup_modal').remove()">Cancelar</button></div>
+    </div></div>`);
+  window._PMD_NOMBRE_EX=nEx;
+}
+function _pmDupGuardar(){
+  const i=document.getElementById('pmd_nombre'), e=document.getElementById('pmd_err');
+  const v=String(i&&i.value||'').trim();
+  const norm=x=>String(x||'').trim().toLowerCase();
+  if(!v){ e.textContent='Escribe un nombre.'; e.style.display=''; i.focus(); return; }
+  if(norm(v)===norm(window._PMD_NOMBRE_EX)){ e.textContent='Ese nombre ya lo tiene la otra meta. Escribe uno diferente.'; e.style.display=''; i.focus(); return; }
+  const pn=document.getElementById('pm_nombre'); if(pn) pn.value=v;
+  document.getElementById('pm_dup_modal').remove();
+  guardarProgMeta();
+}
+function _pmDupNo(idExistente, perOriginal){
+  const m=document.getElementById('pm_dup_modal'); if(m) m.remove();
+  if(perOriginal){   // estaba editando y cambió el periodo por error: se devuelve el periodo original
+    _llenarPeriodoSel('pm', perOriginal); const ep=document.getElementById('pm_periodo'); if(ep){ ep.value=perOriginal; ep.dataset.touched='1'; }
+    toast('Listo: se dejó el periodo «'+perOriginal+'». Revisa y guarda.');
+    return;
+  }
+  cancelarEdicionMeta(); editarProgMeta(idExistente);
+  toast('Abrimos la meta que ya existe para que la revises o la actualices.');
+}
+window._pmPreguntaOtra=_pmPreguntaOtra; window._pmDupGuardar=_pmDupGuardar; window._pmDupNo=_pmDupNo;
 async function _guardarProgMetaReal(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan'), periodo=g('pm_periodo');
@@ -9887,15 +9953,24 @@ async function _guardarProgMetaReal(){
     const yaExiste=(STATE.progMetas||[]).find(x=>
       x.id!==PM_EDIT_ID && normP(leerCampo(x, PM.periodo.id, 'Periodo'))===normP(periodo) && normP(_pmNombre(x))===normP(g('pm_nombre')));
     if(yaExiste){
+      if(typeof _pmPreguntaOtra==='function'){ _pmPreguntaOtra(yaExiste, periodo); return; }
       const vm=leerCampo(yaExiste, PM.valor_meta.id, 'Valor meta');
       const vr=leerCampo(yaExiste, PM.valor_ref.id, 'Valor de referencia');
       const propia=PM_EDIT_ID?(STATE.progMetas||[]).find(x=>x.id===PM_EDIT_ID):null;
       const perPropia=propia&&PM.periodo?leerCampo(propia, PM.periodo.id, 'Periodo'):'';
       if(PM_EDIT_ID && perPropia && normP(perPropia)!==normP(periodo))
-        toast('Estás editando la meta de «'+perPropia+'» y le cambiaste el periodo a «'+periodo+'», pero «'+periodo+'» ya tiene una meta '+(_pmNombre(yaExiste)?'llamada «'+_pmNombre(yaExiste)+'»':'sin nombre')+' (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Si son metas distintas, escribe un «Nombre de la meta» diferente.', true);
+        toast('En «'+periodo+'» ya hay otra meta '+(_pmNombre(yaExiste)?'llamada «'+_pmNombre(yaExiste)+'»':'sin nombre')+' (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Pueden estar las dos en el mismo periodo: solo escribe un NOMBRE para esta meta en el recuadro marcado (ej.: «Convocatoria 2025-2026») y vuelve a guardar.', true);
       else
         toast('Ya existe una meta para «'+periodo+'» '+(_pmNombre(yaExiste)?'llamada «'+_pmNombre(yaExiste)+'»':'sin nombre')+' (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Si es OTRA meta del mismo periodo (por ejemplo, otro convenio), escríbele un nombre distinto en «Nombre de la meta». Si es la misma, edítala con su ✏️ en el historial.', true);
-      { const ps=document.getElementById('pm_periodo_sel'); if(ps){ try{ ps.scrollIntoView({behavior:'smooth',block:'center'}); ps.style.outline='3px solid #c0392b'; setTimeout(()=>{ ps.style.outline=''; }, 4000); }catch(_){ } } }
+      { const pn=document.getElementById('pm_nombre');
+        if(pn){ try{ pn.scrollIntoView({behavior:'smooth',block:'center'}); pn.style.outline='3px solid #e0a800'; pn.style.background='#fffbea'; pn.focus({preventScroll:true});
+          let av=document.getElementById('pm_nombre_aviso');
+          if(!av){ av=document.createElement('div'); av.id='pm_nombre_aviso'; pn.insertAdjacentElement('afterend', av); }
+          av.style.cssText='background:#fff6e5;border:1px solid #f0d9a8;color:#6b4a00;border-radius:8px;padding:8px 11px;margin-top:6px;font-size:13.5px;line-height:1.45';
+          av.innerHTML='👉 En <b>'+String(periodo).replace(/</g,'&lt;')+'</b> ya existe otra meta '+(_pmNombre(yaExiste)?'llamada «<b>'+_pmNombre(yaExiste).replace(/</g,'&lt;')+'</b>»':'<b>sin nombre</b>')+' (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Escribe aquí un nombre para <b>esta</b> meta y pulsa guardar otra vez. Si en realidad es la misma meta, cierra con ✕ y edita la que ya existe.';
+          const quitar=()=>{ pn.style.outline=''; pn.style.background=''; const a=document.getElementById('pm_nombre_aviso'); if(a) a.remove(); pn.removeEventListener('input', quitar); };
+          pn.addEventListener('input', quitar);
+        }catch(_){ } } }
       return;
     }
   }
