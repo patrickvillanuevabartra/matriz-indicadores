@@ -11799,12 +11799,13 @@ async function descargarReporteFichasExcel(){
       [{v:'Matriz de Indicadores · SGOE ISO 21001 · Facultad de Ingeniería URP · '+(_repRangoTxt()?'Periodo: '+_repRangoTxt():'al '+_xFechaLarga()),s:'sub',m:7}],
       [],
       [{v:'1. Resultado global',s:'sec',m:7}],
-      ['Fichas vigentes','Oficinas dueñas','Fichas completas','% fichas completas','% campos llenos'].map(v=>({v,s:'th'})),
-      [{v:totF,s:'kpi'},{v:F.length,s:'kpi'},{v:comp,s:'kpi'},{v:(totF?Math.round(comp/totF*100):0)+' %',s:_xPctStyle(totF?Math.round(comp/totF*100):0)},{v:pctCampos+' %',s:_xPctStyle(pctCampos)}],
+      [{v:''}].concat(['Fichas vigentes','Oficinas dueñas','Fichas completas','% fichas completas','% campos llenos'].map(v=>({v,s:'th'}))),
+      [{v:''},{v:totF,s:'kpi'},{v:F.length,s:'kpi'},{v:comp,s:'kpi'},{v:(totF?Math.round(comp/totF*100):0)+' %',s:_xPctStyle(totF?Math.round(comp/totF*100):0)},{v:pctCampos+' %',s:_xPctStyle(pctCampos)}],
       [],
       [{v:'Oficinas por etapa',s:'sec',m:7}],
-      REPF_NIVELES.map(v=>({v,s:'th'})),
-      porEtapa.map(n=>({v:n,s:'kpi'})),
+      // Empiezan en la columna B: la A (N°) es angosta y cortaba «Por empezar».
+      [{v:''}].concat(REPF_NIVELES.map(v=>({v,s:'th'}))),
+      [{v:''}].concat(porEtapa.map(n=>({v:n,s:'kpi'}))),
       [],
       [{v:'2. Resultado por oficina (de menor a mayor avance)',s:'sec',m:7}],
       ['N°','Oficina dueña','Fichas','Completas','% fichas completas','% campos llenos','Etapa','Responsable de proceso','Correo para reportes'].map(v=>({v,s:'th'}))
