@@ -6684,7 +6684,7 @@ async function renderTablero(){
     const celdaN=(n,color)=> n>0?`<span style="font-weight:700;color:${color}">${n}</span>`:`<span style="color:var(--mist)">—</span>`;
     html+=`<div id="tab-por-oficina" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-bottom:20px;scroll-margin-top:90px">
       <div style="font-weight:700;color:var(--brand);margin-bottom:4px;font-size:15px">Estado de indicadores por oficina</div>
-      <div style="font-size:12px;color:var(--mist);margin-bottom:8px">Ranking de oficinas por % de avance (de mayor a menor). El % de avance es el promedio del % informado en los seguimientos (última medición de cada indicador); los indicadores sin seguimiento cuentan como 0%.</div>
+      <div style="font-size:12px;color:var(--mist);margin-bottom:8px">Oficinas ordenadas de mayor a menor % de avance. El % de avance es el promedio del % informado en los seguimientos (última medición de cada indicador); los indicadores sin seguimiento cuentan como 0%.</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--slate);margin-bottom:6px">
         <span><span style="color:#c0392b">🔴 Sin nada:</span> sin meta ni seguimiento</span>
         <span><span style="color:#b8860b">🟡 Solo meta:</span> meta programada, aún sin medir</span>
@@ -6694,7 +6694,6 @@ async function renderTablero(){
       <div style="margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><input id="buscarOficinaEPO" placeholder="🔍 Buscar mi oficina (la resalta sin ocultar las demás)…" oninput="resaltarOficinaEPO()" style="flex:1;min-width:220px;max-width:420px;padding:7px 11px;font-size:13px;border:1px solid var(--line);border-radius:8px"><button class="btn" onclick="exportarRankingOficinasExcel()" style="white-space:nowrap;padding:7px 12px;font-size:13px">⬇️ Descargar Excel</button></div>
       <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr>
-          <th style="text-align:center;padding:8px 6px;color:var(--mist);font-size:11px;text-transform:uppercase">#</th>
           <th style="text-align:left;padding:8px 10px;color:var(--mist);font-size:11px;text-transform:uppercase">Oficina</th>
           <th style="text-align:center;padding:8px 10px;color:var(--mist);font-size:11px;text-transform:uppercase">Total</th>
           <th style="text-align:center;padding:8px 10px;color:#c0392b;font-size:11px;text-transform:uppercase">🔴 Sin nada</th>
@@ -6717,7 +6716,6 @@ async function renderTablero(){
         : `Ninguno de los ${d.total} indicador(es) tiene seguimiento aún, por eso el avance es 0%.`;
       const tipMeta = `${conMeta} de ${d.total} indicador(es) ya tienen su meta programada.`;
       html+=`<tr class="epo-fila" data-oficina="${String(o).toLowerCase().replace(/"/g,'')}" style="border-top:1px solid var(--line)">
-        <td style="padding:9px 6px;text-align:center;font-weight:700;color:var(--mist)">${rk+1}</td>
         <td style="padding:9px 10px;color:var(--slate);font-weight:600">${String(o).replace(/</g,'&lt;')}</td>
         <td style="padding:9px 10px;text-align:center;font-weight:700;color:var(--brand)">${d.total}</td>
         <td style="padding:9px 10px;text-align:center">${celdaN(d.sinNada,'#c0392b')}</td>
@@ -6743,7 +6741,6 @@ async function renderTablero(){
     const pctMetaTot = tot.total ? Math.round(conMetaTot/tot.total*100) : 0;
     const colorMetaTot = pctMetaTot>=80?'#1f7a3d': pctMetaTot>=50?'#b8860b':'#c0392b';
     html+=`<tr style="border-top:2px solid var(--brand-2);background:var(--paper)">
-        <td style="padding:10px"></td>
         <td style="padding:10px;font-weight:800;color:var(--brand)">TOTAL</td>
         <td style="padding:10px;text-align:center;font-weight:800;color:var(--brand)">${tot.total}</td>
         <td style="padding:10px;text-align:center;font-weight:800;color:#c0392b">${tot.sinNada}</td>
@@ -6782,7 +6779,7 @@ async function renderTablero(){
     });
     html+=`<div id="tab-semaforo" style="background:var(--card);border:1px solid var(--line);border-radius:11px;padding:18px;margin-top:20px;scroll-margin-top:90px">
       <div id="tab-semaforo-titulo" style="font-weight:700;color:var(--brand);margin-bottom:4px;font-size:15px">Avance de cumplimiento por rangos</div>
-      <div style="font-size:12px;color:var(--mist);margin-bottom:14px">Filtra por oficina y periodo, y haz clic en un rango para ver el ranking de indicadores (mayor a menor % de avance).</div>
+      <div style="font-size:12px;color:var(--mist);margin-bottom:14px">Filtra por oficina y periodo, y haz clic en un rango para ver sus indicadores (de mayor a menor % de avance).</div>
       <div id="tab-sem-cuerpo"></div>
     </div>`;
 
@@ -6915,24 +6912,23 @@ function _tabRenderSemaforo(){
     </div>`;
   });
   h+='</div>';
-  h+=`<div style="font-size:11px;color:var(--mist);margin-top:8px">Total de mediciones${(_TAB_FILTRO.oficinas.length||_TAB_FILTRO.periodos.length)?' (filtradas)':''}: ${totalMed} · haz clic en un rango para ver el ranking</div>`;
+  h+=`<div style="font-size:11px;color:var(--mist);margin-top:8px">Total de mediciones${(_TAB_FILTRO.oficinas.length||_TAB_FILTRO.periodos.length)?' (filtradas)':''}: ${totalMed} · haz clic en un rango para ver sus indicadores</div>`;
   h+='<div id="tab-ranking" style="margin-top:16px"></div>';
   cont.innerHTML=h;
   _tabRenderRanking();
 }
 function _tabRenderRanking(){
   const cont=document.getElementById('tab-ranking'); if(!cont) return;
-  if(!_TAB_FILTRO.rango){ cont.innerHTML='<p class="hint" style="margin:0">Haz clic en un rango de arriba para ver el ranking de indicadores.</p>'; return; }
+  if(!_TAB_FILTRO.rango){ cont.innerHTML='<p class="hint" style="margin:0">Haz clic en un rango de arriba para ver sus indicadores.</p>'; return; }
   const r=_TAB_RANGOS.find(x=>x.key===_TAB_FILTRO.rango); if(!r) return;
   const datos=_tabMedicionesFiltradas().filter(m=>r.test(m.pct));
   datos.sort((a,b)=>(b.pct==null?-1:b.pct)-(a.pct==null?-1:a.pct)); // mayor a menor; pendientes al final
   let h=`<div style="font-weight:700;color:${r.color};margin-bottom:10px">${r.label} <span style="color:var(--mist);font-weight:600">(${datos.length})</span></div>`;
   if(!datos.length){ h+='<p class="hint" style="margin:0">Sin indicadores en este rango con los filtros actuales.</p>'; cont.innerHTML=h; return; }
   h+='<div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">';
-  h+='<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">#</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Indicador</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Oficina</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Periodo</th><th style="text-align:right;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">% Avance</th></tr></thead><tbody>';
+  h+='<thead><tr><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Indicador</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Oficina</th><th style="text-align:left;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">Periodo</th><th style="text-align:right;padding:6px 8px;color:var(--mist);font-size:11px;text-transform:uppercase">% Avance</th></tr></thead><tbody>';
   datos.forEach((m,i)=>{
     h+=`<tr style="border-top:1px solid var(--line)">
-      <td style="padding:7px 8px;color:var(--mist);font-weight:700">${i+1}</td>
       <td style="padding:7px 8px;color:var(--slate)">${String(m.ind).replace(/</g,'&lt;')}</td>
       <td style="padding:7px 8px;color:var(--mist)">${String(m.ofi).replace(/</g,'&lt;')}</td>
       <td style="padding:7px 8px;color:var(--mist)">${String(m.periodo).replace(/</g,'&lt;')}</td>
