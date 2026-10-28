@@ -243,6 +243,12 @@
   .av-metas-t{font-size:11.5px;color:var(--slate);margin-bottom:5px;line-height:1.35}
   .av-pill{border:1px solid var(--line);background:#fff;border-radius:14px;padding:3px 9px;font-size:12px;margin:0 4px 4px 0;cursor:pointer;font-family:inherit;line-height:1.3}
   .av-pill.on{border-color:var(--brand);background:#e8f6ee;box-shadow:0 0 0 2px rgba(15,143,94,.12)}
+  .av-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+  .av-tab{border:1px solid var(--line);background:var(--paper);border-radius:8px;padding:4px 9px;font-size:12.5px;font-weight:700;color:var(--slate);cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:5px}
+  .av-tab.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .av-tab .dot{width:9px;height:9px;border-radius:50%;display:inline-block;border:1px solid #fff}
+  .av-l{font-size:13px;line-height:1.45;color:var(--ink)}
+  .av-pct{font-size:15px;font-weight:800;margin:5px 0 3px}
   .av-tit{font-size:12px;font-weight:700;color:var(--slate);margin-bottom:2px}
   .av-est{font-size:12.5px;font-weight:700;margin-top:3px}
   .av-leyenda{font-size:12.5px;color:var(--slate);background:var(--paper);border-radius:8px;padding:6px 10px;margin:4px 0 10px;line-height:1.5}
@@ -7933,19 +7939,19 @@ function celdaAvanceMetas(r){
     const m=g.metas[0]||{};
     return `<div class="av-cel"><div class="per">${esc(g.per)} <span class="av-chip">Sin seguimiento</span></div>
       <div class="val"><span class="sub">Meta: ${esc(m.meta||'—')} · Línea base: ${esc(m.ref||'—')}</span></div>
-      <div class="av-est" style="color:var(--slate)">○ Meta programada; aún no se registra avance</div></div>`;
+      <div class="av-est" style="color:var(--slate)">Aún no hay seguimiento</div></div>`;
   };
   const orden=lista.slice().sort((a,b)=>String(a.per).localeCompare(String(b.per),'es',{numeric:true}));
   const MAX=4, vis=orden.slice(-MAX), resto=orden.length-vis.length;
-  const pills = lista.length>1 ? `<div class="av-metas"><div class="av-metas-t"><b>${lista.length} periodos con meta</b> · toca uno para verlo:</div>${vis.map(g=>{
-      const p=g.ult?Math.round(g.ult.pct):null, c=p===null?'var(--mist)':_avEstado(p).c;
-      return `<button type="button" class="av-pill ${g===principal?'on':''}" data-k="${attr(g.k)}" onclick="event.stopPropagation();avVerPeriodo('${uid}',this)"><b>${esc(g.per)}</b> <span style="color:${c};font-weight:700">${p===null?'sin avance':_avPctTxt(p)}</span></button>`; }).join('')}${resto>0?`<button type="button" class="av-pill" onclick="event.stopPropagation();abrirMetas('${r.id}')">+${resto} más · ver en Metas</button>`:''}</div>` : '';
-  return `<div id="${uid}">${lista.map(g=>`<div class="av-blq" data-k="${attr(g.k)}" style="${g===principal?'':'display:none'}">${bloque(g)}</div>`).join('')}${pills}</div>`;
+  const tabs = lista.length>1 ? `<div class="av-tabs">${resto>0?`<button type="button" class="av-tab" title="Ver todas las metas" onclick="event.stopPropagation();abrirMetas('${r.id}')">+${resto}</button>`:''}${vis.map(g=>{
+      const p=g.ult?Math.round(g.ult.pct):null, c=p===null?'#b8c2bd':_avEstado(p).c;
+      return `<button type="button" class="av-tab ${g===principal?'on':''}" data-k="${attr(g.k)}" title="${attr(g.per+': '+(p===null?'meta sin seguimiento':'avance '+p+' %'))}" onclick="event.stopPropagation();avVerPeriodo('${uid}',this)"><span class="dot" style="background:${c}"></span>${esc(g.per)}</button>`; }).join('')}</div>` : '';
+  return `<div id="${uid}">${tabs}${lista.map(g=>`<div class="av-blq" data-k="${attr(g.k)}" style="${g===principal?'':'display:none'}">${bloque(g)}</div>`).join('')}</div>`;
 }
 function avVerPeriodo(uid, btn){
   const box=document.getElementById(uid); if(!box||!btn) return; const k=btn.dataset.k;
   box.querySelectorAll('.av-blq').forEach(d=>{ d.style.display = d.dataset.k===k ? '' : 'none'; });
-  box.querySelectorAll('.av-pill').forEach(b=>b.classList.toggle('on', b===btn));
+  box.querySelectorAll('.av-tab').forEach(b=>b.classList.toggle('on', b===btn));
 }
 window.celdaAvanceMetas=celdaAvanceMetas; window.avVerPeriodo=avVerPeriodo;
 // Desglose de avance por periodo: una mini-fila por periodo con su nombre, barra y %.
@@ -7965,31 +7971,28 @@ function _avHilo(lista){
     ${dup?'<div style="font-size:11.5px;color:#a33a2c;margin-top:3px">⚠ Hay dos cortes con la misma fecha y el mismo valor: probablemente se registró dos veces. Revísalo en Metas → historial.</div>':''}
   </details>`;
 }
+function _avCorto(p){ const r=Math.round(Number(p));
+  if(r<0) return 'Por debajo de la línea base'; if(r===0) return 'Sin avance todavía'; if(r<60) return 'Avance bajo';
+  if(r<90) return 'En camino'; if(r<100) return 'Casi cumplida'; if(r===100) return 'Meta cumplida'; return 'Superó la meta'; }
 function barraAvancePeriodos(periodos){
   if(!periodos || !periodos.length) return '<span class="hint" style="font-size:12px">Ver metas</span>';
-  // Agrupar por periodo y quedarse con el último corte de cada uno
   const grupos={}, orden=[];
   periodos.forEach(x=>{ const k=x.periodo||'—'; if(!grupos[k]){ grupos[k]=[]; orden.push(k); } grupos[k].push(x); });
   const fmt=v=>(typeof _avN==='function')?_avN(v):v;
   return orden.map(k=>{
     const lista=grupos[k].slice().sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''));
     const x=lista[lista.length-1];
-    const realPct=Math.round(x.pct);
-    const p=Math.max(0,Math.min(100,realPct));
-    const color = realPct>=90?'var(--ok)' : realPct>=60?'var(--warn)' : 'var(--bad)';
+    const realPct=Math.round(x.pct), p=Math.max(0,Math.min(100,realPct)), est=_avEstado(realPct);
     const vv=Object.values(x.vars||{});
     const detalle = vv.length===2 ? ` <span class="sub">(${fmt(vv[0])} de ${fmt(vv[1])})</span>` : '';
     const tieneVals = isFinite(x.real) && isFinite(x.meta);
-    return `<div class="av-cel">
-      <div class="per">${String(k).replace(/</g,'&lt;')} <span class="av-chip ${x.tipo==='Cierre'?'cierre':''}">${x.tipo==='Cierre'?'Cierre':'Parcial'}</span>${lista.length>1?`<span class="sub" style="font-weight:400">· ${lista.length} cortes</span>`:''}</div>
-      ${tieneVals?`<div class="val">Alcanzado: <b>${fmt(x.real)}</b>${detalle}<br><span class="sub">Meta: ${fmt(x.meta)} · Línea base: ${isFinite(x.ref)?fmt(x.ref):'—'}</span></div>`:''}
-      <div class="av-tit">% de avance hacia la meta</div>
-      <div style="display:flex;align-items:center;gap:6px" title="% de avance: cuánto se avanzó desde la línea base hacia la meta. Colores: verde 90 % o más; ámbar 60 a 89 %; rojo menos de 60 %.">
-        <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:45px;${realPct>100?'box-shadow:inset 0 0 0 1px var(--ok)':''}"><div style="width:${p}%;height:100%;background:${color}"></div></div>
-        <span style="font-size:12.5px;font-weight:700;color:${color};white-space:nowrap">${_avPctTxt(realPct)}${realPct>100?' ★':''}</span>
-      </div>
-      <div class="av-est" style="color:${_avEstado(realPct).c}">● ${_avEstado(realPct).t}</div>
-      ${tieneVals?`<a href="#" onclick="event.stopPropagation();verExplicacionAvance(${x.real},${x.meta},${isFinite(x.ref)?x.ref:'NaN'},'${String(k).replace(/['"\\<>]/g,'')}');return false" style="display:inline-block;margin-top:3px;font-size:12px;color:var(--brand);font-weight:600">ⓘ ¿Cómo salió este %?</a>`:''}
+    return `<div class="av-cel" title="% de avance: cuánto se avanzó desde la línea base hacia la meta. Verde 90 % o más · ámbar 60 a 89 % · rojo menos de 60 %.">
+      <div class="per">${String(k).replace(/</g,'&lt;')} <span class="av-chip ${x.tipo==='Cierre'?'cierre':''}">${x.tipo==='Cierre'?'Cierre':'Parcial'}</span></div>
+      ${tieneVals?`<div class="av-l">Alcanzado: <b>${fmt(x.real)}</b>${detalle}</div><div class="av-l">Meta: <b>${fmt(x.meta)}</b> <span class="sub">· Línea base: ${isFinite(x.ref)?fmt(x.ref):'—'}</span></div>`:''}
+      <div class="av-pct" style="color:${est.c}">Avance: ${_avPctTxt(realPct)}${realPct>100?' ★':''}</div>
+      <div style="height:8px;background:var(--line);border-radius:4px;overflow:hidden"><div style="width:${p}%;height:100%;background:${est.c}"></div></div>
+      <div class="av-est" style="color:${est.c}"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${est.c};margin-right:5px"></span>${_avCorto(realPct)}</div>
+      ${tieneVals?`<a href="#" onclick="event.stopPropagation();verExplicacionAvance(${x.real},${x.meta},${isFinite(x.ref)?x.ref:'NaN'},'${String(k).replace(/['"\\<>]/g,'')}');return false" style="display:inline-block;margin-top:3px;font-size:12.5px;color:var(--brand);font-weight:700">ⓘ ¿Cómo se calcula?</a>`:''}
       ${lista.length>1?_avHilo(lista):''}
     </div>`;
   }).join('');
