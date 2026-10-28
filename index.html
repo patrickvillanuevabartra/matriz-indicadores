@@ -239,6 +239,10 @@
   .hm-como{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 13px;margin-top:9px;font-size:14px;line-height:1.6;color:var(--ink)}
   .hm-como .t{font-size:12.5px;font-weight:700;color:var(--slate);margin-bottom:2px}
   .hm-como .sin{color:#8a5a00}
+  .av-metas{margin-top:8px;padding-top:7px;border-top:1px dashed var(--line)}
+  .av-metas-t{font-size:11.5px;color:var(--slate);margin-bottom:5px;line-height:1.35}
+  .av-pill{border:1px solid var(--line);background:#fff;border-radius:14px;padding:3px 9px;font-size:12px;margin:0 4px 4px 0;cursor:pointer;font-family:inherit;line-height:1.3}
+  .av-pill.on{border-color:var(--brand);background:#e8f6ee;box-shadow:0 0 0 2px rgba(15,143,94,.12)}
   .av-tit{font-size:12px;font-weight:700;color:var(--slate);margin-bottom:2px}
   .av-est{font-size:12.5px;font-weight:700;margin-top:3px}
   .av-leyenda{font-size:12.5px;color:var(--slate);background:var(--paper);border-radius:8px;padding:6px 10px;margin:4px 0 10px;line-height:1.5}
@@ -7792,7 +7796,8 @@ async function renderMatriz(){
         const segsR=String(rutaFull||'').split(/\s*[›>]\s*/).map(s=>s.trim()).filter(Boolean);
         const generico=/^(Tipo de proceso|Procesos? nivel [0-3]|Procedimiento)$/i;
         const elemento = _nombreVivo((segsR.length && !generico.test(segsR[segsR.length-1])) ? segsR[segsR.length-1] : (partes.length>1?partes[0].trim():''));
-        const avance = (r._avancePeriodos && r._avancePeriodos.length)
+        const _celAv = celdaAvanceMetas(r);
+        const avance = _celAv ? _celAv : (r._avancePeriodos && r._avancePeriodos.length)
           ? barraAvancePeriodos(r._avancePeriodos)
           : (r._periodos>0
               ? `<span class="hint" style="font-size:11px">${r._periodos} periodo(s) sin avance</span>`
@@ -7907,6 +7912,42 @@ function barraAvance(pct, conTitulo){
     <div style="flex:1;height:7px;background:var(--line);border-radius:4px;overflow:hidden;min-width:50px;${extra}"><div style="width:${p}%;height:100%;background:${color}"></div></div>
     <span style="font-size:12px;font-weight:600;color:${color};white-space:nowrap">${_avPctTxt(real)}${real>100?' ★':''}</span></div>${conTitulo?`<div class="av-est" style="color:${est.c}">● ${est.t}</div>`:''}`;
 }
+// Celda «Avance» de la matriz: reúne metas programadas + seguimientos por periodo.
+function celdaAvanceMetas(r){
+  const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const norm=x=>String(x||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const segs=r._avancePeriodos||[];
+  const metas=(r._progMetasList||[]).filter(x=>String(x.periodo||'').trim() && !/^periodo$/i.test(String(x.periodo).trim()));
+  const G={};
+  metas.forEach(m=>{ const k=norm(m.periodo); (G[k]=G[k]||{per:m.periodo,metas:[],segs:[]}).metas.push(m); });
+  segs.forEach(x=>{ const k=norm(x.periodo); (G[k]=G[k]||{per:x.periodo,metas:[],segs:[]}).segs.push(x); });
+  const lista=Object.keys(G).map(k=>{ const g=G[k]; g.k=k;
+    g.segs.sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')); g.ult=g.segs[g.segs.length-1]||null;
+    g.act = g.ult ? (g.ult.fecha||g.ult.creado||'') : (g.metas.map(m=>m.creado||'').sort().pop()||''); return g; });
+  if(!lista.length) return null;
+  lista.sort((a,b)=>String(b.act).localeCompare(String(a.act)));
+  const principal = lista.find(g=>g.ult) || lista[0];
+  const uid='av_'+String(r.id).replace(/[^\w-]/g,'');
+  const bloque=g=>{
+    if(g.ult) return barraAvancePeriodos(g.segs);
+    const m=g.metas[0]||{};
+    return `<div class="av-cel"><div class="per">${esc(g.per)} <span class="av-chip">Sin seguimiento</span></div>
+      <div class="val"><span class="sub">Meta: ${esc(m.meta||'—')} · Línea base: ${esc(m.ref||'—')}</span></div>
+      <div class="av-est" style="color:var(--slate)">○ Meta programada; aún no se registra avance</div></div>`;
+  };
+  const orden=lista.slice().sort((a,b)=>String(a.per).localeCompare(String(b.per),'es',{numeric:true}));
+  const MAX=4, vis=orden.slice(-MAX), resto=orden.length-vis.length;
+  const pills = lista.length>1 ? `<div class="av-metas"><div class="av-metas-t"><b>${lista.length} periodos con meta</b> · toca uno para verlo:</div>${vis.map(g=>{
+      const p=g.ult?Math.round(g.ult.pct):null, c=p===null?'var(--mist)':_avEstado(p).c;
+      return `<button type="button" class="av-pill ${g===principal?'on':''}" data-k="${attr(g.k)}" onclick="event.stopPropagation();avVerPeriodo('${uid}',this)"><b>${esc(g.per)}</b> <span style="color:${c};font-weight:700">${p===null?'sin avance':_avPctTxt(p)}</span></button>`; }).join('')}${resto>0?`<button type="button" class="av-pill" onclick="event.stopPropagation();abrirMetas('${r.id}')">+${resto} más · ver en Metas</button>`:''}</div>` : '';
+  return `<div id="${uid}">${lista.map(g=>`<div class="av-blq" data-k="${attr(g.k)}" style="${g===principal?'':'display:none'}">${bloque(g)}</div>`).join('')}${pills}</div>`;
+}
+function avVerPeriodo(uid, btn){
+  const box=document.getElementById(uid); if(!box||!btn) return; const k=btn.dataset.k;
+  box.querySelectorAll('.av-blq').forEach(d=>{ d.style.display = d.dataset.k===k ? '' : 'none'; });
+  box.querySelectorAll('.av-pill').forEach(b=>b.classList.toggle('on', b===btn));
+}
+window.celdaAvanceMetas=celdaAvanceMetas; window.avVerPeriodo=avVerPeriodo;
 // Desglose de avance por periodo: una mini-fila por periodo con su nombre, barra y %.
 // Hilo de cortes de un mismo periodo (misma meta): cómo evolucionó, del primero al último.
 function _avHilo(lista){
