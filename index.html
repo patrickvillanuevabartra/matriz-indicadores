@@ -1392,7 +1392,7 @@
       <div id="mt_prog">
         <div id="mt_formula_box" style="display:none;background:var(--card);border:1px solid var(--brand-2);border-radius:9px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--slate)"></div>
         <div id="mt_prog_bar" class="mg-nuevo-bar"><button type="button" class="btn btn-accent" onclick="mgNuevo('prog')">+ Nueva meta</button>
-          <span>Se programa <b>una meta por periodo</b>: cómo empiezas (línea base) y a dónde quieres llegar (meta). Tus metas aparecen abajo, en el historial.</span></div>
+          <span>Cada meta dice cómo empiezas (línea base) y a dónde quieres llegar (meta) en un periodo. Si en un mismo periodo tienes <b>varias metas</b> (por ejemplo, una por convenio), ponle un <b>nombre</b> a cada una.</span></div>
         <div id="mt_prog_form" style="display:none;background:var(--paper);border:1.5px solid var(--brand-2);border-radius:12px;padding:16px 18px;margin-bottom:16px">
           <div class="mg-form-cab"><div class="tt" id="pm_form_tit">Nueva meta</div>
             <div class="bb"><button type="button" class="btn btn-ghost btn-sm" onclick="mgGuiar()">🧭 Guíame paso a paso</button>
@@ -1403,6 +1403,9 @@
             <div class="field"><label>Periodo <span style="color:var(--mist);font-weight:400">(se sugiere; ajustable)</span></label>
               <select id="pm_periodo_sel" onchange="_periodoSelChange('pm')"></select>
               <input id="pm_periodo" placeholder="Ej. Enero 2026, 2026-I" oninput="this.dataset.touched='1'" style="margin-top:6px"></div>
+            <div class="field full"><label>Nombre de la meta <span style="color:var(--mist);font-weight:400">(opcional)</span></label>
+              <input id="pm_nombre" placeholder="Ej.: Convenio con la Universidad X" maxlength="120">
+              <div class="hint" style="font-size:12.5px;margin-top:4px">Escríbelo cuando en <b>un mismo periodo</b> tengas <b>más de una meta</b> (por ejemplo, una por cada convenio). Así cada una se distingue en el historial, en el seguimiento y en la matriz.</div></div>
             <div class="field">
               <label>Valor de referencia (línea base)</label>
               <input type="number" step="any" id="pm_ref" readonly style="background:var(--paper)" placeholder="se calcula con la fórmula">
@@ -6447,6 +6450,10 @@ if(TIPO_MEDICION_FIELD_ID && SM && !SM.tipo_medicion){
 const VARIABLES_REF_FIELD_ID  = "dcSCoyFg5cTj_cQx88umkp"; // campo "Variables referencia" (PROG_METAS)
 const VARIABLES_META_FIELD_ID = "ddMCoxbb9cIOo3CWddHXy4"; // campo "Variables meta" (PROG_METAS)
 if(VARIABLES_REF_FIELD_ID && PM && !PM.variables_ref){  PM.variables_ref  = { id: VARIABLES_REF_FIELD_ID,  type: "text" }; }
+const NOMBRE_META_FIELD_ID = "ddV8kNk2PoWR0wW5zKDq5_"; // campo "Nombre de la meta" (PROG_METAS) — distingue varias metas del mismo periodo
+if(PM && !PM.nombre){ PM.nombre = { id: NOMBRE_META_FIELD_ID, type: "string" }; }
+function _pmNombre(p){ return (p && PM.nombre) ? String(leerCampo(p, PM.nombre.id, 'Nombre de la meta')||'').trim() : ''; }
+function _pmEtiq(p){ const per=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; const n=_pmNombre(p); return (per||'sin periodo')+(n?' · '+n:''); }
 if(VARIABLES_META_FIELD_ID && PM && !PM.variables_meta){ PM.variables_meta = { id: VARIABLES_META_FIELD_ID, type: "text" }; }
 const FREC_OPTS = ["Mensual","Bimensual","Trimestral","Semestral","Anual","A demanda"];
 
@@ -6484,7 +6491,7 @@ function leerDueno(r, F){
 async function loadMatriz(forzar){
   if(!forzar && STATE.matriz && STATE.matriz.length) return STATE.matriz;
   // Tras abrir/guardar metas se lee sin caché para que la matriz muestre el avance actualizado
-  const _fresco=!!window._METAS_FRESCAS; window._METAS_FRESCAS=false;
+  const _fresco=!!window._METAS_FRESCAS;   // una vez que se tocaron metas en esta sesión, siempre datos frescos
   const data = await API.records(CONFIG.ENTITIES.MATRIZ_IND, _fresco);
   STATE.matriz = data.records||[];
   // Leer PROG_METAS y SEG_METAS EN PARALELO (ambas dependen solo de STATE.matriz, no una de otra).
@@ -6503,7 +6510,8 @@ async function loadMatriz(forzar){
         creado: p.created_at||'',
         periodo: PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):'',
         meta: leerCampo(p,PM.valor_meta.id,'Valor meta'),
-        ref: leerCampo(p,PM.valor_ref.id,'Valor de referencia')
+        ref: leerCampo(p,PM.valor_ref.id,'Valor de referencia'),
+        id: p.id, nombre: _pmNombre(p)
       }));
     });
   }catch(e){ STATE.matriz.forEach(m=>{ if(m._progMetas===undefined) m._progMetas=0; }); }
@@ -6526,7 +6534,8 @@ async function loadMatriz(forzar){
         const fechaVal=(f && !/fecha/i.test(f))?f:'';
         const tipoM = SM.tipo_medicion ? (leerCampo(s, SM.tipo_medicion.id, 'Tipo de medición')||'') : '';
         let varsC = {}; try{ varsC = SM.variables_calculo ? _parseVars(leerCampo(s, SM.variables_calculo.id, 'Variables de cálculo')) : {}; }catch(_){ varsC={}; }
-        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal, creado:s.created_at||'', real:realN, meta:metaN, ref:refN, tipo:(tipoM==='Cierre'?'Cierre':'Parcial'), vars:varsC };
+        const _txtS=JSON.stringify(s.values||{}); const _pm=(m._progMetasList||[]).find(q=>q.id && _txtS.includes(q.id));
+        return { periodo:per, pct:isNaN(pctN)?null:pctN, fecha:fechaVal, creado:s.created_at||'', real:realN, meta:metaN, ref:refN, tipo:(tipoM==='Cierre'?'Cierre':'Parcial'), vars:varsC, progId:_pm?_pm.id:'' };
       }).filter(x=>x.pct!==null);
       m._segCreados = mios.map(s=>s.created_at||'');
       // Ordenar por fecha ascendente
@@ -7922,36 +7931,48 @@ function barraAvance(pct, conTitulo){
 function celdaAvanceMetas(r){
   const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
   const norm=x=>String(x||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const num=x=>{ const n=parseFloat(String(x==null?'':x).replace(',','.')); return isNaN(n)?NaN:n; };
   const segs=r._avancePeriodos||[];
   const metas=(r._progMetasList||[]).filter(x=>String(x.periodo||'').trim() && !/^periodo$/i.test(String(x.periodo).trim()));
   const G={};
-  metas.forEach(m=>{ const k=norm(m.periodo); (G[k]=G[k]||{per:m.periodo,metas:[],segs:[]}).metas.push(m); });
-  segs.forEach(x=>{ const k=norm(x.periodo); (G[k]=G[k]||{per:x.periodo,metas:[],segs:[]}).segs.push(x); });
-  const lista=Object.keys(G).map(k=>{ const g=G[k]; g.k=k;
+  metas.forEach((m,i)=>{ const k='m:'+(m.id||i); G[k]={k, per:m.periodo, nombre:m.nombre||'', metas:[m], segs:[]}; });
+  segs.forEach(x=>{
+    let k = (x.progId && G['m:'+x.progId]) ? 'm:'+x.progId : null;
+    if(!k){ const mismos=metas.filter(m=>norm(m.periodo)===norm(x.periodo));
+      const ex = mismos.length===1 ? mismos[0] : mismos.find(m=>num(m.meta)===x.meta);
+      if(ex) k='m:'+(ex.id||metas.indexOf(ex)); }
+    if(!k){ k='p:'+norm(x.periodo); G[k]=G[k]||{k, per:x.periodo, nombre:'', metas:[], segs:[]}; }
+    G[k].segs.push(x);
+  });
+  const lista=Object.values(G).map(g=>{
     g.segs.sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||'')); g.ult=g.segs[g.segs.length-1]||null;
-    g.act = g.ult ? (g.ult.fecha||g.ult.creado||'') : (g.metas.map(m=>m.creado||'').sort().pop()||''); return g; });
+    g.dup = g.metas.length>0 && metas.filter(m=>norm(m.periodo)===norm(g.per) && norm(m.nombre)===norm(g.nombre)).length>1;
+    return g; });
   if(!lista.length) return null;
-  lista.sort((a,b)=>String(b.act).localeCompare(String(a.act)));
-  const principal = lista.find(g=>g.ult) || lista[0];
+  lista.sort((a,b)=>String(a.per).localeCompare(String(b.per),'es',{numeric:true}) || String(a.nombre).localeCompare(String(b.nombre),'es'));
   const uid='av_'+String(r.id).replace(/[^\w-]/g,'');
+  const corto=t=>{ t=String(t||''); return t.length>22 ? t.slice(0,21)+'…' : t; };
   const bloque=g=>{
-    if(g.ult) return barraAvancePeriodos(g.segs);
+    const cab = g.nombre ? `<div class="av-l" style="font-weight:700;color:var(--brand);margin-bottom:3px">🎯 ${esc(g.nombre)}</div>` : '';
+    const dup = g.dup ? `<div style="background:#fff6e5;border:1px solid #f0d9a8;color:#8a5a00;border-radius:8px;padding:5px 8px;font-size:12px;margin-bottom:5px;line-height:1.35">⚠ En <b>${esc(g.per)}</b> hay otra meta con el mismo nombre${g.nombre?'':' (o sin nombre)'}. Si son metas distintas, ponles un nombre en <b>Metas</b>; si es la misma, elimina la repetida.</div>` : '';
+    if(g.ult) return dup + cab + barraAvancePeriodos(g.segs);
     const m=g.metas[0]||{};
-    return `<div class="av-cel"><div class="per">${esc(g.per)} <span class="av-chip">Sin seguimiento</span></div>
-      <div class="val"><span class="sub">Meta: ${esc(m.meta||'—')} · Línea base: ${esc(m.ref||'—')}</span></div>
+    return dup + cab + `<div class="av-cel"><div class="per">${esc(g.per)} <span class="av-chip">Sin seguimiento</span></div>
+      <div class="av-l">Meta: <b>${esc(m.meta||'—')}</b> <span class="sub">· Línea base: ${esc(m.ref||'—')}</span></div>
       <div class="av-est" style="color:var(--slate)">Aún no hay seguimiento</div></div>`;
   };
-  const orden=lista.slice().sort((a,b)=>String(a.per).localeCompare(String(b.per),'es',{numeric:true}));
-  const MAX=4, vis=orden.slice(-MAX), resto=orden.length-vis.length;
-  const tabs = lista.length>1 ? `<div class="av-tabs">${resto>0?`<button type="button" class="av-tab" title="Ver todas las metas" onclick="event.stopPropagation();abrirMetas('${r.id}')">+${resto}</button>`:''}${vis.map(g=>{
+  const MAX=6, vis=lista.slice(-MAX), resto=lista.length-vis.length;
+  const tabs = `<div class="av-tit" style="margin-bottom:4px">Ver avance de:</div><div class="av-tabs">${resto>0?`<button type="button" class="av-tab" title="Ver todas las metas" onclick="event.stopPropagation();abrirMetas('${r.id}')">+${resto}</button>`:''}${vis.map(g=>{
       const p=g.ult?Math.round(g.ult.pct):null, c=p===null?'#b8c2bd':_avEstado(p).c;
-      return `<button type="button" class="av-tab ${g===principal?'on':''}" data-k="${attr(g.k)}" title="${attr(g.per+': '+(p===null?'meta sin seguimiento':'avance '+p+' %'))}" onclick="event.stopPropagation();avVerPeriodo('${uid}',this)"><span class="dot" style="background:${c}"></span>${esc(g.per)}</button>`; }).join('')}</div>` : '';
-  return `<div id="${uid}">${tabs}${lista.map(g=>`<div class="av-blq" data-k="${attr(g.k)}" style="${g===principal?'':'display:none'}">${bloque(g)}</div>`).join('')}</div>`;
+      return `<button type="button" class="av-tab" data-k="${attr(g.k)}" title="${attr(g.per+(g.nombre?' · '+g.nombre:'')+': '+(p===null?'meta sin seguimiento':'avance '+p+' %'))}" onclick="event.stopPropagation();avVerPeriodo('${uid}',this)"><span class="dot" style="background:${c}"></span>${esc(g.per)}${g.nombre?' · '+esc(corto(g.nombre)):''}${g.dup?' ⚠':''}</button>`; }).join('')}</div>`;
+  return `<div id="${uid}">${tabs}${lista.map(g=>`<div class="av-blq" data-k="${attr(g.k)}" style="display:none">${bloque(g)}</div>`).join('')}</div>`;
 }
 function avVerPeriodo(uid, btn){
-  const box=document.getElementById(uid); if(!box||!btn) return; const k=btn.dataset.k;
+  const box=(btn&&btn.closest('[id^="av_"]'))||document.getElementById(uid); if(!box||!btn) return;
+  const cerrar=btn.classList.contains('on');            // segundo clic en el mismo periodo = cerrar
+  const k=cerrar?null:btn.dataset.k;
   box.querySelectorAll('.av-blq').forEach(d=>{ d.style.display = d.dataset.k===k ? '' : 'none'; });
-  box.querySelectorAll('.av-tab').forEach(b=>b.classList.toggle('on', b===btn));
+  box.querySelectorAll('.av-tab').forEach(b=>b.classList.toggle('on', !cerrar && b===btn));
 }
 window.celdaAvanceMetas=celdaAvanceMetas; window.avVerPeriodo=avVerPeriodo;
 // Desglose de avance por periodo: una mini-fila por periodo con su nombre, barra y %.
@@ -8951,7 +8972,7 @@ async function abrirMetas(matId){
   PM_EDIT_ID=null; SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
   const bp=document.getElementById('pm_guardar'); if(bp) bp.textContent='+ Guardar programación';
   const bs=document.getElementById('sm_guardar'); if(bs) bs.textContent='+ Guardar seguimiento';
-  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_nombre','pm_plan','sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   const mi=document.getElementById('sm_meta_info'); if(mi) mi.classList.add('hidden');
   { const ex=document.getElementById('sm_avance_expl'); if(ex){ ex.innerHTML=''; ex.style.display='none'; } }
@@ -9076,7 +9097,7 @@ function _mgPasosProg(){
   return [
     { sel:'#pm_periodo_sel', tit:'¿Para qué periodo es la meta?',
       txt:'Elige el semestre o el año que vas a medir. Ej.: <b>2026</b> o <b>2026-II</b>. Si no aparece en la lista, escríbelo en la casilla de abajo.',
-      rec:'Se programa <b>una meta por periodo</b>.' },
+      rec:'Si en este periodo tendrás <b>más de una meta</b> (por ejemplo, una por convenio), escribe un <b>Nombre de la meta</b> para distinguirlas.' },
     { sel: tieneVars?'#pm_ref_grid':'#pm_ref', tit:'Línea base: ¿cómo estabas al empezar?',
       txt: tieneVars
         ? `Escribe cómo estaba el indicador <b>en el periodo anterior</b>: en «<b>${_mgEsc(a)}</b>» lo que se logró y en «<b>${_mgEsc(b)}</b>» el total de ese periodo.<br>Ej.: el año pasado se recibieron <b>180</b> solicitudes y se formalizaron <b>45</b> → escribe 45 y 180.`
@@ -9251,7 +9272,7 @@ function relMencionaMatriz(r, matId, relFieldId){
   return false;
 }
 // Quita la etiqueta [#matId] de un texto de observación para mostrarlo limpio
-function limpiarEtiqueta(txt){ return String(txt||'').replace(/\[#[a-zA-Z0-9_\-]{22}\]\s*/,'').trim(); }
+function limpiarEtiqueta(txt){ return String(txt||'').replace(/\[#[a-zA-Z0-9_\-]{22}\]\s*/,'').replace(/\[@[a-zA-Z0-9_\-]{22}\]\s*/g,'').trim(); }
 // Convierte fecha ISO (aaaa-mm-dd) a dd/mm/aaaa para mostrar. Si no reconoce, devuelve tal cual.
 function fmtFecha(f){
   if(!f) return '';
@@ -9452,7 +9473,7 @@ function renderHistorialMetas(){
     html+=`<div class="hm-meta">
       <div class="hm-head">
         <div>
-          <div class="t">🎯 Meta ${esc(per||'sin periodo')}</div>
+          <div class="t">🎯 Meta ${esc(per||'sin periodo')}${_pmNombre(p)?` <span style="color:var(--ink)">· ${esc(_pmNombre(p))}</span>`:''}</div>
           <div class="hm-nums">
             <div class="hm-num">Línea base<b>${fmt(ref)}</b></div>
             <div class="hm-num">Meta<b>${fmt(meta)}</b></div>
@@ -9497,7 +9518,7 @@ async function cargarProgMetas(){
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
-    if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const per=PM.periodo?leerCampo(r,PM.periodo.id,'Periodo'):''; return `<option value="${r.id}">${per?per+' · ':''}Meta ${m||'—'}</option>`; }).join(''); }
+    if(selProg){ selProg.innerHTML='<option value="">Seleccione meta…</option>'+mias.map(r=>{ const m=leerCampo(r,PM.valor_meta.id,'Valor meta'); const per=PM.periodo?leerCampo(r,PM.periodo.id,'Periodo'):''; return `<option value="${r.id}">${_pmEtiq(r).replace(/</g,'&lt;')} · Meta ${m||'—'}</option>`; }).join(''); }
     if(!mias.length){ tb.innerHTML='<tr><td colspan="6" class="hint" style="text-align:center;padding:20px">Sin programaciones aún.</td></tr>'; try{ renderHistorialMetas(); }catch(_){ } return; }
     tb.innerHTML=mias.map(r=>{
       const f=leerCampo(r,PM.fecha_prog.id,'Fecha programación');
@@ -9586,7 +9607,7 @@ function _mostrarBtnCancelarSeg(v){ const b=document.getElementById('sm_cancelar
 // Cancelar edición de meta: limpiar el formulario y volver a modo "crear".
 function cancelarEdicionMeta(){
   PM_EDIT_ID=null;
-  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_nombre','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   { const rf=document.getElementById('pm_ref'); if(rf) delete rf.dataset.heredado;
     const ck=document.getElementById('pm_ref_estim'); if(ck && ck.checked){ ck.checked=false; if(typeof _toggleRefEstimada==='function') _toggleRefEstimada(); }
@@ -9676,7 +9697,7 @@ function editarProgMeta(progId){
   if(window._MG_VISTA!=='prog') setMetaTab('prog');
   _limpiarVarsMeta();
   PM_EDIT_ID=progId;
-  { const tt=document.getElementById('pm_form_tit'); if(tt) tt.textContent='✏️ Editar meta'+(PM.periodo&&leerCampo(p,PM.periodo.id,'Periodo')?' · '+leerCampo(p,PM.periodo.id,'Periodo'):''); }
+  { const tt=document.getElementById('pm_form_tit'); if(tt) tt.textContent='✏️ Editar meta · '+_pmEtiq(p); }
   mgForm('prog', true);
   const set=(id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
   set('pm_fecha', leerCampo(p,PM.fecha_prog.id,'Fecha programación'));
@@ -9689,6 +9710,7 @@ function editarProgMeta(progId){
   set('pm_plan', leerCampo(p,PM.plan_accion.id,'Plan de acción'));
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   set('pm_obs', limpiarEtiqueta(leerCampo(p,PM.observacion.id,'Observación')));
+  set('pm_nombre', _pmNombre(p));
   const ep=document.getElementById('pm_periodo'); if(ep){ const perVal=PM.periodo?leerCampo(p,PM.periodo.id,'Periodo'):''; ep.value=perVal; ep.dataset.touched='1'; _llenarPeriodoSel('pm', perVal); }
   const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='✓ Actualizar programación';
   _mostrarBtnCancelarMeta(true);
@@ -9863,16 +9885,16 @@ async function _guardarProgMetaReal(){
   if(String(periodo||'').trim()){
     const normP = x => String(x||'').replace(/\s+/g,' ').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
     const yaExiste=(STATE.progMetas||[]).find(x=>
-      x.id!==PM_EDIT_ID && normP(leerCampo(x, PM.periodo.id, 'Periodo'))===normP(periodo));
+      x.id!==PM_EDIT_ID && normP(leerCampo(x, PM.periodo.id, 'Periodo'))===normP(periodo) && normP(_pmNombre(x))===normP(g('pm_nombre')));
     if(yaExiste){
       const vm=leerCampo(yaExiste, PM.valor_meta.id, 'Valor meta');
       const vr=leerCampo(yaExiste, PM.valor_ref.id, 'Valor de referencia');
       const propia=PM_EDIT_ID?(STATE.progMetas||[]).find(x=>x.id===PM_EDIT_ID):null;
       const perPropia=propia&&PM.periodo?leerCampo(propia, PM.periodo.id, 'Periodo'):'';
       if(PM_EDIT_ID && perPropia && normP(perPropia)!==normP(periodo))
-        toast('Estás editando la meta de «'+perPropia+'» y le cambiaste el periodo a «'+periodo+'». Pero «'+periodo+'» ya tiene su propia meta (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Deja el periodo «'+perPropia+'», o edita directamente la meta de «'+periodo+'» con su ✏️ en el historial.', true);
+        toast('Estás editando la meta de «'+perPropia+'» y le cambiaste el periodo a «'+periodo+'», pero «'+periodo+'» ya tiene una meta '+(_pmNombre(yaExiste)?'llamada «'+_pmNombre(yaExiste)+'»':'sin nombre')+' (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Si son metas distintas, escribe un «Nombre de la meta» diferente.', true);
       else
-        toast('Este indicador ya tiene una meta para «'+periodo+'» (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Solo puede haber una meta por periodo: edítala con su ✏️ en el historial, en lugar de crear otra.', true);
+        toast('Ya existe una meta para «'+periodo+'» '+(_pmNombre(yaExiste)?'llamada «'+_pmNombre(yaExiste)+'»':'sin nombre')+' (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Si es OTRA meta del mismo periodo (por ejemplo, otro convenio), escríbele un nombre distinto en «Nombre de la meta». Si es la misma, edítala con su ✏️ en el historial.', true);
       { const ps=document.getElementById('pm_periodo_sel'); if(ps){ try{ ps.scrollIntoView({behavior:'smooth',block:'center'}); ps.style.outline='3px solid #c0392b'; setTimeout(()=>{ ps.style.outline=''; }, 4000); }catch(_){ } } }
       return;
     }
@@ -9893,6 +9915,7 @@ async function _guardarProgMetaReal(){
   if(PM.variables_meta){ const j=_serializar('meta'); if(j!=null) campos[PM.variables_meta.id]=j; }
   campos[PM.plan_accion.id]=plan||'';
   if(PM.periodo && periodo) campos[PM.periodo.id]=periodo;
+  if(PM.nombre) campos[PM.nombre.id]=String(g('pm_nombre')||'').trim();
   // Etiqueta robusta: el matId va al inicio de la observación (los textos SÍ se leen bien)
   campos[PM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   try{
@@ -9914,7 +9937,7 @@ async function _guardarProgMetaReal(){
     toast(PM_EDIT_ID?'Programación actualizada.':'Programación guardada.');
     PM_EDIT_ID=null;
     const btn=document.getElementById('pm_guardar'); if(btn) btn.textContent='+ Guardar programación';
-    ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+    ['pm_fecha','pm_ref','pm_meta','pm_obs','pm_nombre','pm_plan','pm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   if(typeof _evSyncDesdeInput==='function') _evSyncDesdeInput();
   { const rf=document.getElementById('pm_ref'); if(rf) delete rf.dataset.heredado;
     const ck=document.getElementById('pm_ref_estim'); if(ck && ck.checked){ ck.checked=false; if(typeof _toggleRefEstimada==='function') _toggleRefEstimada(); }
@@ -10600,7 +10623,7 @@ async function guardarSegMeta(){
   if(SM.ref_seg && ref!==null && !isNaN(ref)) campos[SM.ref_seg.id]=ref;
   if(SM.avance_app && pct!==null) campos[SM.avance_app.id]=pct;
   if(SM.periodo && periodo) campos[SM.periodo.id]=periodo;
-  campos[SM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
+  campos[SM.observacion.id]='[#'+MT_CTX.matId+']'+(progId?'[@'+progId+']':'')+' '+(obs||'');
   const btn=document.getElementById('sm_guardar'); if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…'; }
   try{
     await API.saveForm(SM_EDIT_ID||null, campos, SM_EDIT_ID?undefined:CONFIG.ENTITIES.SEG_METAS);
