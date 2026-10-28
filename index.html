@@ -11496,6 +11496,8 @@ function _repIndTabla(filas){
   const DI=window._REP_DIAG_IND||{};
   const diag = window._REP_RANGO ? `<div style="background:#eef7f2;border:1px solid var(--line);border-radius:9px;padding:8px 12px;margin:0 0 8px;font-size:12.5px;color:var(--slate)">🔎 Entran <b>${(DI.total||0)-(DI.fuera||0)}</b> de ${DI.total||0} indicadores${DI.fuera?` (<b>${DI.fuera}</b> se crearon después de la fecha «Hasta»)`:''} · <b>${DI.metas||0}</b> metas registradas hasta el corte · <b>${DI.segs||0}</b> seguimientos registrados dentro del rango · <b>${filas.length}</b> oficinas.</div>` : '';
   return diag + `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px">
+      <button class="btn" onclick="descargarReporteAvanceExcel()" title="Libro de Excel con las cifras de cada oficina y notas que explican cada columna">📥 Descargar reporte de indicadores (Excel)</button></div>
     ${_repSelBarra('rep_chk', filas.length)}
     <div class="tabla-wrap"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="background:var(--paper);text-align:left">
@@ -11862,6 +11864,58 @@ async function descargarReporteFichasExcel(){
 }
 window.descargarReporteFichasExcel=descargarReporteFichasExcel;
 
+/* 27/10/2026: libro de Excel de la pestaña «Indicadores · avance», con las mismas cifras
+   de la pantalla y notas visibles que explican cada columna. Las oficinas van en orden
+   alfabético (sin puestos), para no generar comparaciones. */
+async function descargarReporteAvanceExcel(){
+  const F = window._REP_FILAS || [];
+  if(!F.length){ toast('Primero elige el rango de fechas y pulsa 🔍 Buscar.', true); return; }
+  toast('Preparando el reporte de indicadores…');
+  try{
+    let dir=[]; try{ dir=await _xDirectorioOficinas(window._REPF_FILAS || await _repfCalcular()); }catch(_){}
+    const dirMap={}; dir.forEach(d=>dirMap[_XNORM(d.oficina)]=d);
+    const pc=(a,b)=> b? Math.round(a/b*100) : 0;
+    const tot=F.reduce((a,f)=>a+f.cifras.total,0), cm=F.reduce((a,f)=>a+f.cifras.conMeta,0), cs=F.reduce((a,f)=>a+f.cifras.conSeguimiento,0);
+    const avg = tot? Math.round(F.reduce((a,f)=>a+f.cifras.avancePromedio*f.cifras.total,0)/tot) : 0;
+    const periodo = _repRangoTxt()? 'Periodo: '+_repRangoTxt() : 'Estado al '+_xFechaLarga()+' (todo lo registrado hasta hoy)';
+    const M=10;
+    const h1=[
+      [{v:'Reporte de avance de los indicadores por oficina',s:'tit',m:M}],
+      [{v:'Matriz de Indicadores · SGOE ISO 21001 · Facultad de Ingeniería URP · '+periodo,s:'sub',m:M}],
+      [],
+      [{v:'CÓMO LEER ESTE REPORTE',s:'sec',m:M}],
+      [{v:'• Indicadores: cuántos indicadores tiene la oficina como responsable de la medición.',s:'midt',m:M}],
+      [{v:'• Con meta: indicadores que ya tienen su meta programada. El % es: con meta ÷ indicadores × 100.',s:'midt',m:M}],
+      [{v:'• Con seguimiento: indicadores con al menos un seguimiento registrado (valor alcanzado). Es la evidencia de que el indicador se usa. El % es: con seguimiento ÷ indicadores × 100.',s:'midt',m:M}],
+      [{v:'• Avance promedio: promedio del último % de avance informado de cada indicador; los que no tienen seguimiento cuentan como 0 %. El avance de un indicador es (alcanzado − línea base) ÷ (meta − línea base) × 100.',s:'midt',m:M}],
+      [{v:'• Etapa de avance (0 a 5): 0 Por empezar · menos de 50 % con meta — 1 Planificado · metas, pero sin seguimiento — 2 En marcha · algo de seguimiento — 3 Buen ritmo · 50 % o más con seguimiento — 4 Destacado · 80 % con seguimiento y todas las metas — 5 Excelencia · todo al 100 % y avance de 90 % o más.',s:'midt',m:M}],
+      [{v:'• Colores: verde 80 % o más · amarillo 50 % a 79 % · rojo menos de 50 %.',s:'midt',m:M}],
+      [],
+      [{v:'1. Resultado de toda la Facultad',s:'sec',m:M}],
+      ['Oficinas','Indicadores','Con meta','% con meta','Con seguimiento','% con seguimiento','Avance promedio'].map(v=>({v,s:'th'})),
+      [{v:F.length,s:'kpi'},{v:tot,s:'kpi'},{v:cm,s:'kpi'},{v:pc(cm,tot)+' %',s:_xPctStyle(pc(cm,tot))},{v:cs,s:'kpi'},{v:pc(cs,tot)+' %',s:_xPctStyle(pc(cs,tot))},{v:avg+' %',s:_xPctStyle(avg)}],
+      [],
+      [{v:'Oficinas en cada etapa',s:'sec',m:M}],
+      REP_NIVELES.map((n,i)=>({v:i+' '+n,s:'th'})),
+      REP_NIVELES.map((n,i)=>({v:F.filter(f=>f.nivel===i).length,s:'kpi'})),
+      [],
+      [{v:'2. Resultado por oficina (en orden alfabético)',s:'sec',m:M}],
+      ['Oficina','Indicadores','Con meta','% con meta','Con seguimiento','% con seguimiento','Avance promedio','Indicadores al 100 %','Sin meta','Etapa de avance','Responsable de proceso'].map(v=>({v,s:'th'})),
+      ['Nombre de la oficina responsable de la medición','Total que mide la oficina','Ya tienen meta programada','Con meta ÷ indicadores','Tienen al menos un seguimiento','Con seguimiento ÷ indicadores','Último % de cada indicador, promediado','Ya alcanzaron su meta','Aún sin meta','De 0 Por empezar a 5 Excelencia','A quien se envía el reporte'].map(v=>({v,s:'midt'}))
+    ];
+    [...F].sort((a,b)=>a.oficina.localeCompare(b.oficina,'es')).forEach(f=>{
+      const c=f.cifras, d=dirMap[_XNORM(f.oficina)]||{};
+      h1.push([{v:f.oficina,s:'td'},{v:c.total,s:'num'},{v:c.conMeta,s:'num'},{v:pc(c.conMeta,c.total)+' %',s:_xPctStyle(pc(c.conMeta,c.total))},
+        {v:c.conSeguimiento,s:'num'},{v:pc(c.conSeguimiento,c.total)+' %',s:_xPctStyle(pc(c.conSeguimiento,c.total))},{v:c.avancePromedio+' %',s:_xPctStyle(c.avancePromedio)},
+        {v:c.cien,s:'num'},{v:c.sinMeta,s:'num'},{v:f.nivel+' '+REP_NIVELES[f.nivel],s:'td'},{v:d.responsable||'—',s:'td'}]);
+    });
+    const hojas=[{ nombre:'Avance por oficina', anchos:[260,70,70,75,90,95,90,85,60,120,200], filas:h1, fijar:22 }];
+    if(dir.length) hojas.push(_xHojaDirectorio(dir));
+    _xDescargar(_xLibro(hojas), 'Reporte_avance_indicadores'+(window._REP_RANGO&&_repRangoTxt()?('_'+(window._REP_RANGO.desde||'inicio')+'_al_'+window._REP_RANGO.hasta):''));
+  }catch(e){ toast('No se pudo preparar el reporte: '+e.message, true); }
+}
+window.descargarReporteAvanceExcel=descargarReporteAvanceExcel;
+
 async function repTab(t){
   window._REP_TAB=t;
   ['ind','fic'].forEach(x=>{ const d=document.getElementById('rep_tab_'+x), b=document.getElementById('rep_tabbtn_'+x);
@@ -11944,7 +11998,7 @@ async function abrirReporteAvance(){
   if(!esAdmin()){ toast('Solo el administrador puede enviar reportes.', true); return; }
   try{ await loadMatriz(); }catch(_){}
   window._REP_RANGO=null; window._REP_SIN_EDITADAS=false;
-  window._REP_FILAS=[]; window._REPF_FILAS=null; window._REP_TAB='ind';
+  window._REP_FILAS=[]; window._REPF_FILAS=null; window._REP_TAB='fic';   // 27/10/2026: primero las fichas, luego los indicadores
   const sinConfig = !REPORTE_URL || !REPORTE_CLAVE;
   const html = `
   <div id="rep_modal" style="position:fixed;inset:0;background:rgba(15,30,22,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
@@ -11954,8 +12008,8 @@ async function abrirReporteAvance(){
       <button class="icon-btn" onclick="document.getElementById('rep_modal').remove()">✕</button>
     </div>
     <div style="display:flex;gap:6px;margin:6px 0 4px;border-bottom:2px solid var(--line)">
-      <button id="rep_tabbtn_ind" onclick="repTab('ind')" style="border:0;border-radius:9px 9px 0 0;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;background:var(--brand);color:#fff">📊 Indicadores · avance</button>
-      <button id="rep_tabbtn_fic" onclick="repTab('fic')" style="border:0;border-radius:9px 9px 0 0;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;background:transparent;color:var(--ink)">📄 Fichas registradas · cumplimiento</button>
+      <button id="rep_tabbtn_fic" onclick="repTab('fic')" style="border:0;border-radius:9px 9px 0 0;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;background:var(--brand);color:#fff">📄 Fichas registradas · cumplimiento</button>
+      <button id="rep_tabbtn_ind" onclick="repTab('ind')" style="border:0;border-radius:9px 9px 0 0;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer;background:transparent;color:var(--ink)">📊 Indicadores · avance</button>
     </div>
     <div style="flex:1;min-height:0;overflow:auto;padding-right:4px">
     <div style="display:flex;gap:18px;align-items:center;margin:10px 0 4px;font-size:14px;flex-wrap:wrap">
@@ -11965,7 +12019,7 @@ async function abrirReporteAvance(){
       <span class="hint">Vale para las dos pestañas. El formal es el recomendado para Decanato y comités.</span>
     </div>
     ${_repRangoBarra()}
-    <div id="rep_tab_ind">
+    <div id="rep_tab_ind" style="display:none">
     <details style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0 12px;font-size:13px;line-height:1.55;color:var(--slate)">
       <summary style="cursor:pointer;font-weight:600;color:var(--brand)">💡 Cómo funciona este reporte y su escala de reconocimiento</summary>
       <p style="margin:8px 0"><b>Las cifras</b> son las mismas del Tablero: % de indicadores con meta, % con seguimiento y avance promedio (último % informado de cada indicador; los que no tienen seguimiento cuentan como 0 %).</p>
@@ -11979,7 +12033,7 @@ async function abrirReporteAvance(){
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px"><button class="btn" onclick="descargarDirectorioOficinas()" title="Qué oficinas no tienen correo para reportes o no tienen cuenta en el aplicativo">📇 Oficinas sin correo o sin cuenta (Excel)</button></div>
     <div id="rep_ind_cuerpo">${_REP_ESPERA}</div>
     </div>
-    <div id="rep_tab_fic" style="display:none">
+    <div id="rep_tab_fic">
       <details style="background:#f5f9f7;border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:10px 0 12px;font-size:13px;line-height:1.55;color:var(--slate)">
         <summary style="cursor:pointer;font-weight:600;color:var(--brand)">💡 Cómo funciona el check list de fichas</summary>
         <p style="margin:8px 0">Para cada ficha <b>vigente</b> (no archivada) se revisa si cada campo está <b>lleno ✓</b> o <b>vacío ✗</b>. Solo se mira que haya contenido, no su calidad. Las etiquetas de componente que pone el aplicativo no cuentan como contenido.</p>
@@ -11996,7 +12050,7 @@ async function abrirReporteAvance(){
     </div>
    </div></div>`;
   document.body.insertAdjacentHTML('beforeend', html);
-  setTimeout(()=>_repSelSync('rep_chk'),0);
+  setTimeout(()=>repTab('fic'),0);
   if(typeof _ajustarModalZoom==='function') _ajustarModalZoom('rep_modal');
 }
 window.abrirReporteAvance=abrirReporteAvance;
