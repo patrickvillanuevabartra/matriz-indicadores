@@ -11909,7 +11909,7 @@ async function descargarReporteAvanceExcel(){
         {v:c.conSeguimiento,s:'num'},{v:pc(c.conSeguimiento,c.total)+' %',s:_xPctStyle(pc(c.conSeguimiento,c.total))},{v:c.avancePromedio+' %',s:_xPctStyle(c.avancePromedio)},
         {v:c.cien,s:'num'},{v:c.sinMeta,s:'num'},{v:f.nivel+' '+REP_NIVELES[f.nivel],s:'td'},{v:d.responsable||'—',s:'td'}]);
     });
-    const hojas=[{ nombre:'Avance por oficina', anchos:[260,70,70,75,90,95,90,85,60,120,200], filas:h1, fijar:22 }];
+    const hojas=[{ nombre:'Avance por oficina', anchos:[260,70,70,75,90,95,90,85,60,120,200], filas:h1 }];
     if(dir.length) hojas.push(_xHojaDirectorio(dir));
     _xDescargar(_xLibro(hojas), 'Reporte_avance_indicadores'+(window._REP_RANGO&&_repRangoTxt()?('_'+(window._REP_RANGO.desde||'inicio')+'_al_'+window._REP_RANGO.hasta):''));
   }catch(e){ toast('No se pudo preparar el reporte: '+e.message, true); }
