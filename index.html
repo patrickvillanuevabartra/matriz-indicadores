@@ -11381,6 +11381,13 @@ window._REP_RANGO = null;   // {desde:'YYYY-MM-DD'|'', hasta:'YYYY-MM-DD', exact
 // toLocaleDateString depende del idioma del navegador y puede devolver «5/14/2026».
 function _repDia(iso){
   if(!iso) return '';
+  // 27/10/2026: el servidor puede mandar las fechas como «11/07/2026» (día/mes/año).
+  // Date.parse las leía como mes/día: el 11 de julio pasaba a ser 7 de noviembre y la
+  // ficha quedaba «fuera del periodo». Ahora el día/mes/año se lee tal cual.
+  if(!(iso instanceof Date)){
+    const dm = String(iso).trim().match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+    if(dm) return dm[3]+'-'+dm[2].padStart(2,'0')+'-'+dm[1].padStart(2,'0');
+  }
   const t = (iso instanceof Date) ? iso.getTime() : Date.parse(String(iso));
   if(isNaN(t)){ const m=String(iso).match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[1]+'-'+m[2]+'-'+m[3] : ''; }
   return new Date(t - 5*3600*1000).toISOString().slice(0,10);
@@ -11415,9 +11422,9 @@ function _repRangoBarra(){
       <button class="btn btn-primary" onclick="repBuscar()" style="padding:9px 18px">🔍 Buscar</button>
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-self:center">
         <span class="hint" style="align-self:center">Atajos:</span>
-        <button class="btn btn-sm" onclick="repAtajo('','${anio}-07-31')">Hasta 31 jul ${anio}</button>
-        <button class="btn btn-sm" onclick="repAtajo('${anio}-01-01','${hoy}')">Este año</button>
-        <button class="btn btn-sm" onclick="repAtajo('','${hoy}')">Todo, a hoy</button>
+        <button class="btn btn-sm rep-atajo" data-d="" data-h="${anio}-07-31" onclick="repAtajo('','${anio}-07-31')">Hasta 31 jul ${anio}</button>
+        <button class="btn btn-sm rep-atajo" data-d="${anio}-01-01" data-h="${hoy}" onclick="repAtajo('${anio}-01-01','${hoy}')">Este año</button>
+        <button class="btn btn-sm rep-atajo" data-d="" data-h="${hoy}" onclick="repAtajo('','${hoy}')">Todo, a hoy</button>
       </div>
     </div>
     <details style="margin-top:8px;font-size:12.5px;color:var(--slate)"><summary style="cursor:pointer;color:var(--brand);font-weight:600">¿Qué se cuenta?</summary>
@@ -11427,11 +11434,22 @@ function _repRangoBarra(){
     <div id="rep_rango_estado" style="margin-top:6px;font-size:13px;font-weight:600;color:var(--brand)"></div>
   </div>`;
 }
+// El atajo que corresponde a las fechas buscadas queda marcado (verde, con ✓).
+function _repMarcarAtajo(){
+  const R=window._REP_RANGO||{};
+  document.querySelectorAll('.rep-atajo').forEach(b=>{
+    const on = !!window._REP_RANGO && (b.dataset.d||'')===(R.desde||'') && (b.dataset.h||'')===(R.hasta||'');
+    if(!b.dataset.txt) b.dataset.txt=b.textContent;
+    b.textContent = (on?'✓ ':'')+b.dataset.txt;
+    b.style.background = on?'var(--brand)':''; b.style.color = on?'#fff':''; b.style.fontWeight = on?'700':'';
+  });
+}
 function repAtajo(d,h){ const a=document.getElementById('rep_desde'), b=document.getElementById('rep_hasta'); if(a) a.value=d; if(b) b.value=h; repBuscar(); }
 async function repBuscar(){
   const desde=(document.getElementById('rep_desde')||{}).value||'', hasta=(document.getElementById('rep_hasta')||{}).value||_repDia(new Date().toISOString());
   if(desde && hasta && desde>hasta){ toast('La fecha «Desde» no puede ser posterior a «Hasta».', true); return; }
   window._REP_RANGO={ desde, hasta, exacto: !!window._REP_SIN_EDITADAS };
+  _repMarcarAtajo();
   const est=document.getElementById('rep_rango_estado');
   const txt=_repRangoTxt();
   if(est) est.textContent='⏳ Buscando…';
