@@ -6499,6 +6499,8 @@ async function loadMatriz(forzar){
     API.records(CONFIG.ENTITIES.PROG_METAS, _fresco),
     API.records(CONFIG.ENTITIES.SEG_METAS, _fresco)
   ]);
+  if(progRes.status==='fulfilled' && progRes.value) progRes.value.records=_localMezclar('prog', progRes.value.records);
+  if(segRes.status==='fulfilled' && segRes.value) segRes.value.records=_localMezclar('seg', segRes.value.records);
   // Programaciones de meta por indicador
   try{
     const progs = (progRes.status==='fulfilled' ? (progRes.value.records||[]) : []);
@@ -9349,7 +9351,9 @@ function explicarAvanceHTML(real, meta, ref){
     titulo='⚠️ Retrocedió'; color='#a33a2c'; fondo='#fdecea';
     significado='El valor alcanzado quedó <b>por debajo de la línea base</b> (empeoró). Por eso el % sale <b>negativo</b>. Revisen las acciones o el dato registrado.';
   }
-  const cuenta = logDir>=0
+  const cuenta = prog===0
+    ? `La meta (<b>${_avN(m)}</b>) es <b>igual</b> a la línea base (<b>${_avN(b)}</b>): no se programó ninguna mejora, solo mantener el valor.<br><span style="font-size:17px">Alcanzado ${_avN(r)} ${r>=m?'≥':'<'} meta ${_avN(m)} → <b style="color:${color}">${_avN(pct)} %</b></span><div style="font-size:13.5px;color:#8a5a00;margin-top:6px">💡 Si la meta debía ser mayor que la línea base, corrígela en «② Programa la meta».</div>`
+    : logDir>=0
     ? `Se propusieron mejorar <b>${_avN(progAbs)}</b> y mejoraron <b>${_avN(logDir)}</b>.<br><span style="font-size:17px">${_avN(logDir)} de ${_avN(progAbs)} = <b style="color:${color}">${_avN(pct)} %</b></span>`
     : `Se propusieron mejorar <b>${_avN(progAbs)}</b>, pero en vez de mejorar <b>retrocedieron ${_avN(-logDir)}</b>.<br><span style="font-size:17px">−${_avN(-logDir)} de ${_avN(progAbs)} = <b style="color:${color}">${_avN(pct)} %</b></span>`;
   return `<div class="av-expl" style="border:1.5px solid ${color};background:${fondo};border-radius:12px;padding:14px 16px;font-size:15px;line-height:1.6;color:#1f2a24">
@@ -9511,10 +9515,25 @@ function mgNuevoSeg(progId){
 }
 window.renderHistorialMetas=renderHistorialMetas; window.mgNuevoSeg=mgNuevoSeg;
 
+const _LOCALM={ prog:{}, seg:{}, borr:new Set() };
+function _idResp(res){ return res && (res.id || (res.record&&res.record.id) || (res.dtype&&res.dtype.id) || (res.data&&res.data.id)) || null; }
+function _localGuardar(tipo, id, campos, base){
+  if(!id) return;
+  const prev=_LOCALM[tipo][id] || base || {};
+  _LOCALM[tipo][id]={ id, values:Object.assign({}, prev.values||{}, campos), rel_values:prev.rel_values||{},
+    created_at:prev.created_at||new Date().toISOString(), updated_at:new Date().toISOString(), _local:true };
+}
+function _localMezclar(tipo, recs){
+  const L=_LOCALM[tipo];
+  const out=(recs||[]).filter(r=>!_LOCALM.borr.has(r.id)).map(r=>L[r.id] ? Object.assign({}, r, { values:Object.assign({}, r.values||{}, L[r.id].values) }) : r);
+  Object.values(L).forEach(l=>{ if(!_LOCALM.borr.has(l.id) && !out.some(r=>r.id===l.id)) out.push(l); });
+  return out;
+}
+window._LOCALM=_LOCALM;
 async function cargarProgMetas(){
   const tb=document.getElementById('mt_prog_tabla');
   try{
-    const data=await API.records(CONFIG.ENTITIES.PROG_METAS, true); window._METAS_FRESCAS=true;
+    const data=await API.records(CONFIG.ENTITIES.PROG_METAS, true); window._METAS_FRESCAS=true; data.records=_localMezclar('prog', data.records);
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id));
     STATE.progMetas=mias;
     const selProg=document.getElementById('sm_prog');
@@ -9741,7 +9760,7 @@ window.editarProgMeta=editarProgMeta;
 async function eliminarProgMeta(progId){
   if(!confirm('¿Eliminar esta programación de meta?')) return;
   try{
-    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+progId+'.json','DELETE',{});
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+progId+'.json','DELETE',{}); _LOCALM.borr.add(progId);
     toast('Programación eliminada.');
     await cargarProgMetas();
     // Refrescar la tabla de la matriz EN VIVO (el contador de metas cambió), sin recargar.
@@ -9994,7 +10013,8 @@ async function _guardarProgMetaReal(){
   // Etiqueta robusta: el matId va al inicio de la observación (los textos SÍ se leen bien)
   campos[PM.observacion.id]='[#'+MT_CTX.matId+'] '+(obs||'');
   try{
-    await API.saveForm(PM_EDIT_ID||null, campos, PM_EDIT_ID?undefined:CONFIG.ENTITIES.PROG_METAS);
+    const _resp=await API.saveForm(PM_EDIT_ID||null, campos, PM_EDIT_ID?undefined:CONFIG.ENTITIES.PROG_METAS);
+    _localGuardar('prog', PM_EDIT_ID || _idResp(_resp), campos, PM_EDIT_ID ? (STATE.progMetas||[]).find(x=>x.id===PM_EDIT_ID) : null);
     // Si los valores fueron estimados, dejar constancia en la OBSERVACIÓN del indicador:
     // así el sustento queda visible en la matriz y en el detalle, no solo en esta meta.
     if(typeof _refEsEstimada==='function' && _refEsEstimada() && _refFuente()){
@@ -10037,7 +10057,7 @@ async function guardarProgMeta(){
   try{
     // Antes de comprobar duplicados, leer lo que HOY hay en el servidor (otra pestaña u otro usuario pudo crear una)
     try{ const d=await API.records(CONFIG.ENTITIES.PROG_METAS, true);
-      STATE.progMetas=(d.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id)); }catch(_){ }
+      STATE.progMetas=_localMezclar('prog', d.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id)); }catch(_){ }
     await _guardarProgMetaReal();
   } finally {
     _PM_GUARDANDO=false;
@@ -10519,7 +10539,7 @@ window.sugerirPeriodoProg=sugerirPeriodoProg;
 async function cargarSegMetas(){
   const tb=document.getElementById('mt_seg_tabla');
   try{
-    const data=await API.records(CONFIG.ENTITIES.SEG_METAS, true); window._METAS_FRESCAS=true;
+    const data=await API.records(CONFIG.ENTITIES.SEG_METAS, true); window._METAS_FRESCAS=true; data.records=_localMezclar('seg', data.records);
     const mias=(data.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, SM.rel_matriz.id));
     STATE.segMetas=mias;
     if(typeof _pintarNotaRef==='function') _pintarNotaRef();
@@ -10615,7 +10635,7 @@ function editarSegMeta(segId){
   }
   const real=numOf(leerCampo(s,SM.valor_real.id,'Valor real obtenido'));
   const elAv=document.getElementById('sm_avance');
-  if(elAv && !isNaN(SM_EDIT_META) && !isNaN(real)){ const pct=calcAvance(real, SM_EDIT_META, SM_EDIT_REF); if(pct!==null){ elAv.value=pct+'%'; const box=document.getElementById('sm_remed_box'); if(box) box.classList.toggle('hidden', !(pct<100)); } }
+  if(elAv && !isNaN(SM_EDIT_META) && !isNaN(real)){ const pct=calcAvance(real, SM_EDIT_META, SM_EDIT_REF); if(pct!==null){ elAv.value=pct+'%'; { const ex=document.getElementById('sm_avance_expl'); if(ex){ const h=explicarAvanceHTML(real, SM_EDIT_META, SM_EDIT_REF); ex.innerHTML=h; ex.style.display=h?'':'none'; } } const box=document.getElementById('sm_remed_box'); if(box) box.classList.toggle('hidden', !(pct<100)); } }
   const btn=document.getElementById('sm_guardar'); if(btn) btn.textContent='✓ Actualizar seguimiento';
   _mostrarBtnCancelarSeg(true);
   // Rellenar las variables del valor real desde el JSON guardado (por nombre de variable)
@@ -10634,6 +10654,19 @@ function editarSegMeta(segId){
       }
     }catch(_){}
   }
+  { const sel=document.getElementById('sm_prog');
+    const pAct = sel && sel.value ? (STATE.progMetas||[]).find(x=>x.id===sel.value) : null;
+    if(pAct){
+      const mAct=parseFloat(leerCampo(pAct,PM.valor_meta.id,'Valor meta')), rAct=parseFloat(leerCampo(pAct,PM.valor_ref.id,'Valor de referencia'));
+      try{ evaluarRemediacion(); }catch(_){ }          // recalcula el % con la meta actual y muestra la cuenta
+      const difM = !isNaN(SM_EDIT_META) && !isNaN(mAct) && Math.abs(SM_EDIT_META-mAct)>0.001;
+      const difR = !isNaN(SM_EDIT_REF) && !isNaN(rAct) && Math.abs(SM_EDIT_REF-rAct)>0.001;
+      if(difM || difR){
+        const info=document.getElementById('sm_meta_info');
+        if(info){ info.classList.remove('hidden'); info.insertAdjacentHTML('afterbegin', `<div style="background:#fff6e5;border:1px solid #f0d9a8;color:#6b4a00;border-radius:8px;padding:8px 11px;margin-bottom:8px;font-size:13.5px;line-height:1.45">⚠ Este seguimiento estaba guardado con <b>meta ${_avN(SM_EDIT_META)}</b> y <b>línea base ${isNaN(SM_EDIT_REF)?'—':_avN(SM_EDIT_REF)}</b>, pero la meta actual es <b>${_avN(mAct)}</b> (línea base ${isNaN(rAct)?'—':_avN(rAct)}). El % de abajo ya está calculado con la meta actual; pulsa <b>«Actualizar seguimiento»</b> para corregirlo.</div>`); }
+      }
+    }
+  }
   document.getElementById('sm_real').scrollIntoView({behavior:'smooth',block:'center'});
 }
 window.editarSegMeta=editarSegMeta;
@@ -10641,7 +10674,7 @@ window.editarSegMeta=editarSegMeta;
 async function eliminarSegMeta(segId){
   if(!confirm('¿Eliminar este seguimiento?')) return;
   try{
-    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+segId+'.json','DELETE',{});
+    await API.call('/apps/'+CONFIG.APP_ID+'/dtypes/'+segId+'.json','DELETE',{}); _LOCALM.borr.add(segId);
     toast('Seguimiento eliminado.');
     await cargarSegMetas(); STATE.matriz=[]; renderMatriz();
   }catch(err){ toast('Error al eliminar: '+err.message, true); }
@@ -10701,7 +10734,8 @@ async function guardarSegMeta(){
   campos[SM.observacion.id]='[#'+MT_CTX.matId+']'+(progId?'[@'+progId+']':'')+' '+(obs||'');
   const btn=document.getElementById('sm_guardar'); if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Guardando…'; }
   try{
-    await API.saveForm(SM_EDIT_ID||null, campos, SM_EDIT_ID?undefined:CONFIG.ENTITIES.SEG_METAS);
+    const _resp=await API.saveForm(SM_EDIT_ID||null, campos, SM_EDIT_ID?undefined:CONFIG.ENTITIES.SEG_METAS);
+    _localGuardar('seg', SM_EDIT_ID || _idResp(_resp), campos, SM_EDIT_ID ? (STATE.segMetas||[]).find(x=>x.id===SM_EDIT_ID) : null);
     toast(SM_EDIT_ID?'Seguimiento actualizado.':'Seguimiento guardado.');
     SM_EDIT_ID=null; SM_EDIT_META=null; SM_EDIT_REF=null;
     ['sm_fecha','sm_real','sm_obs','sm_evid','sm_remed','sm_avance','sm_periodo'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
