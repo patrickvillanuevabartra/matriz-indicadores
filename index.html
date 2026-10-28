@@ -11489,7 +11489,9 @@ function _repCifrasPorOficina(){
       avancePromedio: total? Math.round(suma/total) : 0, cien, enCurso, sinAvance };
     const nivel=_repNivel(cifras);
     return { oficina:ofi, cifras, nivel, kudo:'n'+nivel, nota:'' };
-  });
+  // 27/10/2026: de mayor a menor avance (arriba la que más avanzó).
+  }).sort((a,b)=> (b.cifras.avancePromedio-a.cifras.avancePromedio) || (b.nivel-a.nivel) ||
+      ((b.cifras.total?b.cifras.conSeguimiento/b.cifras.total:0)-(a.cifras.total?a.cifras.conSeguimiento/a.cifras.total:0)) || a.oficina.localeCompare(b.oficina,'es'));
 }
 function _repIndTabla(filas){
   if(!filas.length) return '<p class="hint" style="padding:14px">No hay indicadores registrados en ese rango.</p>';
@@ -11616,7 +11618,8 @@ async function _repfCalcular(){
     const completas=fs.filter(x=>x.checks.every(Boolean)).length;
     const pct=tot?Math.round(llenos/tot*100):0, nivel=_repfNivel(pct,completas,fs.length);
     return { oficina:ofi, fichas:fs, pct, completas, nivel, kudo:'n'+nivel, nota:'' };
-  });
+  // 27/10/2026: de mayor a menor avance (arriba la que más avanzó).
+  }).sort((a,b)=> (b.pct-a.pct) || (b.completas/b.fichas.length - a.completas/a.fichas.length) || a.oficina.localeCompare(b.oficina,'es'));
 }
 function _repfChecklist(f){
   const ok='<span style="color:#1f9d55;font-weight:700">✓</span>', no='<span style="color:#c0392b;font-weight:700">✗</span>';
@@ -11807,10 +11810,10 @@ async function descargarReporteFichasExcel(){
       [{v:''}].concat(REPF_NIVELES.map(v=>({v,s:'th'}))),
       [{v:''}].concat(porEtapa.map(n=>({v:n,s:'kpi'}))),
       [],
-      [{v:'2. Resultado por oficina (de menor a mayor avance)',s:'sec',m:7}],
+      [{v:'2. Resultado por oficina (de mayor a menor avance)',s:'sec',m:7}],
       ['N°','Oficina dueña','Fichas','Completas','% fichas completas','% campos llenos','Etapa','Responsable de proceso','Correo para reportes'].map(v=>({v,s:'th'}))
     ];
-    [...F].sort((a,b)=>a.pct-b.pct || a.oficina.localeCompare(b.oficina,'es')).forEach((f,i)=>{
+    [...F].sort((a,b)=>b.pct-a.pct || (b.completas/b.fichas.length - a.completas/a.fichas.length) || a.oficina.localeCompare(b.oficina,'es')).forEach((f,i)=>{
       const pc=f.fichas.length?Math.round(f.completas/f.fichas.length*100):0, d=dirMap[_XNORM(f.oficina)]||{};
       h1.push([{v:i+1,s:'num'},{v:f.oficina,s:'td'},{v:f.fichas.length,s:'num'},{v:f.completas,s:'num'},{v:pc+' %',s:_xPctStyle(pc)},{v:f.pct+' %',s:_xPctStyle(f.pct)},
         {v:REPF_NIVELES[f.nivel],s:'td'},{v:d.responsable||'—',s:'td'},{v:d.correoOk?d.correo:'⚠ sin correo',s:d.correoOk?'td':'not'}]);
@@ -11866,8 +11869,8 @@ async function descargarReporteFichasExcel(){
 window.descargarReporteFichasExcel=descargarReporteFichasExcel;
 
 /* 27/10/2026: libro de Excel de la pestaña «Indicadores · avance», con las mismas cifras
-   de la pantalla y notas visibles que explican cada columna. Las oficinas van en orden
-   alfabético (sin puestos), para no generar comparaciones. */
+   de la pantalla y notas visibles que explican cada columna. Las oficinas van de mayor a
+   menor avance, sin número de puesto. */
 async function descargarReporteAvanceExcel(){
   const F = window._REP_FILAS || [];
   if(!F.length){ toast('Primero elige el rango de fechas y pulsa 🔍 Buscar.', true); return; }
@@ -11900,11 +11903,11 @@ async function descargarReporteAvanceExcel(){
       REP_NIVELES.map((n,i)=>({v:i+' '+n,s:'th'})),
       REP_NIVELES.map((n,i)=>({v:F.filter(f=>f.nivel===i).length,s:'kpi'})),
       [],
-      [{v:'2. Resultado por oficina (en orden alfabético)',s:'sec',m:M}],
+      [{v:'2. Resultado por oficina (de mayor a menor avance promedio)',s:'sec',m:M}],
       ['Oficina','Indicadores','Con meta','% con meta','Con seguimiento','% con seguimiento','Avance promedio','Indicadores al 100 %','Sin meta','Etapa de avance','Responsable de proceso'].map(v=>({v,s:'th'})),
       ['Nombre de la oficina responsable de la medición','Total que mide la oficina','Ya tienen meta programada','Con meta ÷ indicadores','Tienen al menos un seguimiento','Con seguimiento ÷ indicadores','Último % de cada indicador, promediado','Ya alcanzaron su meta','Aún sin meta','De 0 Por empezar a 5 Excelencia','A quien se envía el reporte'].map(v=>({v,s:'midt'}))
     ];
-    [...F].sort((a,b)=>a.oficina.localeCompare(b.oficina,'es')).forEach(f=>{
+    [...F].forEach(f=>{   // ya vienen de mayor a menor avance
       const c=f.cifras, d=dirMap[_XNORM(f.oficina)]||{};
       h1.push([{v:f.oficina,s:'td'},{v:c.total,s:'num'},{v:c.conMeta,s:'num'},{v:pc(c.conMeta,c.total)+' %',s:_xPctStyle(pc(c.conMeta,c.total))},
         {v:c.conSeguimiento,s:'num'},{v:pc(c.conSeguimiento,c.total)+' %',s:_xPctStyle(pc(c.conSeguimiento,c.total))},{v:c.avancePromedio+' %',s:_xPctStyle(c.avancePromedio)},
