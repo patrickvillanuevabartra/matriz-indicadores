@@ -236,6 +236,9 @@
   .mg-form-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
   .mg-form-cab .tt{font-size:17px;font-weight:700;color:var(--ink)}
   .mg-form-cab .bb{display:flex;gap:8px;align-items:center}
+  .hm-como{background:#fff;border:1px solid var(--line);border-radius:10px;padding:9px 13px;margin-top:9px;font-size:14px;line-height:1.6;color:var(--ink)}
+  .hm-como .t{font-size:12.5px;font-weight:700;color:var(--slate);margin-bottom:2px}
+  .hm-como .sin{color:#8a5a00}
   .av-tit{font-size:12px;font-weight:700;color:var(--slate);margin-bottom:2px}
   .av-est{font-size:12.5px;font-weight:700;margin-top:3px}
   .av-leyenda{font-size:12.5px;color:var(--slate);background:var(--paper);border-radius:8px;padding:6px 10px;margin:4px 0 10px;line-height:1.5}
@@ -9331,6 +9334,23 @@ function _segProgId(sg){
   return delPer.length===1 ? delPer[0].id : '';
 }
 window._segProgId=_segProgId;
+// Explica con los datos de la fórmula cómo se obtuvo la línea base y la meta
+function _hmComo(p, ref, meta){
+  const esc=t=>String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const leer=(campo,nom)=>{ try{ return campo?_parseVars(leerCampo(p,campo.id,nom)):{}; }catch(_){ return {}; } };
+  const vr=leer(PM.variables_ref,'Variables referencia'), vm=leer(PM.variables_meta,'Variables meta');
+  const x100=/[*x×]\s*100\b/i.test(MT_CTX.formula||'');
+  const V=(typeof _mgVars==='function')?_mgVars():{arriba:'',abajo:'',n:0};
+  const nv=v=>{ const n=parseFloat(String(v==null?'':v).replace(',','.')); return isNaN(n)?esc(v||'—'):_avN(n); };
+  const linea=(ico,tit,vars,val)=>{
+    const k=Object.keys(vars);
+    if(!k.length) return `<div>${ico} <b>${tit}: ${nv(val)}</b> <span class="sin">— se escribió el valor directamente, sin los datos de la fórmula.</span></div>`;
+    const a=k.find(x=>x===V.arriba)||k[0], b=k.find(x=>x===V.abajo&&x!==a)||k.find(x=>x!==a);
+    if(k.length===2 && b) return `<div>${ico} <b>${tit}: ${nv(val)}</b> = ${esc(a)} <b>(${nv(vars[a])})</b> ÷ ${esc(b)} <b>(${nv(vars[b])})</b>${x100?' × 100':''} → es decir, <b>${nv(vars[a])} de ${nv(vars[b])}</b></div>`;
+    return `<div>${ico} <b>${tit}: ${nv(val)}</b>, calculado con: ${k.map(x=>esc(x)+' = <b>'+nv(vars[x])+'</b>').join(' · ')}</div>`;
+  };
+  return `<div class="hm-como"><div class="t">¿De dónde salen estos valores?</div>${linea('📍','Línea base',vr,ref)}${linea('🎯','Meta',vm,meta)}</div>`;
+}
 function renderHistorialMetas(){
   const box=document.getElementById('mt_hist'); if(!box) return;
   const P=STATE.progMetas||[], S=STATE.segMetas||[];
@@ -9395,6 +9415,7 @@ function renderHistorialMetas(){
             <div class="hm-num ult">Último alcanzado<b>${isNaN(ultReal)?'—':_avN(ultReal)}</b></div>
             <div class="hm-num ult">% de avance<b style="color:${isNaN(ultPct)?'inherit':_avEstado(ultPct).c}">${isNaN(ultPct)?'—':_avPctTxt(Math.round(ultPct*100)/100)+(ultPct>100?' ★':'')}</b>${isNaN(ultPct)?'':`<span style="display:block;font-size:11.5px;font-weight:600;color:${_avEstado(ultPct).c}">${_avEstado(ultPct).t}</span>`}</div>
           </div>
+          ${_hmComo(p, ref, meta)}
           <div style="font-size:12.5px;color:var(--mist);margin-top:6px">Programada el ${fmtFecha(fP)||'—'}${obs?' · 💬 '+esc(obs):''}</div>
           ${plan.length?`<div class="hm-ev">${plan.map(x=>`<a href="${String(x.url).replace(/"/g,'&quot;')}" target="_blank" rel="noopener">📎 ${esc(x.etq||'plan de acción')} ↗</a>`).join('')}</div>`:''}
         </div>
@@ -9768,7 +9789,7 @@ function _pintarNotaRef(){
 }
 window._pintarNotaRef = _pintarNotaRef;
 
-async function guardarProgMeta(){
+async function _guardarProgMetaReal(){
   const g=id=>{ const el=document.getElementById(id); return el?el.value:''; };
   const fecha=g('pm_fecha'), ref=g('pm_ref'), meta=g('pm_meta'), obs=g('pm_obs'), plan=g('pm_plan'), periodo=g('pm_periodo');
   { const parcial=w=>{ const gr=document.getElementById('pm_'+w+'_grid'); if(!gr) return false;
@@ -9801,8 +9822,14 @@ async function guardarProgMeta(){
       x.id!==PM_EDIT_ID && normP(leerCampo(x, PM.periodo.id, 'Periodo'))===normP(periodo));
     if(yaExiste){
       const vm=leerCampo(yaExiste, PM.valor_meta.id, 'Valor meta');
-      toast('Este indicador ya tiene una meta programada para «'+periodo+'»'+(vm?' (valor '+vm+')':'')+
-            '. Edita la que ya existe en lugar de crear otra.', true);
+      const vr=leerCampo(yaExiste, PM.valor_ref.id, 'Valor de referencia');
+      const propia=PM_EDIT_ID?(STATE.progMetas||[]).find(x=>x.id===PM_EDIT_ID):null;
+      const perPropia=propia&&PM.periodo?leerCampo(propia, PM.periodo.id, 'Periodo'):'';
+      if(PM_EDIT_ID && perPropia && normP(perPropia)!==normP(periodo))
+        toast('Estás editando la meta de «'+perPropia+'» y le cambiaste el periodo a «'+periodo+'». Pero «'+periodo+'» ya tiene su propia meta (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Deja el periodo «'+perPropia+'», o edita directamente la meta de «'+periodo+'» con su ✏️ en el historial.', true);
+      else
+        toast('Este indicador ya tiene una meta para «'+periodo+'» (línea base '+(vr||'—')+' → meta '+(vm||'—')+'). Solo puede haber una meta por periodo: edítala con su ✏️ en el historial, en lugar de crear otra.', true);
+      { const ps=document.getElementById('pm_periodo_sel'); if(ps){ try{ ps.scrollIntoView({behavior:'smooth',block:'center'}); ps.style.outline='3px solid #c0392b'; setTimeout(()=>{ ps.style.outline=''; }, 4000); }catch(_){ } } }
       return;
     }
   }
@@ -9858,6 +9885,22 @@ async function guardarProgMeta(){
     // modal ni recargar la app — mismo patrón que al guardar un seguimiento.
     STATE.matriz=[]; renderMatriz();
   }catch(err){ console.error('Error guardando programación:', err); toast('Error: '+err.message, true); }
+}
+let _PM_GUARDANDO=false;
+async function guardarProgMeta(){
+  if(_PM_GUARDANDO) return;                       // un segundo clic mientras guarda no crea otra meta
+  _PM_GUARDANDO=true;
+  const btn=document.getElementById('pm_guardar');
+  if(btn){ btn.disabled=true; btn.textContent='Guardando…'; }
+  try{
+    // Antes de comprobar duplicados, leer lo que HOY hay en el servidor (otra pestaña u otro usuario pudo crear una)
+    try{ const d=await API.records(CONFIG.ENTITIES.PROG_METAS, true);
+      STATE.progMetas=(d.records||[]).filter(r=>relMencionaMatriz(r, MT_CTX.matId, PM.rel_matriz.id)); }catch(_){ }
+    await _guardarProgMetaReal();
+  } finally {
+    _PM_GUARDANDO=false;
+    if(btn){ btn.disabled=false; if(btn.textContent==='Guardando…') btn.textContent = PM_EDIT_ID?'✓ Actualizar programación':'+ Guardar programación'; }
+  }
 }
 window.guardarProgMeta=guardarProgMeta;
 
