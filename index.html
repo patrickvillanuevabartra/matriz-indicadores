@@ -13592,5 +13592,122 @@ async function rnReemplazar(){
 window.rnReemplazar = rnReemplazar;
 </script>
 
+
+<style id="urp-comun-css">
+  /* ===== Urpito · SGOE FI URP (módulo común) ===== */
+  .urp-guia{display:flex;gap:14px;align-items:flex-start}
+  .urp-guia .urp-img{flex:0 0 auto;width:104px;height:auto;filter:drop-shadow(0 3px 4px rgba(0,0,0,.12))}
+  .urp-guia .urp-cuerpo{flex:1;min-width:0}
+  .urp-globo{position:relative;background:#fff;border:1.5px solid #0fa968;border-radius:14px;padding:9px 13px;font-size:15px;line-height:1.5;color:#11161d;margin-bottom:10px;text-align:left}
+  .urp-globo:before{content:"";position:absolute;left:-9px;top:18px;border:8px solid transparent;border-right-color:#0fa968;border-left:0}
+  .urp-globo:after{content:"";position:absolute;left:-7px;top:19px;border:7px solid transparent;border-right-color:#fff;border-left:0}
+  .urp-mini{width:58px;height:auto;flex:0 0 auto}
+  .urp-fila{display:flex;gap:10px;align-items:center}
+  .urp-ocultar{font-size:12.5px;color:#6b7785;background:none;border:0;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0}
+  .urp-login{display:flex;gap:10px;align-items:center;margin:4px 0 14px}
+  .urp-login .urp-mini{width:62px}
+  .urp-login .urp-globo{margin:0;font-size:14px;padding:8px 11px}
+  .urp-ava{width:30px;height:30px;border-radius:50%;vertical-align:middle;display:inline-block;object-fit:cover;box-shadow:0 0 0 2px #fff}
+  #urp_bienvenida{position:fixed;right:22px;bottom:96px;z-index:10065;display:flex;gap:6px;align-items:flex-end;animation:urpIn .35s ease-out;max-width:calc(100vw - 30px)}
+  #urp_bienvenida .urp-globo{margin:0 0 70px;max-width:330px;font-size:15.5px;box-shadow:0 8px 24px rgba(0,0,0,.12)}
+  #urp_bienvenida .urp-globo:before{left:auto;right:-9px;border-right:0;border-left:8px solid #0fa968}
+  #urp_bienvenida .urp-globo:after{left:auto;right:-7px;border-right:0;border-left:7px solid #fff}
+  #urp_bienvenida img.urp-cuerpo-img{width:118px;filter:drop-shadow(0 3px 5px rgba(0,0,0,.15))}
+  #urp_bienvenida .urp-bot{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  #urp_bienvenida .urp-ok{background:#0f8f5e;color:#fff;border:0;border-radius:9px;padding:8px 14px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:inherit}
+  #urp_festejo{position:fixed;right:22px;bottom:96px;z-index:10070;display:flex;gap:6px;align-items:flex-end;animation:urpIn .35s ease-out;cursor:pointer}
+  #urp_festejo .urp-globo{margin:0 0 70px;max-width:280px;font-size:16px}
+  #urp_festejo .urp-globo:before{left:auto;right:-9px;border-right:0;border-left:8px solid #0fa968}
+  #urp_festejo .urp-globo:after{left:auto;right:-7px;border-right:0;border-left:7px solid #fff}
+  #urp_festejo img{width:120px}
+  details.ayuda > summary .urp-ava{width:26px;height:26px;margin-right:6px}
+  @media (max-width:640px){ .urp-guia .urp-img{width:72px} #urp_bienvenida img.urp-cuerpo-img{width:84px} #urp_bienvenida .urp-globo{max-width:230px;font-size:14.5px} }
+  @keyframes urpIn{from{transform:translateY(30px);opacity:0}to{transform:none;opacity:1}}
+  body.sin-urpito .urp-img, body.sin-urpito .urp-mini, body.sin-urpito .urp-login, body.sin-urpito .urp-ava{display:none !important}
+  body.sin-urpito .urp-guia .urp-globo{display:none !important}
+</style>
+<script id="urp-comun-js">
+/* ===== Urpito · mascota de la URP con la chapita del SGOE FI URP =====
+   Guía amable: saluda al ingresar, acompaña al asistente de ayuda y a las notas.
+   Cada persona puede ocultarlo; la preferencia se recuerda en este navegador
+   (es la misma para todos los aplicativos del SGOE publicados en github.io). */
+(function(){
+  const CFG = {"app": "indicadores", "login": "#loginOverlay", "antes": "#loginOverlay form", "saludo": "Ingresa con tu usuario y contraseña; después te acompaño con tus indicadores.", "tip": "Si tienes una duda, pulsa <b>Ayuda</b> (abajo a la derecha) y pregúntame. En <b>Metas</b> te explico tu indicador paso a paso."};
+  const IMG = (typeof URPITO_IMG!=='undefined') ? URPITO_IMG : 'data:image/webp;base64,';
+  const CARA = 'data:image/webp;base64,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';
+  const on = ()=>{ try{ return localStorage.getItem('urpito_off')!=='1'; }catch(_){ return true; } };
+  const aplicar = ()=>document.body.classList.toggle('sin-urpito', !on());
+  const img = (cls)=>`<img class="${cls||'urp-img'}" src="${IMG}" alt="Urpito, mascota de la URP, con la chapita del SGOE FI URP" title="Urpito · SGOE FI URP">`;
+  const cara = (cls)=>`<img class="${cls||'urp-ava'}" src="${CARA}" alt="" aria-hidden="true">`;
+  function alternar(){ try{ localStorage.setItem('urpito_off', on()?'1':'0'); }catch(_){ } aplicar(); try{ asistente(); }catch(_){ } if(typeof window.mgRender==='function') window.mgRender(); if(typeof window.urpTrasAlternar==='function') window.urpTrasAlternar(); }
+  function festejo(titulo, texto){
+    if(!on()) return;
+    let f=document.getElementById('urp_festejo'); if(f) f.remove();
+    document.body.insertAdjacentHTML('beforeend', `<div id="urp_festejo" onclick="this.remove()" title="Clic para cerrar"><div class="urp-globo"><b>${titulo}</b><br>${texto}</div>${img('')}</div>`);
+    setTimeout(()=>{ const x=document.getElementById('urp_festejo'); if(x) x.remove(); }, 6500);
+  }
+  // 1) Pantalla de ingreso: saludo de Urpito
+  function saludoIngreso(){
+    if(!CFG.antes) return;
+    const ref=document.querySelector(CFG.antes); if(!ref || document.getElementById('urp_login')) return;
+    ref.insertAdjacentHTML('beforebegin', `<div class="urp-login" id="urp_login">${img('urp-mini')}<div class="urp-globo">¡Hola! Soy <b>Urpito</b>, del <b>SGOE FI URP</b> 👋 ${CFG.saludo||'Ingresa para empezar; te acompaño.'}</div></div>`);
+  }
+  // 2) Asistente de ayuda: Urpito es su cara
+  function asistente(){
+    const b=document.querySelector('#asis-btn, #asisBoton'); if(!b) return;
+    const ico=b.querySelector('.asis-ico');
+    if(ico){ if(on() && ico.textContent.trim()==='💬') ico.innerHTML=cara(); else if(!on() && ico.querySelector('img')) ico.textContent='💬'; }
+    else if(b.id==='asisBoton'){ if(on() && /💬/.test(b.textContent)) b.innerHTML=cara()+' Ayuda'; else if(!on() && b.querySelector('img')) b.innerHTML='💬 Ayuda'; }
+    b.title = on() ? 'Pregúntale a Urpito (asistente de ayuda)' : 'Asistente de ayuda';
+    const cab=document.querySelector('#asis-panel .asis-cab b, #asisPanel .asis-cab b');
+    if(cab){ if(on() && !cab.dataset.urp){ cab.dataset.urp=cab.innerHTML; cab.innerHTML=cara()+' Urpito · '+cab.innerHTML; } else if(!on() && cab.dataset.urp){ cab.innerHTML=cab.dataset.urp; delete cab.dataset.urp; } }
+    // el primer mensaje del asistente lo dice Urpito
+    document.querySelectorAll('#asis-msgs > *:first-child, #asisCuerpo > .asis-msg:first-child p:first-child').forEach(m=>{
+      if(on() && !m.dataset.urp){ const t=m.innerHTML; const n=t.replace(/Soy el asistente (del aplicativo|del portal)/,'Soy <b>Urpito</b>, el asistente $1').replace(/^Hola\./,'Hola, soy <b>Urpito</b>.'); if(n!==t){ m.innerHTML=n; m.dataset.urp='1'; } }
+    });
+  }
+  // 3) Notas «¿Cómo funciona…?»: Urpito en lugar del foco 💡
+  function notas(){
+    document.querySelectorAll('details.ayuda > summary').forEach(s=>{
+      if(s.dataset.urp) return; s.dataset.urp='1';
+      s.innerHTML = s.innerHTML.replace(/^\s*💡\s*/, '');
+      s.insertAdjacentHTML('afterbegin', cara());
+    });
+  }
+  // 4) Bienvenida al ingresar (una vez al día en cada aplicativo)
+  function visible(sel){ const e=document.querySelector(sel); if(!e) return false; const cs=getComputedStyle(e); return cs.display!=='none' && cs.visibility!=='hidden' && !e.classList.contains('oculto') && !e.classList.contains('hidden') && e.offsetParent!==null; }
+  function bienvenida(){
+    if(!on() || !CFG.tip) return;
+    const k='urpito_hola_'+(CFG.app||location.pathname)+'_'+new Date().toISOString().slice(0,10);
+    try{ if(localStorage.getItem(k)) return; localStorage.setItem(k,'1'); }catch(_){ }
+    if(document.getElementById('urp_bienvenida')) return;
+    document.body.insertAdjacentHTML('beforeend', `<div id="urp_bienvenida" role="status"><div class="urp-globo">¡Hola! Soy <b>Urpito</b>, del <b>SGOE FI URP</b> 👋<br>${CFG.tip}
+      <div class="urp-bot"><button type="button" class="urp-ok" onclick="document.getElementById('urp_bienvenida').remove()">Entendido</button>
+      <button type="button" class="urp-ocultar" onclick="document.getElementById('urp_bienvenida').remove();URP.alternar()">No mostrar a Urpito</button></div></div>${img('urp-cuerpo-img')}</div>`);
+    setTimeout(()=>{ const x=document.getElementById('urp_bienvenida'); if(x) x.remove(); }, 20000);
+  }
+  let vigilando=false;
+  function vigilarIngreso(){
+    if(vigilando) return; vigilando=true;
+    if(!CFG.login){ setTimeout(bienvenida, 1800); return; }
+    let estabaEnLogin = visible(CFG.login), t0=Date.now();
+    const iv=setInterval(()=>{
+      const v=visible(CFG.login);
+      if(estabaEnLogin && !v){ clearInterval(iv); setTimeout(bienvenida, 900); }
+      estabaEnLogin = estabaEnLogin || v;
+      if(!estabaEnLogin && Date.now()-t0>4000){ clearInterval(iv); setTimeout(bienvenida, 900); }   // sesión ya abierta
+      if(Date.now()-t0>30*60*1000) clearInterval(iv);
+    }, 700);
+  }
+  function iniciar(){
+    aplicar(); saludoIngreso(); asistente(); notas(); vigilarIngreso();
+    // el aplicativo vuelve a pintar el botón/notas: mantener a Urpito
+    const obs=new MutationObserver(()=>{ clearTimeout(obs._t); obs._t=setTimeout(()=>{ try{ asistente(); notas(); saludoIngreso(); }catch(_){ } }, 150); });
+    obs.observe(document.body, { childList:true, subtree:true, characterData:true });
+  }
+  window.URP = { on, img, cara, festejo, alternar };
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
+</script>
 </body>
 </html>
